@@ -1,0 +1,5 @@
+Query or change the secure-delete setting. When secure_delete is on, SQLite overwrites deleted content with zeros.
+
+The "fast" setting for secure_delete (added circa 2017-08-01) is an intermediate setting in between "on" and "off". When secure_delete is set to "fast", SQLite will overwrite deleted content with zeros only if doing so does not increase the amount of I/O. In other words, the "fast" setting uses more CPU cycles but does not use more I/O. This has the effect of purging all old content from b-tree pages, but leaving forensic traces on freelist pages.
+
+Limitation: The secure_delete pragma only causes deleted content to be scrubbed from ordinary tables. If virtual tables store content in shadow tables, then deleting content from the virtual table does not necessarily remove forensic traces from the shadow tables. In particular, the FTS3 and FTS5 virtual tables that come bundled with SQLite might leave forensic traces in their shadow tables even if the secure_delete pragma is enabled.

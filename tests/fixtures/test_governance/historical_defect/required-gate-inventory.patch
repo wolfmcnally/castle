@@ -1,0 +1,11 @@
+--- a/policies/test-suite-governance.md
++++ b/policies/test-suite-governance.md
+@@ -58,7 +58,7 @@
+ 
+ ## Reassessment and transfer
+ 
+-Every governed sweep MUST run `./bin/test-governance reassess`. It MUST rerun the
++Every governed sweep MUST run `./bin/proof-manager reassess`. It MUST rerun the
+ local assay when proof code, selection, corpus, or critical-risk applicability
+ changed, and propose further consolidation when a proof is dominated. This is an
+ executable shrinkage obligation.

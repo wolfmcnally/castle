@@ -1,0 +1,34 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install pinned uv
+        run: |
+          python3 -m pip install --target "${RUNNER_TEMP}/uv-tools" uv==0.9.26
+          echo "${RUNNER_TEMP}/uv-tools/bin" >> "$GITHUB_PATH"
+      - name: Install locked environment
+        run: ./bin/setup
+      - name: Full package gate
+        run: ./bin/check
+      - name: Build release artifacts
+        run: uv build --project project --out-dir "${RUNNER_TEMP}/castle-dist"
+      - name: Clean wheel installation and synthetic smoke
+        shell: bash
+        run: |
+          uv venv --managed-python --python 3.12 "${RUNNER_TEMP}/castle-wheel-venv"
+          uv pip install --python "${RUNNER_TEMP}/castle-wheel-venv/bin/python" --no-deps "${RUNNER_TEMP}/castle-dist/castle-0.1.0-py3-none-any.whl"
+          cd "$RUNNER_TEMP"
+          "${RUNNER_TEMP}/castle-wheel-venv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/package-smoke.py"

@@ -1,0 +1,926 @@
+schema: agentic.proof_estate.v2
+baseline_report: reports/test-governance/castle-pre-reset-baseline.json
+audit_ledger: reports/test-governance/castle-reset.jsonl
+effectiveness_corpus: tests/fixtures/test_governance/corpus.yaml
+effectiveness_report: reports/test-governance/castle-effectiveness.jsonl
+reset_limits:
+  max_families_ratio: 0.2
+  max_leaves_ratio: 0.2
+  min_historical_recall: 0.8
+  min_mutant_recall: 0.8
+test_budget_delta:
+  families: 0
+  leaves: 0
+budget_approval: null
+critical_risks:
+  custody:
+    state: applicable
+    direct_proof: pytest:tests/test_check_receipt.py::test_passed_run_is_durable_and_reusable_for_exact_clean_head
+  security:
+    state: applicable
+    direct_proof: pytest:project/tests/test_hermeticity.py::test_real_network_egress_fails_loudly
+  authority:
+    state: applicable
+    direct_proof: pytest:project/tests/test_cas.py::test_store_lifecycle_refuses_before_content_io
+  concurrency:
+    state: applicable
+    direct_proof: pytest:project/tests/test_journal.py::test_two_processes_never_overlap_in_the_critical_section
+  atomicity:
+    state: applicable
+    direct_proof: pytest:project/tests/test_cas.py::test_excision_recovers_forward_after_each_durable_boundary
+  corruption:
+    state: applicable
+    direct_proof: pytest:project/tests/test_cas.py::test_media_detection_refuses_forged_proof
+  recovery:
+    state: applicable
+    direct_proof: pytest:project/tests/test_cas.py::test_excision_recovers_forward_after_each_durable_boundary
+  public-contract:
+    state: applicable
+    direct_proof: pytest:project/tests/test_cli.py::test_shipped_command_set_is_exactly_the_realized_set
+  schema:
+    state: applicable
+    direct_proof: pytest:project/tests/test_journal.py::test_store_metadata_is_closed_and_canonical
+  core-success:
+    state: applicable
+    direct_proof: pytest:project/tests/test_cli.py::test_ingest_then_get_round_trips_byte_identically
+  deploy:
+    state: not-applicable
+    rationale: Castle has no deployment or publication command.
+    activation_trigger: Adding any deployment or publication command makes direct deploy proof mandatory.
+families:
+- id: castle-cas
+  kind: pytest
+  selectors: ["project/tests/test_cas.py"]
+  source_paths: ["project/tests/test_cas.py"]
+  covers: ["project/tests/test_cas.py", "project/castle/cas.py", "project/castle/excision.py"]
+  contract: "CAS authority, lifecycle closure, exact retained reconstruction, bound recovery and private receipts have independent executable witnesses."
+  risk_class: product-contract
+  oracle: "Exact set difference and remote multisets prove removal; damaged-state snapshots prove non-destruction; literal receipts and sensitive-token controls prove privacy."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: vital
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: castle-cli
+  kind: pytest
+  selectors: ["project/tests/test_cli.py"]
+  source_paths: ["project/tests/test_cli.py"]
+  covers: ["project/tests/test_cli.py", "project/castle/cli.py"]
+  contract: "Castle's cli contract retains direct executable behavior."
+  risk_class: product-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: vital
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: network-hermeticity
+  kind: pytest
+  selectors: ["project/tests/test_hermeticity.py"]
+  source_paths: ["project/tests/test_hermeticity.py"]
+  covers: ["project/tests/test_hermeticity.py"]
+  contract: "The network hermeticity contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: castle-journal
+  kind: pytest
+  selectors: ["project/tests/test_journal.py"]
+  source_paths: ["project/tests/test_journal.py"]
+  covers: ["project/tests/test_journal.py", "project/castle/journal.py", "project/castle/store_state.py"]
+  contract: "Castle's journal contract retains direct executable behavior."
+  risk_class: product-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: vital
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: castle-journal-migration
+  kind: pytest
+  selectors: ["project/tests/test_journal_migrate_v1.py"]
+  source_paths: ["project/tests/test_journal_migrate_v1.py"]
+  covers: ["project/tests/test_journal_migrate_v1.py", "project/castle/journal_migrate_v1.py"]
+  contract: "Castle's journal-migration contract retains direct executable behavior."
+  risk_class: product-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: castle-store-merge
+  kind: pytest
+  selectors: ["project/tests/test_merge.py"]
+  source_paths: ["project/tests/test_merge.py"]
+  covers: ["project/tests/test_merge.py", "project/castle/store_merge.py"]
+  contract: "Castle's store-merge contract retains direct executable behavior."
+  risk_class: product-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: vital
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: atomic-check
+  kind: pytest
+  selectors: ["tests/test_check.py"]
+  source_paths: ["tests/test_check.py"]
+  covers: ["tests/test_check.py"]
+  contract: "The atomic check contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: ["check-mode-arity", "invalid-runtime-fallback"]
+  mutation_evidence: ["vital-substitutes-for-full"]
+  tier: vital
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: catalog-integrity
+  kind: pytest
+  selectors: ["tests/test_check_catalogs.py"]
+  source_paths: ["tests/test_check_catalogs.py"]
+  covers: ["tests/test_check_catalogs.py"]
+  contract: "The catalog integrity contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: ["deleted-catalog-source"]
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: hook-liveness
+  kind: pytest
+  selectors: ["tests/test_check_hooks_installed.py"]
+  source_paths: ["tests/test_check_hooks_installed.py"]
+  covers: ["tests/test_check_hooks_installed.py"]
+  contract: "The hook liveness contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: plan-concreteness
+  kind: pytest
+  selectors: ["tests/test_check_plan_concreteness.py"]
+  source_paths: ["tests/test_check_plan_concreteness.py"]
+  covers: ["tests/test_check_plan_concreteness.py"]
+  contract: "The plan concreteness contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: plan-delivery
+  kind: pytest
+  selectors: ["tests/test_check_plan_delivery.py"]
+  source_paths: ["tests/test_check_plan_delivery.py"]
+  covers: ["tests/test_check_plan_delivery.py"]
+  contract: "The plan delivery contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: full-gate-receipt
+  kind: pytest
+  selectors: ["tests/test_check_receipt.py"]
+  source_paths: ["tests/test_check_receipt.py"]
+  covers: ["tests/test_check_receipt.py"]
+  contract: "The full gate receipt contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: ["receipt-candidate-drift"]
+  mutation_evidence: []
+  tier: vital
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: execution-dashboard
+  kind: pytest
+  selectors: ["tests/test_execution_dashboard.py"]
+  source_paths: ["tests/test_execution_dashboard.py"]
+  covers: ["tests/test_execution_dashboard.py"]
+  contract: "The execution dashboard contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: execution-telemetry
+  kind: pytest
+  selectors: ["tests/test_execution_telemetry.py"]
+  source_paths: ["tests/test_execution_telemetry.py"]
+  covers: ["tests/test_execution_telemetry.py"]
+  contract: "The execution telemetry contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: ["operator-park-union"]
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: hook-installation
+  kind: pytest
+  selectors: ["tests/test_install_hooks.py"]
+  source_paths: ["tests/test_install_hooks.py"]
+  covers: ["tests/test_install_hooks.py"]
+  contract: "The hook installation contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: kickoff-configuration
+  kind: pytest
+  selectors: ["tests/test_kickoff_config.py"]
+  source_paths: ["tests/test_kickoff_config.py"]
+  covers: ["tests/test_kickoff_config.py"]
+  contract: "The kickoff configuration contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: ["yielded-session-exit"]
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: orchestration-evidence
+  kind: pytest
+  selectors: ["tests/test_kickoff_evidence.py"]
+  source_paths: ["tests/test_kickoff_evidence.py"]
+  covers: ["tests/test_kickoff_evidence.py"]
+  contract: "The orchestration evidence contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: ["blocking-finding-finalization"]
+  mutation_evidence: []
+  tier: vital
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: kickoff-control-plane
+  kind: pytest
+  selectors: ["tests/test_kickoff_control_plane.py"]
+  source_paths: &kickoff-control-plane-paths
+    - lib/agentic_starter/kickoff_runbook.py
+    - lib/agentic_starter/candidate_boundaries.py
+    - bin/kickoff-command-zero
+    - tests/test_kickoff_control_plane.py
+  covers: *kickoff-control-plane-paths
+  contract: "Expensive kickoff gates run only after an immutable manifest admits their exact command and cheap preflight succeeds."
+  risk_class: orchestration-custody
+  oracle: "Synthetic manifests and commands prove exact admission, ordered preflight, and first-failure stopping."
+  admission: "A post-reset retirement funds this direct executable oracle for the new control plane."
+  nearest_overlap: "Orchestration-evidence tests bind review artifacts, but did not own executable command authority."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: ["pytest:tests/test_kickoff_evidence.py::test_gate_record_rejects_stale_candidate_and_hashes_artifact"]
+- id: log-control-plane
+  kind: pytest
+  selectors: ["tests/test_log_control_plane.py"]
+  source_paths: &log-control-plane-paths
+    - lib/agentic_starter/log_blocks.py
+    - bin/check-log
+    - bin/check-log-prefix
+    - bin/check-log-monotonic
+    - bin/log-append
+    - bin/log-relocate
+    - bin/normalize-final-newline
+    - tests/test_log_control_plane.py
+  covers: *log-control-plane-paths
+  contract: "Castle's activity log extends committed bytes, remains effectively chronological, and accepts only bounded authenticated repairs."
+  risk_class: chronology-custody
+  oracle: "A temporary repository exercises append, prefix refusal, chronology repair, identity preservation, and closed newline normalization."
+  admission: "A post-reset retirement funds this direct executable oracle for append-only construction evidence."
+  nearest_overlap: "Log policy prose described ownership but did not prove exact bytes or repair boundaries."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: ["pytest:tests/test_kickoff_tree_id.py::test_tracked_staged_unstaged_and_untracked_changes_affect_identity"]
+- id: candidate-identity
+  kind: pytest
+  selectors: ["tests/test_kickoff_tree_id.py"]
+  source_paths: ["tests/test_kickoff_tree_id.py"]
+  covers: ["tests/test_kickoff_tree_id.py"]
+  contract: "The candidate identity contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: lessons-ledger
+  kind: pytest
+  selectors: ["tests/test_lessons.py"]
+  source_paths: ["tests/test_lessons.py"]
+  covers: ["tests/test_lessons.py"]
+  contract: "The lessons ledger contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: methodology-transfer
+  kind: pytest
+  selectors: ["tests/test_methodology_toolchain_contract.py"]
+  source_paths: ["tests/test_methodology_toolchain_contract.py"]
+  covers: ["tests/test_methodology_toolchain_contract.py"]
+  contract: "The methodology transfer contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: ["required-gate-inventory"]
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: harness-parity
+  kind: pytest
+  selectors: ["tests/test_mirror_parity.py"]
+  source_paths: ["tests/test_mirror_parity.py"]
+  covers: ["tests/test_mirror_parity.py"]
+  contract: "The harness parity contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: ledger-naming
+  kind: pytest
+  selectors: ["tests/test_new_name.py"]
+  source_paths: ["tests/test_new_name.py"]
+  covers: ["tests/test_new_name.py"]
+  contract: "The ledger naming contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: pre-commit-structure
+  kind: pytest
+  selectors: ["tests/test_pre_commit.py"]
+  source_paths: ["tests/test_pre_commit.py"]
+  covers: ["tests/test_pre_commit.py"]
+  contract: "The pre commit structure contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: research-authority
+  kind: pytest
+  selectors: ["tests/test_research_authority.py"]
+  source_paths: ["tests/test_research_authority.py"]
+  covers: ["tests/test_research_authority.py"]
+  contract: "The research authority contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: ["research-resource-default"]
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: review-verdict-harvest
+  kind: pytest
+  selectors: ["tests/test_review_verdicts.py"]
+  source_paths: ["tests/test_review_verdicts.py"]
+  covers: ["tests/test_review_verdicts.py"]
+  contract: "The review verdict harvest contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: ["active-review-session"]
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: shell-syntax
+  kind: pytest
+  selectors: ["tests/test_shell_syntax.py"]
+  source_paths: ["tests/test_shell_syntax.py"]
+  covers: ["tests/test_shell_syntax.py"]
+  contract: "The shell syntax contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: test-governance-manager
+  kind: pytest
+  selectors: ["tests/test_test_governance.py"]
+  source_paths: ["tests/test_test_governance.py"]
+  covers: ["tests/test_test_governance.py"]
+  contract: "The test governance manager contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: ["manager-caller-root"]
+  mutation_evidence: ["expanded-leaf-inventory", "frozen-baseline-denominator", "aggregate-disposition", "optional-disposition-evidence", "family-only-cap", "critical-risk-averaging", "unauthorized-positive-growth", "shadow-proof-removal", "indeterminate-changed-selection", "post-holdout-selection-change", "absent-consolidation-replacement"]
+  tier: vital
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: toolchain-callers
+  kind: pytest
+  selectors: ["tests/test_toolchain_callers.py"]
+  source_paths: ["tests/test_toolchain_callers.py"]
+  covers: ["tests/test_toolchain_callers.py"]
+  contract: "The toolchain callers contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: toolchain-entrypoints
+  kind: pytest
+  selectors: ["tests/test_toolchain_entrypoints.py"]
+  source_paths: ["tests/test_toolchain_entrypoints.py"]
+  covers: ["tests/test_toolchain_entrypoints.py"]
+  contract: "The toolchain entrypoints contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: ["symlink-repository-ownership"]
+  mutation_evidence: []
+  tier: vital
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: treatise-validation
+  kind: pytest
+  selectors: ["tests/test_treatise.py"]
+  source_paths: ["tests/test_treatise.py"]
+  covers: ["tests/test_treatise.py"]
+  contract: "The treatise validation contract retains direct executable behavior."
+  risk_class: methodology-contract
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-changed
+  kind: gate
+  selectors: ["changed"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate changed contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-format
+  kind: gate
+  selectors: ["format"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate format contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-lint
+  kind: gate
+  selectors: ["lint"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate lint contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-policy-catalogs
+  kind: gate
+  selectors: ["policy-catalogs"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate policy catalogs contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-policy-config
+  kind: gate
+  selectors: ["policy-config"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate policy config contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-policy-execution-dashboards
+  kind: gate
+  selectors: ["policy-execution-dashboards"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate policy execution dashboards contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-policy-harness-parity
+  kind: gate
+  selectors: ["policy-harness-parity"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate policy harness parity contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-policy-hooks-installed
+  kind: gate
+  selectors: ["policy-hooks-installed"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate policy hooks installed contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-policy-log
+  kind: gate
+  selectors: ["policy-log"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The authoritative policy lane refuses historical log rewrites and chronology regressions."
+  risk_class: lifecycle-custody
+  oracle: "The named gate remains wired into bin/check and propagates the log validator's exit status."
+  admission: "A post-reset retirement funds the new lifecycle wiring."
+  nearest_overlap: "The log control-plane family proves behavior but not authoritative gate composition."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: full
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: ["pytest:tests/test_kickoff_tree_id.py::test_symlink_escape_fails_closed"]
+- id: gate-policy-lessons
+  kind: gate
+  selectors: ["policy-lessons"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate policy lessons contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-policy-shell-syntax
+  kind: gate
+  selectors: ["policy-shell-syntax"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate policy shell syntax contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-policy-test-governance
+  kind: gate
+  selectors: ["policy-test-governance"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate policy test governance contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: vital
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-policy-toolchain-callers
+  kind: gate
+  selectors: ["policy-toolchain-callers"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate policy toolchain callers contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-policy-treatise
+  kind: gate
+  selectors: ["policy-treatise"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate policy treatise contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-test
+  kind: gate
+  selectors: ["test"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate test contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: vital
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: gate-vital
+  kind: gate
+  selectors: ["vital"]
+  source_paths: ["bin/check"]
+  covers: ["bin/check"]
+  contract: "The gate vital contract retains direct executable behavior."
+  risk_class: gate-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: hook-harness-parity
+  kind: hook
+  selectors: ["hook:.githooks/pre-commit:./bin/check-harness-parity"]
+  source_paths: [".githooks/pre-commit"]
+  covers: [".githooks/pre-commit"]
+  contract: "The hook harness parity contract retains direct executable behavior."
+  risk_class: hook-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: hook-toolchain-callers
+  kind: hook
+  selectors: ["hook:.githooks/pre-commit:./bin/check-toolchain-callers"]
+  source_paths: [".githooks/pre-commit"]
+  covers: [".githooks/pre-commit"]
+  contract: "The hook toolchain callers contract retains direct executable behavior."
+  risk_class: hook-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: changed
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: hook-log-staged
+  kind: hook
+  selectors: ["hook:.githooks/pre-commit:./bin/check-log --staged"]
+  source_paths: [".githooks/pre-commit"]
+  covers: [".githooks/pre-commit"]
+  contract: "A staged historical log rewrite is refused before a commit can record it."
+  risk_class: lifecycle-custody
+  oracle: "The tracked pre-commit hook calls the staged-byte and chronology wrapper directly."
+  admission: "A post-reset retirement funds the new lifecycle wiring."
+  nearest_overlap: "The log control-plane family proves behavior but not staged custody."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: full
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: ["pytest:tests/test_pre_commit.py::test_pre_commit_preserves_governance_failure"]
+- id: hook-test-governance
+  kind: hook
+  selectors: ["hook:.githooks/pre-commit:./bin/test-governance validate"]
+  source_paths: [".githooks/pre-commit"]
+  covers: [".githooks/pre-commit"]
+  contract: "The hook test governance contract retains direct executable behavior."
+  risk_class: hook-custody
+  oracle: "The retained executable proof fails when its named contract is violated."
+  admission: "Retained by the recipient-local whole-estate Pareto reset."
+  nearest_overlap: "No cheaper retained family owns this exact executable selector."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: vital
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: []
+- id: "gate-candidate-partition"
+  kind: "gate"
+  selectors: ["policy-candidate-partition"]
+  source_paths: ["bin/check"]
+  covers: ["candidate-partition.yaml", "lib/agentic_starter/candidate_boundaries.py", "bin/check"]
+  contract: "The full policy gate rejects unclassified tracked paths and invalid candidate declarations."
+  risk_class: "candidate-custody"
+  oracle: "The candidate identity behavioral fixture trips the actual checker and staged hook on an invalid declaration; the gate/hook inventory must retain its executable wiring."
+  admission: "Compensated by a consolidated evidence family in the local append-only ledger."
+  nearest_overlap: "The candidate identity family proves checker behavior but cannot by itself establish mandatory full-gate or pre-commit wiring."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: "vital"
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: ["pytest:tests/test_kickoff_evidence.py::test_init_creates_complete_run_scoped_evidence"]
+- id: "hook-candidate-partition"
+  kind: "hook"
+  selectors: ["hook:.githooks/pre-commit:./bin/check-candidate-partition --staged"]
+  source_paths: [".githooks/pre-commit"]
+  covers: ["candidate-partition.yaml", "lib/agentic_starter/candidate_boundaries.py", ".githooks/pre-commit"]
+  contract: "Pre-commit checks the staged declaration against staged paths, independently of unstaged repairs."
+  risk_class: "candidate-custody"
+  oracle: "The candidate identity behavioral fixture trips the actual checker and staged hook on an invalid declaration; the gate/hook inventory must retain its executable wiring."
+  admission: "Compensated by a consolidated evidence family in the local append-only ledger."
+  nearest_overlap: "The candidate identity family proves checker behavior but cannot by itself establish mandatory full-gate or pre-commit wiring."
+  historical_evidence: []
+  mutation_evidence: []
+  tier: "vital"
+  duration_seconds: 0.0
+  flake_rate: 0.0
+  replacement_lineage: ["pytest:tests/test_kickoff_evidence.py::test_a_proven_disjoint_drift_is_accepted_and_recorded"]

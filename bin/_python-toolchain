@@ -1,0 +1,414 @@
+#!/usr/bin/env bash
+# Shared Python runtime selection and dependency-chain probe.
+#
+# Source this file after defining repo_root and project_root, then call
+# python_toolchain_init with the entry point's diagnostic prefix.
+#
+# Runtime resolution is family-owned and FAIL-CLOSED. uv resolves a cache and a
+# managed-interpreter directory whether or not anyone told it to -- with no pin
+# it silently uses the invoking user's own `~/.cache/uv` and `~/.local/share/uv`.
+# That fallback exits 0 and yields a working interpreter, so a repository that
+# merely forgot to pin looks identical to one that pinned correctly. Every path
+# below therefore refuses rather than falling back, and the refusal is decided by
+# uv's OWN reported directories rather than by the variables we just exported --
+# only the former can tell "the pin took effect" from "uv ignored it".
+
+# Canonicalize a path so both sides of a comparison spell it the same way.
+# A checkout may be reached through symlinks; compare canonical paths.
+python_toolchain_canonical() {
+  local target="$1"
+  local parent
+  local base
+  if [[ -d "$target" ]]; then
+    (cd "$target" && pwd -P)
+    return 0
+  fi
+  parent="$(dirname "$target")"
+  base="$(basename "$target")"
+  if [[ -d "$parent" ]]; then
+    printf '%s/%s\n' "$(cd "$parent" && pwd -P)" "$base"
+  else
+    printf '%s\n' "$target"
+  fi
+}
+
+# Read one key out of the flat six-key participation declaration. The format is
+# deliberately not YAML: this runs before any interpreter has been selected, and
+# a declaration whose parser needs the runtime it is choosing cannot be the
+# authority for that choice.
+python_toolchain_declaration_value() {
+  local declaration="$1"
+  local wanted="$2"
+  local found=""
+  local matches=0
+  local line
+  local key
+  local value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -z "$line" ]] && continue
+    if [[ "$line" != *=* ]]; then
+      echo "$python_toolchain_prefix ERROR malformed line in ${declaration}: $line" >&2
+      return 1
+    fi
+    key="${line%%=*}"
+    value="${line#*=}"
+    if [[ "$key" == "$wanted" ]]; then
+      found="$value"
+      matches=$((matches + 1))
+    fi
+  done <"$declaration"
+  if [[ "$matches" -eq 0 ]]; then
+    echo "$python_toolchain_prefix ERROR ${declaration} declares no $wanted" >&2
+    return 1
+  fi
+  if [[ "$matches" -gt 1 ]]; then
+    echo "$python_toolchain_prefix ERROR ${declaration} declares $wanted $matches times" >&2
+    return 1
+  fi
+  if [[ -z "$found" ]]; then
+    echo "$python_toolchain_prefix ERROR ${declaration} declares an empty $wanted" >&2
+    return 1
+  fi
+  printf '%s\n' "$found"
+}
+
+# The post-resolution assertion, shared by both resolution modes. Everything
+# that runs before it states an intention; this asks uv what it actually
+# resolved. The isolated lane needs the answer at least as much as the family
+# does -- its whole premise is that it shares nothing with the family store, so
+# a lane that merely exported two variables and never checked them would be
+# exactly the ambient failure the header rules out. Reads
+# `python_toolchain_{cache_dir,python_install_dir,family_mode}`, which both
+# branches set before calling.
+python_toolchain_assert_uv_resolution() {
+  local label
+  local expected
+  local reported
+  local reported_raw
+  local command_exit
+
+  for label in cache python; do
+    case "$label" in
+      cache) expected="$python_toolchain_cache_dir" ;;
+      *) expected="$python_toolchain_python_install_dir" ;;
+    esac
+    # uv's status is read from uv, never through a filter: piping it into `sed`
+    # would hand back sed's exit and turn a failed query into a silent success.
+    # So capture raw, branch on uv's own status, and strip afterwards.
+    # Probed from the repository root, never the caller's cwd: uv's resolution is
+    # cwd-sensitive, and the question is what THIS repository resolves -- not what
+    # the directory someone happened to invoke from resolves.
+    if reported_raw=$(cd "$repo_root" && NO_COLOR=1 uv "$label" dir 2>/dev/null); then
+      :
+    else
+      command_exit=$?
+      echo \
+        "$python_toolchain_prefix ERROR uv could not report its $label directory (exit $command_exit)" \
+        >&2
+      echo "$python_toolchain_prefix ERROR no runtime fallback was attempted" >&2
+      return "$command_exit"
+    fi
+    # `NO_COLOR` is honoured inconsistently across uv versions, so the styling is
+    # also stripped: an escape sequence inside a path makes an equal comparison
+    # unequal, and that false red reads exactly like a real one.
+    reported="$(printf '%s' "$reported_raw" | sed $'s/\x1b\\[[0-9;]*[a-zA-Z]//g')"
+    if [[ -z "$reported" ]]; then
+      echo \
+        "$python_toolchain_prefix ERROR uv reported an empty $label directory" >&2
+      return 1
+    fi
+    if [[ "$(python_toolchain_canonical "$reported")" != "$expected" ]]; then
+      echo \
+        "$python_toolchain_prefix ERROR uv resolved its $label directory to $reported, not the declared $python_toolchain_family_mode path $expected" \
+        >&2
+      echo \
+        "$python_toolchain_prefix ERROR this is ambient uv resolution; no runtime fallback was attempted" \
+        >&2
+      return 1
+    fi
+  done
+  return 0
+}
+
+# The sole carve-out, and it is containment-checked rather than trusted. The
+# hostile sweep needs lanes that share nothing with the family store; it says so
+# with one variable, and the repository, cache, and interpreter root must all
+# resolve beneath it. An "isolation" root that does not actually contain the
+# things it isolates is not isolation.
+python_toolchain_isolation_init() {
+  local isolation_root
+  local target
+  local label
+  isolation_root="$(python_toolchain_canonical "$AGENTIC_UV_ISOLATION_ROOT")"
+  if [[ ! -d "$isolation_root" ]]; then
+    echo \
+      "$python_toolchain_prefix ERROR AGENTIC_UV_ISOLATION_ROOT is not a directory: $isolation_root" \
+      >&2
+    return 1
+  fi
+  for label in UV_CACHE_DIR UV_PYTHON_INSTALL_DIR; do
+    if [[ -z "${!label:-}" ]]; then
+      echo \
+        "$python_toolchain_prefix ERROR isolated runtime requires an explicit $label" \
+        >&2
+      echo "$python_toolchain_prefix ERROR no runtime fallback was attempted" >&2
+      return 1
+    fi
+  done
+  for label in repository UV_CACHE_DIR UV_PYTHON_INSTALL_DIR; do
+    case "$label" in
+      repository) target="$(python_toolchain_canonical "$repo_root")" ;;
+      *) target="$(python_toolchain_canonical "${!label}")" ;;
+    esac
+    if [[ "$target" != "$isolation_root" && "$target" != "$isolation_root"/* ]]; then
+      echo \
+        "$python_toolchain_prefix ERROR $label ($target) is not contained by AGENTIC_UV_ISOLATION_ROOT ($isolation_root)" \
+        >&2
+      echo "$python_toolchain_prefix ERROR no runtime fallback was attempted" >&2
+      return 1
+    fi
+  done
+  python_toolchain_family_mode="isolated"
+  python_toolchain_cache_dir="$(python_toolchain_canonical "$UV_CACHE_DIR")"
+  python_toolchain_python_install_dir="$(python_toolchain_canonical "$UV_PYTHON_INSTALL_DIR")"
+  export UV_CACHE_DIR="$python_toolchain_cache_dir"
+  export UV_PYTHON_INSTALL_DIR="$python_toolchain_python_install_dir"
+  # Containment proves the pins point somewhere legitimate; only uv can say
+  # whether it honoured them.
+  python_toolchain_assert_uv_resolution || return $?
+  return 0
+}
+
+python_toolchain_family_init() {
+  local declaration="$repo_root/workspace-uv.conf"
+  local schema
+  local store
+  local cache
+  local python_install
+  local family_root
+  local existing
+  local initialize_store=false
+
+  if [[ -n "${AGENTIC_UV_ISOLATION_ROOT:-}" ]]; then
+    python_toolchain_isolation_init
+    return $?
+  fi
+
+  if [[ ! -r "$declaration" ]]; then
+    echo \
+      "$python_toolchain_prefix ERROR missing required file: workspace-uv.conf" >&2
+    echo \
+      "$python_toolchain_prefix ERROR this repository declares no family uv store; no ambient runtime was attempted" \
+      >&2
+    return 1
+  fi
+  schema="$(python_toolchain_declaration_value "$declaration" schema)" || return 1
+  if [[ "$schema" != "agentic.workspace_uv.v1" ]]; then
+    echo \
+      "$python_toolchain_prefix ERROR ${declaration} declares schema $schema, expected agentic.workspace_uv.v1" \
+      >&2
+    return 1
+  fi
+  store="$(python_toolchain_declaration_value "$declaration" store)" || return 1
+  cache="$(python_toolchain_declaration_value "$declaration" cache)" || return 1
+  python_install="$(python_toolchain_declaration_value "$declaration" python_install)" || return 1
+
+  family_root="$(python_toolchain_canonical "$repo_root/$store")"
+  if [[ "$store" == ".runtime" ]]; then
+    # Only the exact public declaration may initialize a checkout-owned store.
+    # Refuse symlink components before any write, including when they resolve inside.
+    if [[ "$cache" != "cache" || "$python_install" != "python" ]] \
+      || [[ -L "$repo_root/.runtime" || -L "$repo_root/.runtime/cache" || -L "$repo_root/.runtime/python" ]]; then
+      echo "$python_toolchain_prefix ERROR unsafe checkout-owned runtime declaration or symlink" >&2
+      return 1
+    fi
+    if [[ "$python_toolchain_prefix" == "SETUP" ]]; then
+      initialize_store=true
+    fi
+  fi
+  if [[ ! -d "$family_root" && "$initialize_store" != true ]]; then
+    echo "$python_toolchain_prefix ERROR the declared workspace uv store is absent: $family_root" >&2
+    echo "$python_toolchain_prefix ERROR run ./bin/setup for the checkout-owned store" >&2
+    return 1
+  fi
+  python_toolchain_family_root="$family_root"
+  python_toolchain_cache_dir="$family_root/$cache"
+  python_toolchain_python_install_dir="$family_root/$python_install"
+  python_toolchain_family_mode="family"
+
+  # A pre-existing value is not overwritten silently: it either agrees with the
+  # declaration or it is someone else's runtime, and inheriting someone else's
+  # runtime is the ambient failure wearing an environment variable.
+  for existing in UV_CACHE_DIR UV_PYTHON_INSTALL_DIR; do
+    local expected
+    case "$existing" in
+      UV_CACHE_DIR) expected="$python_toolchain_cache_dir" ;;
+      *) expected="$python_toolchain_python_install_dir" ;;
+    esac
+    if [[ -n "${!existing:-}" ]]; then
+      if [[ "$(python_toolchain_canonical "${!existing}")" != "$expected" ]]; then
+        echo \
+          "$python_toolchain_prefix ERROR $existing=${!existing} conflicts with the declared family path $expected" \
+          >&2
+        echo "$python_toolchain_prefix ERROR no runtime fallback was attempted" >&2
+        return 1
+      fi
+    fi
+  done
+  if [[ "$initialize_store" == true ]]; then
+    mkdir -p "$python_toolchain_cache_dir" "$python_toolchain_python_install_dir" || return $?
+  fi
+  export UV_CACHE_DIR="$python_toolchain_cache_dir"
+  export UV_PYTHON_INSTALL_DIR="$python_toolchain_python_install_dir"
+
+  # A generic missing-file error would not distinguish "the pin took" from "uv
+  # fell back to the user's own store", and that distinction is the entire
+  # guarantee.
+  python_toolchain_assert_uv_resolution || return $?
+  return 0
+}
+
+python_toolchain_init() {
+  python_toolchain_prefix="$1"
+
+  # The repository owns .venv; a harness-activated environment is never a
+  # runtime-selection input and makes uv emit misleading mismatch warnings.
+  unset VIRTUAL_ENV
+
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "$python_toolchain_prefix ERROR missing prerequisite: uv" >&2
+    return 1
+  fi
+
+  # One fact, stated twice: `workspace-uv.conf` declares `project_root`, and
+  # every entry point sets its own copy before sourcing this file. Only the
+  # declaration is read by the Python side (`lib/repository_python.py` and the
+  # runtime verifier); only the entry point's copy is read by the shell path
+  # below. Two readers looking at different trees is exactly the silent
+  # divergence this file refuses everywhere else, so compare them and stop.
+  # Checked before the required-file loop, which consumes `$project_root`: a
+  # wrong project root otherwise surfaces as "missing required file", naming
+  # the symptom instead of the cause.
+  local layout_declaration="$repo_root/workspace-uv.conf"
+  if [[ -r "$layout_declaration" ]]; then
+    local declared_project_root
+    declared_project_root="$(
+      python_toolchain_declaration_value "$layout_declaration" project_root
+    )" || return 1
+    if [[ "$(python_toolchain_canonical "$repo_root/$declared_project_root")" \
+      != "$(python_toolchain_canonical "$project_root")" ]]; then
+      echo \
+        "$python_toolchain_prefix ERROR workspace-uv.conf declares project_root=$declared_project_root, which is not the project root this entry point set: $project_root" \
+        >&2
+      echo "$python_toolchain_prefix ERROR no runtime fallback was attempted" >&2
+      return 1
+    fi
+  fi
+
+  local required_path
+  for required_path in \
+    "$project_root/.python-version" \
+    "$project_root/pyproject.toml" \
+    "$project_root/uv.lock"; do
+    if [[ ! -f "$required_path" ]]; then
+      echo \
+        "$python_toolchain_prefix ERROR missing required file: ${required_path#"$repo_root/"}" \
+        >&2
+      return 1
+    fi
+  done
+
+  # Family paths are established BEFORE any uv invocation that could read or
+  # write a store, including the authoritative-override probes below.
+  python_toolchain_family_init || return 1
+
+  python_toolchain_uv_args=(--managed-python)
+  python_toolchain_runtime_description="managed runtime from project/.python-version"
+
+  if [[ -n "${TOOLCHAIN_PYTHON:-}" ]]; then
+    local command_exit
+    local managed_python_root
+    local resolved_python
+    if [[ "$TOOLCHAIN_PYTHON" != /* || ! -x "$TOOLCHAIN_PYTHON" ]]; then
+      echo \
+        "$python_toolchain_prefix ERROR authoritative TOOLCHAIN_PYTHON must be an executable absolute path: $TOOLCHAIN_PYTHON" \
+        >&2
+      echo "$python_toolchain_prefix ERROR no runtime fallback was attempted" >&2
+      return 1
+    fi
+    if resolved_python=$(uv python find --no-project "$TOOLCHAIN_PYTHON"); then
+      :
+    else
+      command_exit=$?
+      echo \
+        "$python_toolchain_prefix ERROR uv could not resolve authoritative TOOLCHAIN_PYTHON: $TOOLCHAIN_PYTHON (exit $command_exit)" \
+        >&2
+      echo "$python_toolchain_prefix ERROR no runtime fallback was attempted" >&2
+      return "$command_exit"
+    fi
+    if [[ "$resolved_python" != /* || ! -x "$resolved_python" ]]; then
+      echo \
+        "$python_toolchain_prefix ERROR authoritative TOOLCHAIN_PYTHON did not resolve to an executable absolute path: $TOOLCHAIN_PYTHON" \
+        >&2
+      echo "$python_toolchain_prefix ERROR no runtime fallback was attempted" >&2
+      return 1
+    fi
+    if "$resolved_python" -c 'import sys' >/dev/null 2>&1; then
+      :
+    else
+      command_exit=$?
+      echo \
+        "$python_toolchain_prefix ERROR authoritative TOOLCHAIN_PYTHON is not a usable Python interpreter: $resolved_python (exit $command_exit)" \
+        >&2
+      echo "$python_toolchain_prefix ERROR no runtime fallback was attempted" >&2
+      return "$command_exit"
+    fi
+    if [[ "$resolved_python" == "$project_root/.venv/"* ]]; then
+      echo \
+        "$python_toolchain_prefix ERROR authoritative TOOLCHAIN_PYTHON cannot point inside project/.venv: $TOOLCHAIN_PYTHON" \
+        >&2
+      echo "$python_toolchain_prefix ERROR select a base interpreter outside the managed project environment" >&2
+      echo "$python_toolchain_prefix ERROR no runtime fallback was attempted" >&2
+      return 1
+    fi
+    if managed_python_root=$(uv python dir); then
+      :
+    else
+      command_exit=$?
+      echo \
+        "$python_toolchain_prefix ERROR uv could not identify its managed Python directory (exit $command_exit)" \
+        >&2
+      echo "$python_toolchain_prefix ERROR no runtime fallback was attempted" >&2
+      return "$command_exit"
+    fi
+    if [[ "$resolved_python" == "$managed_python_root/"* ]]; then
+      python_toolchain_uv_args=(--python "$resolved_python" --managed-python)
+    else
+      python_toolchain_uv_args=(--python "$resolved_python" --no-managed-python)
+    fi
+    python_toolchain_runtime_description="authoritative TOOLCHAIN_PYTHON=$TOOLCHAIN_PYTHON (resolved to $resolved_python)"
+  fi
+}
+
+python_toolchain_probe() {
+  local probe
+  local command_exit
+  probe="import castle.cli, pytest, subprocess; subprocess.run(['ruff','--version'], check=True, stdout=subprocess.DEVNULL)"
+
+  if uv run --project "$project_root" --locked \
+    "${python_toolchain_uv_args[@]}" python -c "$probe"; then
+    return 0
+  else
+    command_exit=$?
+  fi
+
+  echo \
+    "$python_toolchain_prefix ERROR dependency-chain probe failed with $python_toolchain_runtime_description (exit $command_exit)" \
+    >&2
+  if [[ -n "${TOOLCHAIN_PYTHON:-}" ]]; then
+    echo "$python_toolchain_prefix ERROR no runtime fallback was attempted" >&2
+  fi
+  return "$command_exit"
+}

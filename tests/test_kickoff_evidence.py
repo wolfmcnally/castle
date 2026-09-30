@@ -1,0 +1,2000 @@
+"""Behavioral tests for run-scoped kickoff evidence."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
+from test_check_catalogs import ZONE_MARKERS, write_instruction_resources
+
+ROOT = Path(__file__).resolve().parents[1]
+EVIDENCE = ROOT / "bin" / "kickoff-evidence"
+TREE_ID = ROOT / "bin" / "kickoff-tree-id"
+UV = shutil.which("uv")
+assert UV is not None
+sys.path.insert(0, str(ROOT / "lib"))
+from agentic_starter import workflow  # noqa: E402
+from agentic_starter.execution_telemetry import (  # noqa: E402
+    attach_review_metrics,
+    closed_span,
+    closed_spans,
+    finalize_trace,
+    finish_span,
+    start_span,
+    start_trace,
+)
+
+
+def link_managed_interpreter(root: Path) -> None:
+    """Give a synthetic engine root the managed interpreter a real one has.
+
+    Repo tools run under `#!/usr/bin/env python3`, so an ambient interpreter
+    older than 3.11 makes the shared guard re-exec under
+    `<repository_root>/.venv/bin/python3`. A real engine root always has that
+    venv; a fixture root without one models an engine that cannot exist, and
+    the guard then refuses for want of an interpreter instead of proving
+    anything about the tool. On a host whose `PATH` already leads with the
+    managed venv the guard never fires and the gap stays invisible — Gate 9
+    workers inherit the ambient `PATH`, which is where it surfaced.
+
+    The symlink mirrors `tests/test_gate_contracts.py::_copy_gate_repository`;
+    `.gitignore` keeps it out of the fixture's tracked content so candidate
+    identity is unchanged.
+    """
+    managed = ROOT / ".venv"
+    if managed.is_dir():
+        (root / ".venv").symlink_to(managed.resolve(), target_is_directory=True)
+
+
+@pytest.fixture
+def repository(tmp_path: Path) -> Path:
+    root = tmp_path / "repo"
+    root.mkdir()
+    subprocess.run(["git", "init", "-b", "master"], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "fixture@example.invalid"],
+        cwd=root,
+        check=True,
+    )
+    subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True)
+    # `.venv` without a trailing slash: the managed interpreter arrives as a
+    # symlink, and a directory-only pattern would leave it tracked.
+    (root / ".gitignore").write_text(".kickoff/\n.venv\n")
+    link_managed_interpreter(root)
+    (root / "projects").mkdir()
+    (root / "policies").mkdir()
+    (root / "CLAUDE.md").write_text("# Synthetic engine\n")
+    (root / "phase.md").write_text("# Phase\n")
+    (root / "policy.md").write_text("# Policy\n")
+    (root / "candidate-partition.yaml").write_text(
+        "schema: agentic.candidate-partition.v1\n"
+        "active:\n"
+        '  - "/candidate-partition.yaml"\n'
+        '  - "/.gitignore"\n'
+        '  - "/CLAUDE.md"\n'
+        '  - "/phase.md"\n'
+        '  - "/policy.md"\n'
+        '  - "/code.py"\n'
+        '  - "/tracked.txt"\n'
+        '  - "/script"\n'
+        '  - "/projects/**"\n'
+        '  - "/policies/**"\n'
+        '  - "/bin/**"\n'
+        '  - "/lib/**"\n'
+        '  - "/plan/**"\n'
+        "bookkeeping:\n"
+        '  - "/LOG*.md"\n'
+        '  - "/EXECUTION_LOG.jsonl"\n'
+        '  - "/plan/INDEX.md"\n'
+        '  - "/lessons/**"\n'
+        '  - "/lessons-archived/**"\n'
+        '  - "/user-actions/**"\n'
+        '  - "/user-actions-archived/**"\n'
+    )
+
+    (root / "code.py").write_text("VALUE = 1\n")
+    (root / "bin").mkdir()
+    (root / "bin" / "check").write_text("#!/bin/sh\nexit 0\n")
+    (root / "bin" / "check").chmod(0o755)
+    (root / "bin" / "check-catalogs").write_text("#!/bin/sh\nexit 0\n")
+    (root / "bin" / "check-catalogs").chmod(0o755)
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "fixture"], cwd=root, check=True, capture_output=True)
+    return root
+
+
+def run(
+    *arguments: str,
+    cwd: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    executable = EVIDENCE
+    if "--run-dir" in arguments and arguments[0] != "init":
+        run_dir = Path(arguments[arguments.index("--run-dir") + 1])
+        pinned = run_dir / "tools" / "kickoff-evidence"
+        if pinned.is_file():
+            executable = pinned
+    environment = os.environ.copy()
+    if "--run-dir" in arguments:
+        directory = Path(arguments[arguments.index("--run-dir") + 1])
+        config = directory.parent / "fixture-config.yaml"
+        if config.exists():
+            environment["KICKOFF_CONFIG_FILE"] = str(config)
+    return subprocess.run(
+        [str(executable), *arguments],
+        env=environment,
+        cwd=cwd or ROOT,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+
+
+def open_role_dispatch(
+    run_dir: Path,
+    registration: Path,
+    intelligence_span_id: str | None,
+    *,
+    dispatch_candidate: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    arguments = [
+        "record-role-dispatch",
+        "--run-dir",
+        str(run_dir),
+        "--registration",
+        str(registration),
+        "--state",
+        "opened",
+        "--idle-telemetry",
+        "not-dispatched",
+    ]
+    if intelligence_span_id is not None:
+        arguments.extend(["--intelligence-span-id", intelligence_span_id])
+    if dispatch_candidate is not None:
+        arguments.extend(["--dispatch-candidate", dispatch_candidate])
+    return run(*arguments)
+
+
+def write_fixture_receipt(receipt: Path, *, mode: str = "delegated") -> None:
+    document = yaml.safe_load((ROOT / "tests/fixtures/kickoff_config_seed.yaml").read_text())
+    document["role_models"] = {"default": {role: {"model": "default"} for role in workflow.ROLES}}
+    document["workflow"]["mode"] = mode
+    config = receipt.parent / "fixture-config.yaml"
+    config.write_text(yaml.safe_dump(document))
+    resolution = workflow.resolve(document, "codex")
+    targets = (
+        []
+        if mode == "delegated"
+        else [
+            {
+                "cli": "claude",
+                "model": "opus",
+                "effort": None,
+                "write_enabled": False,
+                "roles": [role],
+                "probe_sha256": "a" * 64,
+            }
+            for role in ("critic", "reviewer")
+        ]
+    )
+    receipt.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "config_sha256": hashlib.sha256(config.read_bytes()).hexdigest(),
+                "harness": "codex",
+                "targets": targets,
+                "workflow": resolution,
+            }
+        )
+        + "\n"
+    )
+
+
+def initialize(
+    repository: Path,
+    run_dir: Path,
+    *,
+    review_lane: str = "full",
+    mode: str = "delegated",
+    phase: str = "1.1",
+    evidence_lane: str = "full",
+    follow_up_route: str = "direct-fix",
+    authorities: tuple[str, ...] = ("phase.md::Acceptance", "policy.md"),
+) -> str:
+    receipt = run_dir.parent / f"{run_dir.name}-preflight.json"
+    write_fixture_receipt(receipt, mode=mode)
+    handle = start_trace(
+        engine_root=repository,
+        scope_root=repository,
+        scope="engine",
+        scope_id="engine",
+        run_type="kickoff",
+        operation=f"phase.{phase}",
+    )
+    setup = start_span(
+        engine_root=repository,
+        trace_id=handle.trace_id,
+        parent_span_id=handle.span_id,
+        category="reconciliation",
+        operation="orchestration.setup",
+    )
+    result = run(
+        "init",
+        "--run-dir",
+        str(run_dir),
+        "--root",
+        str(repository),
+        "--phase",
+        phase,
+        *[item for authority in authorities for item in ("--authority", authority)],
+        "--telemetry-trace-id",
+        handle.trace_id,
+        "--telemetry-root-span-id",
+        handle.span_id,
+        "--initial-orchestration-span-id",
+        setup.span_id,
+        "--preflight-receipt",
+        str(receipt),
+        "--review-lane",
+        review_lane,
+        "--evidence-lane",
+        evidence_lane,
+        "--follow-up-route",
+        follow_up_route,
+    )
+    assert result.returncode == 0, result.stderr
+    manifest = run_dir.parent / f"{run_dir.name}-commands.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "commands": [
+                    {
+                        "operation": "gate.check-all",
+                        "attempt": 1,
+                        "final": True,
+                        "argv": ["./bin/check", "all"],
+                    },
+                    {
+                        "operation": "gate.focused",
+                        "attempt": 1,
+                        "final": False,
+                        "argv": ["/usr/bin/true"],
+                    },
+                    {
+                        "operation": "gate.check-all",
+                        "attempt": 1,
+                        "final": True,
+                        "argv": ["/usr/bin/true"],
+                    },
+                ],
+                "preflight_commands": [],
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    activated = run(
+        "activate-gate-manifest",
+        "--run-dir",
+        str(run_dir),
+        "--manifest",
+        str(manifest),
+    )
+    assert activated.returncode == 0, activated.stderr
+    return result.stdout.strip()
+
+
+def complete_orchestration(repository: Path, run_dir: Path) -> None:
+    metadata = json.loads((run_dir / "run.json").read_text())
+    trace_id = metadata["telemetry_trace_id"]
+    root_span_id = metadata["telemetry_root_span_id"]
+    finish_span(
+        engine_root=repository,
+        trace_id=trace_id,
+        span_id=metadata["initial_orchestration_span_id"],
+        outcome="success",
+    )
+    existing = closed_spans(
+        engine_root=repository,
+        trace_id=trace_id,
+    )
+    for operation in (
+        "orchestration.planning",
+        "orchestration.implementation",
+        "orchestration.acceptance",
+        "orchestration.close",
+    ):
+        if operation not in metadata["required_orchestration_operations"]:
+            continue
+        if any(
+            span["operation"] == operation and span["outcome"] == "success" for span in existing
+        ):
+            continue
+        stage = start_span(
+            engine_root=repository,
+            trace_id=trace_id,
+            parent_span_id=root_span_id,
+            category="reconciliation",
+            operation=operation,
+        )
+        finish_span(
+            engine_root=repository,
+            trace_id=trace_id,
+            span_id=stage.span_id,
+            outcome="success",
+        )
+        existing.append(
+            closed_span(
+                engine_root=repository,
+                trace_id=trace_id,
+                span_id=stage.span_id,
+            )
+        )
+
+
+def finding(
+    finding_id: str,
+    candidate: str,
+    *,
+    state: str = "open",
+    classification: str = "initial",
+    resolved_in: str | None = None,
+) -> dict[str, object]:
+    return {
+        "id": finding_id,
+        "severity": "high",
+        "authority": "policy.md",
+        "evidence": "Observed mismatch",
+        "affected_paths": ["code.py"],
+        "required_outcome": "Make the behavior exact",
+        "introduced_in": candidate,
+        "resolved_in": resolved_in,
+        "state": state,
+        "classification": classification,
+        "disposition": None,
+    }
+
+
+def ingest(
+    run_dir: Path,
+    tmp_path: Path,
+    findings: list[dict[str, object]],
+    *,
+    kind: str = "code",
+    candidate: str | None = None,
+    review_span_id: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Ingest findings for a test that is exercising something other than metrics.
+
+    `--review-span-id` is required in production, but these cases have no
+    dispatched review pass to name. They pass the explicit opt-out so the
+    omission is recorded rather than silent -- which is the whole point of the
+    flag. Tests that care about convergence metrics pass `review_span_id`.
+    """
+    input_path = tmp_path / "findings-input.json"
+    input_path.write_text(json.dumps({"findings": findings}))
+    expected_candidate = candidate or str(
+        findings[0]["resolved_in"] or findings[0]["introduced_in"]
+    )
+    metrics_argv = (
+        ["--review-span-id", review_span_id]
+        if review_span_id
+        else ["--no-review-span", "test fixture: no review pass was dispatched"]
+    )
+    return run(
+        "ingest-findings",
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        kind,
+        "--candidate",
+        expected_candidate,
+        "--input",
+        str(input_path),
+        *metrics_argv,
+    )
+
+
+def capture(repository: Path, run_dir: Path) -> str:
+    result = run(
+        "capture-change",
+        "--run-dir",
+        str(run_dir),
+        "--risk-tag",
+        "public-api",
+        "--test",
+        "./bin/test focused",
+        "--unchanged",
+        "policy.md",
+        "--selection-reason",
+        "Exercises the changed behavior",
+        cwd=repository,
+    )
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()
+
+
+def tree_manifest_for_test(repository: Path) -> str:
+    result = subprocess.run(
+        [str(TREE_ID), "--root", str(repository), "--product", "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)["candidate_id"]
+
+
+def review_gate_output(run_dir: Path, result: subprocess.CompletedProcess[str]):
+    key = result.stdout.split("GATE RECORDED ", 1)[1].split(";", 1)[0]
+    reviewed = run(
+        "review-gate",
+        "--run-dir",
+        str(run_dir),
+        "--gate",
+        key,
+        "--warning-count",
+        "0",
+        "--summary",
+        "Complete fixture diagnostics inspected; no warnings.",
+    )
+    assert reviewed.returncode == 0, reviewed.stderr
+    return reviewed
+
+
+def run_final_gate(run_dir: Path, candidate: str, artifact: Path | None = None):
+    repository = Path(json.loads((run_dir / "run.json").read_text())["repository_root"])
+    complete_orchestration(repository, run_dir)
+    arguments = [
+        "run-gate",
+        "--run-dir",
+        str(run_dir),
+        "--candidate",
+        candidate,
+        "--operation",
+        "gate.check-all",
+        "--attempt",
+        "1",
+        "--selection-reason",
+        "Authoritative acceptance close",
+    ]
+    if artifact is not None:
+        arguments.extend(["--artifact", str(artifact)])
+    arguments.extend(["--final", "--", "./bin/check", "all"])
+    result = run(
+        *arguments,
+        cwd=repository,
+    )
+    if "GATE RECORDED " in result.stdout:
+        review_gate_output(run_dir, result)
+    return result
+
+
+def test_change_manifest_is_candidate_bound_and_detects_authority_drift(
+    repository: Path, tmp_path: Path
+) -> None:
+    custody_dir = tmp_path / "custody"
+    custody_dir.mkdir()
+    custody_repository = custody_dir / "repo"
+    shutil.copytree(repository, custody_repository)
+    _assert_bookkeeping_review_custody(custody_repository, custody_dir)
+    run_dir = tmp_path / "run"
+    reviewed = initialize(repository, run_dir)
+    assert len(reviewed) == 64
+    assert json.loads((run_dir / "run.json").read_text())["phase"] == "1.1"
+    authority = json.loads((run_dir / "authority.json").read_text())
+    assert [item["path"] for item in authority["authorities"]] == [
+        "phase.md",
+        "policy.md",
+    ]
+    assert (run_dir / "reviewed-candidate.json").is_file()
+    assert (run_dir / "findings.json").is_file()
+    assert (run_dir / "gates.jsonl").is_file()
+
+    # Neither the source executable nor its pinned copy may require an
+    # ambient interpreter before reaching their own imports and argument parser.
+    launch_path = tmp_path / "launch-path"
+    launch_path.mkdir()
+    (launch_path / "uv").symlink_to(UV)
+    assert shutil.which("python3", path=str(launch_path)) is None
+    for executable in (EVIDENCE, run_dir / "tools" / "kickoff-evidence"):
+        launched = subprocess.run(
+            [str(executable), "--help"],
+            cwd=repository,
+            env={
+                **os.environ,
+                "PATH": str(launch_path),
+                "UV_PYTHON_PREFERENCE": "only-managed",
+            },
+            text=True,
+            capture_output=True,
+            timeout=20,
+            check=False,
+        )
+        assert launched.returncode == 0, launched.stderr
+        assert "capture-change" in launched.stdout
+
+    active_digest = json.loads((run_dir / "gate-manifests.jsonl").read_text())["manifest_sha256"]
+    original_manifest = json.loads((tmp_path / "run-commands.json").read_text())
+    successor = tmp_path / "successor-commands.json"
+    successor_document = dict(original_manifest)
+    successor_document["commands"] = [
+        {
+            "operation": "gate.check-all",
+            "attempt": 2,
+            "final": True,
+            "argv": ["./bin/check", "all"],
+        }
+    ]
+    successor.write_text(json.dumps(successor_document, sort_keys=True) + "\n")
+    refused = run(
+        "activate-gate-manifest",
+        "--run-dir",
+        str(run_dir),
+        "--manifest",
+        str(successor),
+    )
+    assert refused.returncode != 0
+    assert f"must pass --supersedes {active_digest}" in refused.stderr
+    replaced = run(
+        "activate-gate-manifest",
+        "--run-dir",
+        str(run_dir),
+        "--manifest",
+        str(successor),
+        "--supersedes",
+        active_digest,
+    )
+    assert replaced.returncode == 0, replaced.stderr
+
+    (repository / "code.py").write_text("VALUE = 2\n")
+    (repository / "new.py").write_text("NEW = True\n")
+    candidate = capture(repository, run_dir)
+
+    change = json.loads((run_dir / "change.json").read_text())
+    assert change["reviewed_candidate_id"] == reviewed
+    assert change["candidate_id"] == candidate
+    assert [(item["path"], item["change"]) for item in change["changed_files"]] == [
+        ("code.py", "modified"),
+        ("new.py", "added"),
+    ]
+    assert change["risk_tags"] == ["public-api"]
+    assert not change["rebase_required"]
+
+    (repository / "policy.md").write_text("# Changed policy\n")
+    capture(repository, run_dir)
+    changed = json.loads((run_dir / "change.json").read_text())
+    assert changed["rebase_required"]
+    assert changed["authority_drift"][0]["path"] == "policy.md"
+
+
+def test_finding_state_is_stable_validated_and_reopen_is_counted(
+    repository: Path, tmp_path: Path
+) -> None:
+    run_dir = tmp_path / "run"
+    candidate = initialize(repository, run_dir)
+    result = ingest(run_dir, tmp_path, [finding("CODE-F001", candidate)])
+    assert result.returncode == 0, result.stderr
+
+    addressed = finding("CODE-F001", candidate, state="addressed")
+    result = ingest(run_dir, tmp_path, [addressed])
+    assert result.returncode == 0, result.stderr
+
+    verified = finding(
+        "CODE-F001",
+        candidate,
+        state="verified",
+        resolved_in=candidate,
+    )
+    assert ingest(run_dir, tmp_path, [verified]).returncode == 0
+    closed = finding(
+        "CODE-F001",
+        candidate,
+        state="closed",
+        resolved_in=candidate,
+    )
+    assert ingest(run_dir, tmp_path, [closed]).returncode == 0
+    reopened = finding(
+        "CODE-F001",
+        candidate,
+        state="open",
+        classification="newly-exposed-by-resolution",
+    )
+    assert ingest(run_dir, tmp_path, [reopened]).returncode == 0
+
+    ledger = json.loads((run_dir / "findings.json").read_text())
+    assert ledger["reopened_count"] == 1
+    assert ledger["findings"][0]["state"] == "open"
+
+
+def test_role_artifacts_feed_findings_and_change_metadata_without_reparsing(
+    repository: Path, tmp_path: Path
+) -> None:
+    run_dir = tmp_path / "run"
+    candidate = initialize(repository, run_dir)
+    review_artifact = tmp_path / "review.md"
+    review_artifact.write_text(
+        "## Finding Evidence\n```json\n"
+        + json.dumps({"findings": [finding("CODE-F001", candidate)]})
+        + "\n```\n\n## Verdict: REVISE\n"
+    )
+
+    review = run(
+        "ingest-findings",
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "code",
+        "--candidate",
+        candidate,
+        "--no-review-span",
+        "test fixture: no review pass was dispatched",
+        "--artifact",
+        str(review_artifact),
+    )
+    assert review.returncode == 0, review.stderr
+
+    (repository / "code.py").write_text("VALUE = 2\n")
+    coder_artifact = tmp_path / "coder.md"
+    coder_artifact.write_text(
+        "### Change Evidence\n```json\n"
+        + json.dumps(
+            {
+                "risk_tags": ["public-api"],
+                "selected_tests": ["./bin/test focused"],
+                "selection_reason": "Exercises the public behavior",
+                "intentionally_unchanged": ["policy.md"],
+                "rebase_reasons": [],
+                "failure_analysis": "",
+                "falsifiers": [],
+                "gate_status": {"focused": "green", "reason": ""},
+            }
+        )
+        + "\n```\n"
+    )
+    change = run(
+        "capture-change",
+        "--run-dir",
+        str(run_dir),
+        "--metadata-artifact",
+        str(coder_artifact),
+    )
+    assert change.returncode == 0, change.stderr
+    manifest = json.loads((run_dir / "change.json").read_text())
+    assert manifest["risk_tags"] == ["public-api"]
+    assert manifest["selection_reason"] == "Exercises the public behavior"
+
+
+def test_revision_round_requires_and_carries_failure_analysis(
+    repository: Path, tmp_path: Path
+) -> None:
+    run_dir = tmp_path / "run"
+    initialize(repository, run_dir)
+    (repository / "code.py").write_text("VALUE = 2\n")
+    first_candidate = capture(repository, run_dir)
+    marked = run(
+        "mark-reviewed",
+        "--run-dir",
+        str(run_dir),
+        "--expected-candidate",
+        first_candidate,
+        cwd=repository,
+    )
+    assert marked.returncode == 0, marked.stderr
+
+    (repository / "code.py").write_text("VALUE = 3\n")
+    without_analysis = run(
+        "capture-change",
+        "--run-dir",
+        str(run_dir),
+        "--risk-tag",
+        "public-api",
+        "--test",
+        "./bin/test focused",
+        "--selection-reason",
+        "Exercises the revised behavior",
+        cwd=repository,
+    )
+    assert without_analysis.returncode == 2
+    assert "failure_analysis must be nonempty on a revision round" in without_analysis.stderr
+
+    analysis = "Initial fix patched the symptom; the guard belonged one call earlier."
+    with_analysis = run(
+        "capture-change",
+        "--run-dir",
+        str(run_dir),
+        "--risk-tag",
+        "public-api",
+        "--test",
+        "./bin/test focused",
+        "--selection-reason",
+        "Exercises the revised behavior",
+        "--failure-analysis",
+        analysis,
+        cwd=repository,
+    )
+    assert with_analysis.returncode == 0, with_analysis.stderr
+    revised_candidate = with_analysis.stdout.strip()
+    assert json.loads((run_dir / "change.json").read_text())["failure_analysis"] == analysis
+
+    assert (
+        ingest(
+            run_dir,
+            tmp_path,
+            [finding("CODE-F001", revised_candidate)],
+            candidate=revised_candidate,
+        ).returncode
+        == 0
+    )
+    output = tmp_path / "revision-packet.md"
+    packet = run(
+        "packet",
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "code",
+        "--output",
+        str(output),
+    )
+    assert packet.returncode == 0, packet.stderr
+    text = output.read_text()
+    assert "## Failure analysis" in text
+    assert analysis in text
+
+
+@pytest.mark.parametrize("state", ["open", "addressed", "blocked-owner"])
+def test_final_validation_rejects_blocking_findings(
+    repository: Path,
+    tmp_path: Path,
+    state: str,
+) -> None:
+    run_dir = tmp_path / "run"
+    candidate = initialize(repository, run_dir)
+    item = finding("CODE-F001", candidate, state=state)
+    assert ingest(run_dir, tmp_path, [item]).returncode == 0
+    assert run_final_gate(run_dir, candidate).returncode == 0
+    complete_orchestration(repository, run_dir)
+
+    result = run(
+        "validate",
+        "--run-dir",
+        str(run_dir),
+        "--level",
+        "acceptance",
+        "--required-final-command",
+        "./bin/check all",
+    )
+
+    assert result.returncode == 2
+    assert "phase-close findings remain unresolved: CODE-F001" in result.stderr
+
+
+def test_validate_detects_corrupt_evidence(repository: Path, tmp_path: Path) -> None:
+    _assert_failed_close_is_truthful_terminal_and_idempotent(repository, tmp_path)
+    run_dir = tmp_path / "run"
+    initialize(repository, run_dir)
+    valid = run("validate", "--run-dir", str(run_dir))
+    assert valid.returncode == 0, valid.stderr
+    assert "EVIDENCE VALID" in valid.stdout
+
+    (run_dir / "findings.json").write_text("{broken")
+    invalid = run("validate", "--run-dir", str(run_dir))
+    assert invalid.returncode == 2
+    assert "invalid JSON" in invalid.stderr
+
+
+def _assert_failed_close_is_truthful_terminal_and_idempotent(
+    repository: Path, tmp_path: Path
+) -> None:
+    run_dir = tmp_path / "failed-run"
+    initialize(repository, run_dir, follow_up_route="full-cycle")
+    status = run("status", "--run-dir", str(run_dir))
+    assert status.returncode == 0, status.stderr
+    observed = json.loads(status.stdout)
+    assert observed["missing_acceptance_role_operations"]
+    assert run("validate", "--run-dir", str(run_dir), "--level", "integrity").returncode == 0
+    acceptance = run("validate", "--run-dir", str(run_dir), "--level", "acceptance")
+    assert acceptance.returncode == 2
+    assert "missing required initial role attempt" in acceptance.stderr
+
+    metadata = json.loads((run_dir / "run.json").read_text())
+    failure = {
+        "affected_contract": "phase acceptance",
+        "causal_generator": "run stopped before required roles completed",
+        "execution_boundary": "role dispatch",
+        "failed_operation": "phase.1.1",
+        "novelty": "known",
+        "park_id": "a" * 32,
+        "phase": "1.1",
+        "remaining_budget": 0,
+        "resume_permitted": False,
+        "resume_refusal_reason": "operator decision required",
+        "self_resume_consumed": False,
+        "terminal_condition": "run cannot accept",
+        "trace_id": metadata["telemetry_trace_id"],
+    }
+    failure_path = tmp_path / "failed-close.json"
+    failure_path.write_text(json.dumps(failure) + "\n")
+    log_text = "## 2026-01-01 10:00 — PARK\n\nPhase 1.1 — failed\n"
+    log_block = tmp_path / "failed-close.md"
+    log_block.write_text(log_text)
+    arguments = (
+        "close",
+        "--run-dir",
+        str(run_dir),
+        "--outcome",
+        "failed",
+        "--reason-code",
+        "required-roles-missing",
+        "--log-block",
+        str(log_block),
+        "--failure-record",
+        str(failure_path),
+    )
+    first = run(*arguments)
+    second = run(*arguments)
+    assert first.returncode == second.returncode == 0, first.stderr + second.stderr
+    assert (repository / "LOG.md").read_text().count(log_text) == 1
+    rows = [
+        json.loads(line)
+        for line in (repository / ".kickoff" / "failure-signatures.jsonl").read_text().splitlines()
+    ]
+    assert rows == [failure]
+    closure = json.loads((run_dir / "closure.json").read_text())
+    assert closure["status"] == "complete" and closure["outcome"] == "failed"
+
+
+def test_complete_synthetic_kickoff_cross_validates_roles_revision_and_gates(
+    repository: Path, tmp_path: Path
+) -> None:
+    primary_repository = tmp_path / "primary-repo"
+    shutil.copytree(repository, primary_repository, symlinks=True)
+    _assert_complete_synthetic_kickoff(
+        primary_repository, tmp_path / "primary", phase="1", primary=True
+    )
+    final_repository = tmp_path / "final-repo"
+    shutil.copytree(repository, final_repository, symlinks=True)
+    child_repository = tmp_path / "child-repo"
+    shutil.copytree(repository, child_repository, symlinks=True)
+    _assert_complete_synthetic_kickoff(repository, tmp_path / "major", phase="1")
+    _assert_complete_synthetic_kickoff(child_repository, tmp_path / "child", phase="1.1")
+    parent_run = _assert_complete_synthetic_kickoff(
+        final_repository,
+        tmp_path / "parent",
+        phase="1",
+        final_child=True,
+        nested=True,
+        accept_only=True,
+    )
+    middle_run = _assert_complete_synthetic_kickoff(
+        final_repository,
+        tmp_path / "middle-child",
+        phase="1.1",
+        final_child=True,
+        nested=True,
+        parent_run=parent_run,
+        accept_only=True,
+    )
+    _assert_complete_synthetic_kickoff(
+        final_repository,
+        tmp_path / "final-child",
+        phase="1.1.1",
+        final_child=True,
+        nested=True,
+        parent_run=middle_run,
+    )
+
+
+def _assert_complete_synthetic_kickoff(
+    repository: Path,
+    tmp_path: Path,
+    *,
+    phase: str,
+    final_child: bool = False,
+    nested: bool = False,
+    accept_only: bool = False,
+    parent_run: Path | None = None,
+    primary: bool = False,
+) -> Path | None:
+    tmp_path.mkdir()
+    (repository / "code.py").write_text("VALUE = 1\n")
+    write_instruction_resources(repository)
+    (repository / "briefs").mkdir(exist_ok=True)
+    (repository / "briefs/design.md").write_text("# Design\n\nDeliver VALUE = 2.\n")
+    (repository / "policies/delivery.md").write_text(
+        "# Delivery\n\nKeep governing bytes unchanged through accepted close.\n"
+    )
+    (repository / "CLAUDE.md").write_text(
+        "# Synthetic engine\n\n"
+        "[Design](briefs/design.md)\n[Delivery](policies/delivery.md)\n" + ZONE_MARKERS
+    )
+    (repository / "plan").mkdir(exist_ok=True)
+    (repository / "plan/phase-0.md").write_text("# Prepared dependency\n")
+    (repository / "plan/phase-1.md").write_text(
+        '---\nid: "1"\ndepends_on: ["plan/phase-0.md"]\n---\n'
+        "# Qualification\n\n## Acceptance\n\nDeliver VALUE = 2 under frozen authorities.\n"
+        "\n## Brief refs\n\n[Design](../briefs/design.md)\n"
+    )
+    child_row = ""
+    if phase == "1.1" or final_child:
+        (repository / "plan/phase-1.1.md").write_text(
+            "# Child qualification\n\n[Parent](phase-1.md)\n"
+        )
+        child_row = (
+            "| [Phase 1.1](phase-1.1.md) | Qualification child | 🚧 |\n"
+            "| [Phase 1.2](phase-1.2.md) | Next child | ⬅️ |\n"
+        )
+        (repository / "plan/phase-1.2.md").write_text("# Next child\n")
+        if final_child:
+            child_row = (
+                "| [Phase 1.1](phase-1.1.md) | Qualification child | 🚧 |\n"
+                "| [Phase 2](phase-2.md) | Next major | ⏳ |\n"
+            )
+            (repository / "plan/phase-2.md").write_text("# Next major\n")
+            if nested:
+                child_row = child_row.replace(
+                    "| [Phase 2]",
+                    "| [Phase 1.1.1](phase-1.1.1.md) | Nested child | 🚧 |\n| [Phase 2]",
+                )
+                (repository / "plan/phase-1.1.1.md").write_text("# Nested child\n")
+    index = repository / "plan/INDEX.md"
+    index.write_text(
+        "# Plan\n\n## Phase Table\n\n| Phase | Title | Status |\n|---|---|---|\n"
+        "| [Phase 0](phase-0.md) | Prepared dependency | ✅ |\n"
+        "| [Phase 1](phase-1.md) | Qualification | 🚧 |\n"
+        + child_row
+        + "\n## Cross-cutting concerns\n\nRetain both close gates.\n"
+    )
+    captured_index = index.read_bytes()
+    shutil.copy2(ROOT / "bin/check-catalogs", repository / "bin/check-catalogs")
+    # The final synthetic gate exercises the product and the real catalog checker.
+    (repository / "bin/check").write_text(
+        '#!/bin/sh\nset -eu\ntest "$1" = all\n'
+        f"{sys.executable} -c \"import runpy; assert runpy.run_path('code.py')['VALUE'] == 2\"\n"
+        "exec ./bin/check-catalogs\n"
+    )
+    partition = repository / "candidate-partition.yaml"
+    if '"/.claude/**"' not in partition.read_text():
+        partition.write_text(
+            partition.read_text().replace(
+                "active:\n", 'active:\n  - "/.claude/**"\n  - "/briefs/**"\n'
+            )
+        )
+    authorities = (
+        "plan/INDEX.md",
+        f"plan/phase-{phase}.md",
+        *(("plan/phase-1.md",) if phase == "1.1" else ()),
+        "briefs/design.md",
+        "plan/phase-0.md",
+        "CLAUDE.md",
+        "policies/delivery.md",
+    )
+    governing_bytes = {name: (repository / name).read_bytes() for name in authorities}
+    root = start_trace(
+        engine_root=repository,
+        scope_root=repository,
+        scope="engine",
+        scope_id="engine",
+        run_type="kickoff",
+        operation=f"phase.{phase}",
+    )
+    setup = start_span(
+        engine_root=repository,
+        trace_id=root.trace_id,
+        parent_span_id=root.span_id,
+        category="reconciliation",
+        operation="orchestration.setup",
+    )
+    run_dir = tmp_path / "run"
+    receipt = tmp_path / "preflight.json"
+    write_fixture_receipt(receipt, mode="primary" if primary else "delegated")
+    initialized = run(
+        "init",
+        "--run-dir",
+        str(run_dir),
+        "--root",
+        str(repository),
+        "--phase",
+        phase,
+        *[item for authority in authorities for item in ("--authority", authority)],
+        "--telemetry-trace-id",
+        root.trace_id,
+        "--telemetry-root-span-id",
+        root.span_id,
+        "--initial-orchestration-span-id",
+        setup.span_id,
+        "--preflight-receipt",
+        str(receipt),
+        "--review-lane",
+        "full",
+        "--evidence-lane",
+        "full",
+        "--follow-up-route",
+        "initial",
+    )
+    assert initialized.returncode == 0, initialized.stderr
+    initial_product = initialized.stdout.strip()
+    authority = json.loads((run_dir / "authority.json").read_text())["authorities"]
+    assert [item["path"] for item in authority] == list(authorities)
+    assert all(item["locator"] is None for item in authority)
+    for item in authority:
+        assert item["content_sha256"] == hashlib.sha256(governing_bytes[item["path"]]).hexdigest()
+    assert index.read_bytes() == captured_index and "🚧" in captured_index.decode()
+    gate_manifest = tmp_path / "gate-manifest.json"
+    gate_manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "commands": [
+                    {
+                        "operation": "gate.check-all",
+                        "attempt": 1,
+                        "final": True,
+                        "argv": ["./bin/check", "all"],
+                    },
+                    {
+                        "operation": "gate.focused",
+                        "attempt": 1,
+                        "final": False,
+                        "argv": ["/usr/bin/true"],
+                    },
+                    {
+                        "operation": "gate.check-all",
+                        "attempt": 1,
+                        "final": True,
+                        "argv": ["/usr/bin/true"],
+                    },
+                ],
+                "preflight_commands": [],
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    activated = run(
+        "activate-gate-manifest",
+        "--run-dir",
+        str(run_dir),
+        "--manifest",
+        str(gate_manifest),
+    )
+    assert activated.returncode == 0, activated.stderr
+
+    primary_report = {
+        "summary": "Check completed.",
+        "findings": [
+            {
+                "id": "F1",
+                "severity": "critical",
+                "affected_paths": ["code.py"],
+                "evidence": "VALUE is a constant.",
+                "consequence": "Suggestion assumes runtime configuration.",
+                "suggestion": "Introduce a configuration service.",
+            }
+        ],
+    }
+
+    def role_attempt(
+        operation: str,
+        role: str,
+        harness: str,
+        attempt: int,
+        reason: str,
+        outcome: str = "success",
+        exit_code: int = 0,
+        model: str | None = None,
+        effort: str | None = None,
+    ) -> None:
+        handoff = run_dir / f"{operation}-{attempt}.json"
+        arguments = [
+            "register-role-attempt",
+            "--run-dir",
+            str(run_dir),
+            "--operation",
+            operation,
+            "--attempt",
+            str(attempt),
+            "--role",
+            role,
+            "--harness",
+            harness,
+            "--reason",
+            reason,
+            "--output",
+            str(handoff),
+        ]
+        if model:
+            arguments.extend(["--model", model])
+        if effort:
+            arguments.extend(["--effort", effort])
+        if primary and attempt > 1:
+            arguments.extend(["--cause", "Check the concrete correction once"])
+        registered = run(*arguments)
+        assert registered.returncode == 0, registered.stderr
+        if harness in {"claude", "codex"}:
+            executable = tmp_path / harness
+            event = (
+                '{"type":"result","result":"OK"}'
+                if harness == "claude"
+                else '{"type":"turn.completed"}'
+            )
+            if primary:
+                event = json.dumps({"type": "result", "result": json.dumps(primary_report)})
+            artifact = tmp_path / f"{operation}-{attempt}-artifact.txt"
+            populate = "" if harness == "claude" else f"printf '%s' 'CODEX' > {artifact}\n"
+            executable.write_text(
+                f"#!/bin/sh\nprintf '%s\\n' '{event}'\n{populate}exit {exit_code}\n"
+            )
+            executable.chmod(0o755)
+            prompt = tmp_path / f"{operation}-{attempt}-prompt.md"
+            prompt.write_text("Adopt your canonical persona and report.\n")
+            artifact_flag = "--result-file" if harness == "claude" else "--required-output-file"
+            watcher_arguments = [
+                UV,
+                "run",
+                "--script",
+                str(run_dir / "tools" / "kickoff-config"),
+                "watch",
+                "--role",
+                role,
+                "--venue",
+                harness,
+                "--model",
+                model or harness,
+                "--effort",
+                effort or "default",
+                "--phase",
+                phase,
+                "--prompt-file",
+                str(prompt),
+                artifact_flag,
+                str(artifact),
+                "--first-event-timeout",
+                "2",
+                "--idle-timeout",
+                "2",
+                "--hard-timeout",
+                "2",
+                "--telemetry-role-registration",
+                str(handoff),
+            ]
+            watched = subprocess.run(
+                watcher_arguments,
+                cwd=repository,
+                env={
+                    **os.environ,
+                    f"KICKOFF_CLI_{harness.upper()}": str(executable),
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if primary and attempt == 3:
+                assert watched.returncode != 0 and "maximum two" in watched.stderr, watched.stderr
+            else:
+                assert watched.returncode == exit_code, watched.stderr
+            return
+        metadata = {"role": role, "harness": harness}
+        if model:
+            metadata["model"] = model
+        if effort:
+            metadata["effort"] = effort
+        intelligence = start_span(
+            engine_root=repository,
+            trace_id=root.trace_id,
+            parent_span_id=root.span_id,
+            category="intelligence",
+            operation=operation,
+            attempt=attempt,
+            **metadata,
+        )
+        opened = open_role_dispatch(run_dir, handoff, intelligence.span_id)
+        assert opened.returncode == 0, opened.stderr
+        if role == "coder":
+            (repository / "code.py").write_text("VALUE = 2\n")
+        wait = start_span(
+            engine_root=repository,
+            trace_id=root.trace_id,
+            parent_span_id=intelligence.span_id,
+            category="wait",
+            operation=operation,
+            attempt=attempt,
+            **metadata,
+        )
+        finish_span(
+            engine_root=repository,
+            trace_id=root.trace_id,
+            span_id=wait.span_id,
+            outcome=outcome,
+            exit_code=exit_code,
+        )
+        finish_span(
+            engine_root=repository,
+            trace_id=root.trace_id,
+            span_id=intelligence.span_id,
+            outcome=outcome,
+            exit_code=exit_code,
+        )
+        dispatched = run(
+            "record-role-dispatch",
+            "--run-dir",
+            str(run_dir),
+            "--registration",
+            str(handoff),
+            "--state",
+            "accepted",
+            "--idle-telemetry",
+            ("unavailable" if harness == "native" else "available"),
+            "--intelligence-span-id",
+            intelligence.span_id,
+            "--wait-span-id",
+            wait.span_id,
+        )
+        assert dispatched.returncode == 0, dispatched.stderr
+
+    if primary:
+        plan = tmp_path / "primary-plan.md"
+        plan.write_text("# Plan\n\nImplement VALUE = 2 and run the complete gate.\n")
+        captured_plan = run("capture-plan", "--run-dir", str(run_dir), "--plan", str(plan))
+        assert captured_plan.returncode == 0, captured_plan.stderr
+        role_attempt("role.plan-review", "reviewer", "claude", 1, "initial", model="opus")
+        (repository / "code.py").write_text("VALUE = 2\n")
+        implemented = capture(repository, run_dir)
+        role_attempt("role.code-review", "critic", "claude", 1, "initial", model="opus")
+        role_attempt("role.code-review", "critic", "claude", 2, "revision", model="opus")
+        role_attempt("role.code-review", "critic", "claude", 3, "revision", model="opus")
+    else:
+        role_attempt(
+            "role.plan",
+            "planner",
+            "claude",
+            1,
+            "initial",
+            outcome="error",
+            exit_code=1,
+            model="opus",
+            effort="high",
+        )
+        role_attempt(
+            "role.plan",
+            "planner",
+            "claude",
+            2,
+            "revision",
+            model="opus",
+            effort="high",
+        )
+        role_attempt("role.plan-review", "reviewer", "native", 1, "initial")
+        role_attempt("role.implement", "coder", "native", 1, "initial")
+        implemented = capture(repository, run_dir)
+        assert implemented != initial_product
+        change = json.loads((run_dir / "change.json").read_text())
+        assert [item["path"] for item in change["changed_files"]] == ["code.py"]
+        assert change["authority_drift"] == []
+        role_attempt(
+            "role.code-review",
+            "critic",
+            "codex",
+            1,
+            "initial",
+            model="sol",
+            effort="high",
+        )
+    dispatches = [
+        dispatch
+        for line in (run_dir / "role-dispatch.jsonl").read_text().splitlines()
+        for dispatch in [json.loads(line)]
+        if dispatch.get("state") != "opened"
+    ]
+    if primary:
+        assert len(dispatches) == 4
+        assert sum(d["accepted"] for d in dispatches) == 3
+        assert {d["operation"] for d in dispatches} == {
+            "role.plan-review",
+            "role.code-review",
+        }
+        for dispatch in dispatches:
+            if not dispatch["accepted"]:
+                continue
+            report = tmp_path / f"{dispatch['operation']}-{dispatch['attempt']}-artifact.txt"
+            assert json.loads(report.read_text()) == primary_report
+            ingested = run(
+                "ingest-findings",
+                "--run-dir",
+                str(run_dir),
+                "--kind",
+                "plan" if dispatch["operation"] == "role.plan-review" else "code",
+                "--artifact",
+                str(report),
+                "--candidate",
+                dispatch["dispatch_candidate_id"],
+                "--review-span-id",
+                dispatch["intelligence_span_id"],
+            )
+            assert ingested.returncode == 0, ingested.stderr
+        # Advice-driven correction changes final identity without another model call.
+        (repository / "code.py").write_text("VALUE = 2  # Required constant.\n")
+        implemented = capture(repository, run_dir)
+        decision = tmp_path / "primary-decision-input.json"
+        decision.write_text(
+            json.dumps(
+                {
+                    "delta_assessment": "Added a comment after advice; behavior unchanged.",
+                    "requirements_checked": "Constant remains 2; full gate required.",
+                    "dispositions": [
+                        {
+                            "finding": identifier + ":F1",
+                            "action": "decline",
+                            "reason": "Requirement specifies a constant; no service needed.",
+                            "verification": "",
+                        }
+                        for identifier in ("plan-1", "code-1", "code-2")
+                    ],
+                }
+            )
+        )
+        accepted = run("accept-primary", "--run-dir", str(run_dir), "--input", str(decision))
+        assert accepted.returncode == 0, accepted.stderr
+        saved = (run_dir / "primary-decision.json").read_bytes()
+        altered = json.loads(saved)
+        altered["candidate_id"] = initial_product
+        (run_dir / "primary-decision.json").write_text(json.dumps(altered))
+        stale = run("validate", "--run-dir", str(run_dir), "--level", "acceptance")
+        assert stale.returncode != 0 and "stale" in stale.stderr, stale.stderr
+        (run_dir / "primary-decision.json").write_bytes(saved)
+        continuation = tmp_path / "continuation"
+        initialize(repository, continuation, mode="primary", phase=phase)
+        carried = run("carry-advice", "--run-dir", str(continuation), "--source-run", str(run_dir))
+        assert carried.returncode == 0, carried.stderr
+        carried_rows = json.loads((continuation / "advisory-reports.json").read_text())
+        assert len(carried_rows) == 3 and all(
+            r["source_run"] == str(run_dir.resolve()) for r in carried_rows
+        )
+        decision_again = run(
+            "accept-primary", "--run-dir", str(continuation), "--input", str(decision)
+        )
+        assert decision_again.returncode == 0, decision_again.stderr
+    else:
+        for dispatch in dispatches:
+            if dispatch["operation"] in {"role.plan-review", "role.code-review"}:
+                attach_review_metrics(
+                    engine_root=repository,
+                    trace_id=root.trace_id,
+                    span_id=dispatch["intelligence_span_id"],
+                    findings_reported=0,
+                    actionable_findings=0,
+                )
+        assert len(dispatches) == 5
+        assert sum(item["idle_telemetry"] == "available" for item in dispatches) == 3
+        assert sum(item["idle_telemetry"] == "unavailable" for item in dispatches) == 2
+    candidate = tree_manifest_for_test(repository)
+    assert candidate == implemented
+    reviewed = run("mark-reviewed", "--run-dir", str(run_dir), "--expected-candidate", candidate)
+    assert reviewed.returncode == 0, reviewed.stderr
+    full_tree = subprocess.run(
+        [str(TREE_ID), "--root", str(repository)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert full_tree.returncode == 0, full_tree.stderr
+    assert full_tree.stdout.strip() != candidate
+    wrong_identity = run(
+        "run-gate",
+        "--run-dir",
+        str(run_dir),
+        "--candidate",
+        full_tree.stdout.strip(),
+        "--operation",
+        "gate.focused",
+        "--selection-reason",
+        "full-tree identity must not substitute for product identity",
+        "--",
+        "/usr/bin/true",
+        cwd=repository,
+    )
+    assert wrong_identity.returncode != 0
+    assert "candidate mismatch" in wrong_identity.stderr
+    focused = run(
+        "run-gate",
+        "--run-dir",
+        str(run_dir),
+        "--candidate",
+        candidate,
+        "--operation",
+        "gate.focused",
+        "--selection-reason",
+        "focused proof",
+        "--",
+        "/usr/bin/true",
+        cwd=repository,
+    )
+    assert focused.returncode == 0, focused.stderr
+    complete_orchestration(repository, run_dir)
+    artifact = tmp_path / "gate.txt"
+    artifact.write_text("PASS\n")
+    final = run(
+        "run-gate",
+        "--run-dir",
+        str(run_dir),
+        "--candidate",
+        candidate,
+        "--operation",
+        "gate.check-all",
+        "--selection-reason",
+        "final proof",
+        "--artifact",
+        str(artifact),
+        "--final",
+        "--",
+        "./bin/check",
+        "all",
+        cwd=repository,
+    )
+    assert final.returncode == 0, final.stderr
+    gates = [json.loads(line) for line in (run_dir / "gates.jsonl").read_text().splitlines()]
+    assert gates[-1]["artifact_sha256"] == hashlib.sha256(artifact.read_bytes()).hexdigest()
+    assert gates[-1]["final"]
+    assert all(gate["warning_count"] is None for gate in gates)
+    unreviewed = run("validate", "--run-dir", str(run_dir), "--level", "acceptance")
+    assert unreviewed.returncode == 2
+    assert "gate diagnostics remain unreviewed" in unreviewed.stderr
+    wrong_review = run(
+        "review-gate",
+        "--run-dir",
+        str(run_dir),
+        "--gate",
+        "f" * 64,
+        "--warning-count",
+        "0",
+        "--summary",
+        "Wrong execution must refuse.",
+    )
+    assert wrong_review.returncode == 2
+    review_gate_output(run_dir, focused)
+    reviewed = review_gate_output(run_dir, final)
+    review_bytes = (run_dir / "gate-reviews.jsonl").read_bytes()
+    review_gate_output(run_dir, final)
+    assert (run_dir / "gate-reviews.jsonl").read_bytes() == review_bytes
+    key = final.stdout.split("GATE RECORDED ", 1)[1].split(";", 1)[0]
+    correction = [
+        "review-gate",
+        "--run-dir",
+        str(run_dir),
+        "--gate",
+        key,
+        "--warning-count",
+        "2",
+        "--summary",
+        "Two explained fixture warnings; correcting the observation.",
+    ]
+    assert run(*correction).returncode == 2
+    corrected = run(*correction, "--supersedes", reviewed.stdout.split()[2])
+    assert corrected.returncode == 0, corrected.stderr
+    assert len((run_dir / "gates.jsonl").read_text().splitlines()) == 2
+    assert len((run_dir / "gate-reviews.jsonl").read_text().splitlines()) == 3
+    validated = run(
+        "validate",
+        "--run-dir",
+        str(run_dir),
+        "--level",
+        "acceptance",
+        "--required-final-command",
+        "./bin/check all",
+    )
+    assert validated.returncode == 0, validated.stderr
+    finish_span(
+        engine_root=repository,
+        trace_id=root.trace_id,
+        span_id=root.span_id,
+        outcome="success",
+    )
+    finalize_trace(engine_root=repository, trace_id=root.trace_id)
+    json_summary = run("timing-summary", "--run-dir", str(run_dir), "--format", "json")
+    markdown = run("timing-summary", "--run-dir", str(run_dir), "--format", "markdown")
+    assert json_summary.returncode == markdown.returncode == 0
+    projection = json.loads(json_summary.stdout)
+    if primary:
+        assert projection["authority_mode"] == "primary"
+        assert projection["advisory_reports"] == 3
+        assert len(projection["primary_dispositions"]) == 3
+    else:
+        assert projection["retry_ns"] > 0
+        assert projection["failed_ns"] > 0
+    for slow in projection["slowest_spans"]:
+        assert slow["operation"] in markdown.stdout
+
+    assert f"Execution trace: {projection['trace_id']}" in markdown.stdout
+
+    close_text = (
+        f"## 2026-01-01 10:00 — END\n\nPhase {phase} — accepted implementation\n"
+        "\nStatus bookkeeping and handoff remain pending.\n"
+    )
+    close_block = tmp_path / "accepted-close.md"
+    close_block.write_text(close_text)
+    close_arguments = (
+        "close",
+        "--run-dir",
+        str(run_dir),
+        "--outcome",
+        "accepted",
+        "--reason-code",
+        "all-gates-green",
+        "--log-block",
+        str(close_block),
+        "--required-final-command",
+        "./bin/check all",
+    )
+    for relative, replacement, diagnostic in (
+        (
+            "policies/delivery.md",
+            b"# Delivery\n\nGoverning edits are now permitted.\n",
+            "declared authority changed; re-review in a fresh evidence run",
+        ),
+        (
+            "plan/INDEX.md",
+            captured_index.replace(b"Retain both close gates.", b"Omit the handoff gate."),
+            "reviewed bookkeeping changed; capture and re-review: plan/INDEX.md",
+        ),
+    ):
+        target = repository / relative
+        try:
+            target.write_bytes(replacement)
+            refused = run(*close_arguments)
+            assert refused.returncode == 2, refused.stdout + refused.stderr
+            expected = (
+                "primary acceptance is stale"
+                if primary and relative == "policies/delivery.md"
+                else diagnostic
+            )
+            assert expected in refused.stderr
+            assert not (run_dir / "closure.json").exists()
+        finally:
+            target.write_bytes(governing_bytes[relative])
+    assert all((repository / name).read_bytes() == body for name, body in governing_bytes.items())
+    if accept_only and parent_run is None:
+        closed = run(*close_arguments)
+        assert closed.returncode == 0, closed.stderr
+        return run_dir
+    ledger_after = tmp_path / "ledger-after.md"
+    title = {
+        "1": "Qualification",
+        "1.1": "Qualification child",
+        "1.1.1": "Nested child",
+    }[phase]
+    expected_index = captured_index.replace(
+        f"{title} | 🚧".encode(),
+        f"{title} | ✅".encode(),
+    )
+    if parent_run is not None:
+        if phase == "1.1.1":
+            expected_index = expected_index.replace(
+                "Qualification child | 🚧".encode(), "Qualification child | ✅".encode()
+            )
+        expected_index = expected_index.replace(
+            "Qualification | 🚧".encode(), "Qualification | ✅".encode()
+        )
+        expected_index = expected_index.replace(
+            "Next major | ⏳".encode(), "Next major | ⬅️".encode()
+        )
+        close_arguments += ("--parent-run", str(parent_run))
+    ledger_after.write_bytes(expected_index)
+    close_arguments += ("--ledger-after", str(ledger_after))
+    for invalid in (
+        expected_index.replace(b"Retain both close gates.", b"Omit the handoff gate."),
+        expected_index.replace(
+            "Prepared dependency | ✅".encode(), "Prepared dependency | 🚧".encode()
+        ),
+    ):
+        ledger_after.write_bytes(invalid)
+        refused = run(*close_arguments)
+        assert refused.returncode == 2
+        assert "close transition" in refused.stderr
+        assert not (run_dir / "closure.json").exists()
+    ledger_after.write_bytes(expected_index)
+    if parent_run is not None:
+        wrong_parent = run(*close_arguments, "--parent-run", str(run_dir))
+        assert wrong_parent.returncode == 2
+        assert "parent acceptance must belong" in wrong_parent.stderr
+        parent_closure = parent_run / "closure.json"
+        clean_closure = parent_closure.read_bytes()
+        try:
+            invalid_parent = json.loads(clean_closure)
+            invalid_parent["status"] = "failed"
+            parent_closure.write_text(json.dumps(invalid_parent))
+            refused_parent = run(*close_arguments)
+            assert refused_parent.returncode == 2
+            assert "parent implementation is not independently accepted" in refused_parent.stderr
+        finally:
+            parent_closure.write_bytes(clean_closure)
+        if "ledger_transition" in json.loads(clean_closure):
+            try:
+                altered = json.loads(clean_closure)
+                altered["ledger_transition"]["completed_phases"].append("0")
+                parent_closure.write_text(json.dumps(altered))
+                refused_parent = run(*close_arguments)
+                assert refused_parent.returncode == 2
+                assert "parent closure identity" in refused_parent.stderr
+            finally:
+                parent_closure.write_bytes(clean_closure)
+    closed = run(*close_arguments)
+    repeated = run(*close_arguments)
+    assert closed.returncode == repeated.returncode == 0, closed.stderr + repeated.stderr
+    assert (repository / "LOG.md").read_text().count(close_text) == 1
+    closure = json.loads((run_dir / "closure.json").read_text())
+    assert closure["status"] == "complete" and closure["outcome"] == "accepted"
+    assert index.read_bytes() == captured_index
+    if accept_only:
+        return run_dir
+    record_path = run_dir / "closure.json"
+    clean_record = record_path.read_bytes()
+    try:
+        corrupted = json.loads(clean_record)
+        corrupted["ledger_transition"]["after_sha256"] = corrupted["ledger_transition"][
+            "before_sha256"
+        ]
+        record_path.write_text(json.dumps(corrupted))
+        refused_record = run(*close_arguments, "--verify-handoff")
+        assert refused_record.returncode == 2
+        assert "closure identity" in refused_record.stderr
+    finally:
+        record_path.write_bytes(clean_record)
+    missing_bookkeeping = run(*close_arguments, "--verify-handoff")
+    assert missing_bookkeeping.returncode == 2
+    assert "handoff ledger differs" in missing_bookkeeping.stderr
+    index.write_bytes(expected_index)
+    retried = run(*close_arguments)
+    assert retried.returncode == 0, retried.stderr
+    verified = run(*close_arguments, "--verify-handoff")
+    assert verified.returncode == 0, verified.stderr
+    handoff = subprocess.run(
+        [str(repository / "bin/check"), "all"],
+        cwd=repository,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert handoff.returncode == 0, handoff.stdout + handoff.stderr
+    assert "CATALOGS OK" in handoff.stdout
+
+    # Delivery is a real ordinary commit and fast-forward to a disposable remote.
+    remote = tmp_path / "delivery.git"
+    subprocess.run(["git", "init", "--bare", "-q", "-b", "master", str(remote)], check=True)
+    subprocess.run(
+        ["git", "push", str(remote), "master"],
+        cwd=repository,
+        capture_output=True,
+        check=True,
+    )
+    paths = (
+        subprocess.run(
+            ["git", "ls-files", "-co", "--exclude-standard", "-z"],
+            cwd=repository,
+            capture_output=True,
+            check=True,
+        )
+        .stdout.decode()
+        .split("\0")
+    )
+    paths = sorted(set(item for item in paths if item))
+    subprocess.run(["git", "add", "--", *paths], cwd=repository, check=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "Deliver qualified fixture"],
+        cwd=repository,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "push", str(remote), "master"],
+        cwd=repository,
+        capture_output=True,
+        check=True,
+    )
+    local_head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repository, capture_output=True, check=True
+    ).stdout
+    remote_head = subprocess.run(
+        ["git", "--git-dir", str(remote), "rev-parse", "master"],
+        capture_output=True,
+        check=True,
+    ).stdout
+    assert local_head == remote_head
+    clean = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=repository,
+        capture_output=True,
+        check=True,
+    )
+    assert not clean.stdout
+
+    (repository / "code.py").write_text("VALUE = 3\n")
+    stale = run(
+        "record-gate",
+        "--run-dir",
+        str(run_dir),
+        "--candidate",
+        candidate,
+        "--selection-reason",
+        "Final authoritative gate",
+        "--exit-code",
+        "0",
+        "--warning-count",
+        "0",
+        "--",
+        "./bin/check",
+        "all",
+    )
+    assert stale.returncode == 2
+    assert "candidate mismatch" in stale.stderr
+
+
+REVIEWER_PERSONAS = (
+    ".claude/agents/plan-reviewer.md",
+    ".claude/agents/code-critic.md",
+)
+
+
+# --- The pre-finalization latch and the derived-metrics overlay ----------------
+#
+# Two halves of one contract. The latch refuses an unmeasured review pass while
+# the trace is still open, which is the only window in which an honest re-ingest
+# can repair it. The overlay is the sanctioned recovery for the residue the
+# latch cannot reach: a pass that really succeeded, whose batch was structurally
+# refused, discovered after the trace closed.
+
+
+def review_artifact(path: Path, findings: list[dict[str, object]], **extra: object) -> Path:
+    """A critic artifact in the markdown envelope the native venues emit."""
+    document: dict[str, object] = {"verdict": "REVISE", "findings": findings, **extra}
+    path.write_text(
+        "## Finding Evidence\n```json\n" + json.dumps(document) + "\n```\n\n## Verdict: REVISE\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def ingest_artifact(
+    run_dir: Path, candidate: str, artifact: Path, span_id: str
+) -> subprocess.CompletedProcess[str]:
+    return run(
+        "ingest-findings",
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "code",
+        "--candidate",
+        candidate,
+        "--review-span-id",
+        span_id,
+        "--artifact",
+        str(artifact),
+    )
+
+
+# --- Candidate drift under an in-flight dispatch ------------------------------
+#
+# `kickoff-tree-id` hashes nonignored untracked files, so any write by any
+# session moves the candidate. The three acceptance checks below are exercised
+# for independence on purpose: each of the first three tests constructs a drift
+# that passes the other two checks and fails only its own, because a layered
+# rule whose layers are never isolated is one check plus two decorations.
+
+
+DRIFT_MARKERS = ("drift-partition:", "drift-reviewed-surface:", "drift-authority:")
+
+
+def write_repo_file(repository: Path, relative: str, text: str) -> None:
+    target = repository / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+
+
+def dispatch_rows(run_dir: Path) -> list[dict[str, object]]:
+    return [
+        row
+        for line in (run_dir / "role-dispatch.jsonl").read_text().splitlines()
+        if line.strip()
+        for row in [json.loads(line)]
+        if row.get("state") != "opened"
+    ]
+
+
+def drifting_attempt(
+    repository: Path,
+    run_dir: Path,
+    mutate,
+    *,
+    operation: str = "role.code-review",
+    role: str = "critic",
+    attempt: int = 1,
+    accepted: bool = True,
+    record_open_candidate: bool = True,
+) -> tuple[str, str, str]:
+    """One dispatch whose tree moved between dispatch-open and dispatch-return.
+
+    Returns `(dispatch candidate, return candidate, intelligence span id)`.
+    """
+    metadata = json.loads((run_dir / "run.json").read_text())
+    trace_id = metadata["telemetry_trace_id"]
+    root_span_id = metadata["telemetry_root_span_id"]
+    handoff = run_dir / f"{operation}-{attempt}.json"
+    registered = run(
+        "register-role-attempt",
+        "--run-dir",
+        str(run_dir),
+        "--operation",
+        operation,
+        "--attempt",
+        str(attempt),
+        "--role",
+        role,
+        "--harness",
+        "native",
+        "--reason",
+        "initial",
+        "--output",
+        str(handoff),
+    )
+    assert registered.returncode == 0, registered.stderr
+    opened = run("current-candidate", "--run-dir", str(run_dir), "--reason", "dispatch")
+    assert opened.returncode == 0, opened.stderr
+    dispatch_candidate = opened.stdout.strip()
+    intelligence = start_span(
+        engine_root=repository,
+        trace_id=trace_id,
+        parent_span_id=root_span_id,
+        category="intelligence",
+        operation=operation,
+        attempt=attempt,
+        role=role,
+        harness="native",
+    )
+    dispatch_opened = open_role_dispatch(
+        run_dir,
+        handoff,
+        intelligence.span_id,
+        dispatch_candidate=(dispatch_candidate if record_open_candidate else None),
+    )
+    assert dispatch_opened.returncode == 0, dispatch_opened.stderr
+    wait = start_span(
+        engine_root=repository,
+        trace_id=trace_id,
+        parent_span_id=intelligence.span_id,
+        category="wait",
+        operation=operation,
+        attempt=attempt,
+        role=role,
+        harness="native",
+    )
+    mutate(repository)
+    for span_id in (wait.span_id, intelligence.span_id):
+        finish_span(
+            engine_root=repository,
+            trace_id=trace_id,
+            span_id=span_id,
+            outcome="success",
+            exit_code=0,
+        )
+    arguments = [
+        "record-role-dispatch",
+        "--run-dir",
+        str(run_dir),
+        "--registration",
+        str(handoff),
+        "--state",
+        "accepted" if accepted else "rejected",
+        "--idle-telemetry",
+        "unavailable" if accepted else "not-dispatched",
+        "--intelligence-span-id",
+        intelligence.span_id,
+    ]
+    if accepted:
+        arguments.extend(["--wait-span-id", wait.span_id])
+    dispatched = run(*arguments)
+    assert dispatched.returncode == 0, dispatched.stderr
+    row = [
+        item
+        for item in dispatch_rows(run_dir)
+        if item["operation"] == operation and item["attempt"] == attempt
+    ][0]
+    return dispatch_candidate, str(row["return_candidate_id"]), intelligence.span_id
+
+
+def add_lesson(repository: Path) -> None:
+    write_repo_file(repository, "lessons/silent-guard-drift.md", "# Lesson\n")
+
+
+def stale_batch(tmp_path: Path, dispatch: str, name: str = "critic.md") -> Path:
+    """A critic batch stamped with the candidate the critic was dispatched at."""
+    return review_artifact(
+        tmp_path / name,
+        [
+            finding(
+                "CODE-F002",
+                dispatch,
+                state="rejected-with-evidence",
+                resolved_in=dispatch,
+            )
+        ],
+    )
+
+
+def _assert_bookkeeping_review_custody(repository: Path, tmp_path: Path) -> None:
+    """Bookkeeping preserves review identity without an exception ledger."""
+    run_dir = tmp_path / "run"
+    initialize(repository, run_dir)
+    dispatch, returned, span_id = drifting_attempt(repository, run_dir, add_lesson)
+    assert dispatch == returned
+    assert not (run_dir / "candidate-drift.jsonl").exists()
+    assert (
+        ingest_artifact(run_dir, returned, stale_batch(tmp_path, dispatch), span_id).returncode == 0
+    )
+    assert run("validate", "--run-dir", str(run_dir)).returncode == 0
+    assert "accept-candidate-drift" not in run("--help").stdout
+    # The same pass cannot hide an active edit behind an old resolution stamp.
+    (repository / "code.py").write_text("VALUE = 2\n")
+    current = run(
+        "current-candidate", "--run-dir", str(run_dir), "--reason", "active edit"
+    ).stdout.strip()
+    assert current != returned
+    refused = ingest_artifact(run_dir, current, stale_batch(tmp_path, dispatch), span_id)
+    assert refused.returncode == 2
+    assert "resolved_in does not match" in refused.stderr
+    # Even bookkeeping is protected when it is explicitly reviewed.
+    captured = capture(repository, run_dir)
+    assert captured == current
+    reviewed = finding("CODE-F003", current, state="rejected-with-evidence", resolved_in=current)
+    reviewed["affected_paths"] = ["lessons/silent-guard-drift.md"]
+    assert ingest(run_dir, tmp_path, [reviewed], candidate=current).returncode == 0
+    (repository / "lessons/silent-guard-drift.md").write_text("changed after review\n")
+    protected = run("validate", "--run-dir", str(run_dir))
+    assert protected.returncode == 2
+    assert "reviewed bookkeeping changed" in protected.stderr
+
+    marked = run("mark-reviewed", "--run-dir", str(run_dir), "--expected-candidate", current)
+    assert marked.returncode == 2
+    assert "reviewed bookkeeping changed" in marked.stderr
+
+    # A gate that changes only bookkeeping still fails its full-tree custody check.
+    (repository / "bin/check").write_text("#!/bin/sh\nprintf 'gate mutation\\n' >> LOG.md\n")
+    gate_dir = tmp_path / "mutating-gate"
+    gate_candidate = initialize(repository, gate_dir, evidence_lane="light")
+    gate_result = run(
+        "run-gate",
+        "--run-dir",
+        str(gate_dir),
+        "--candidate",
+        gate_candidate,
+        "--operation",
+        "gate.check-all",
+        "--attempt",
+        "1",
+        "--final",
+        "--selection-reason",
+        "prove bookkeeping cannot hide gate mutation",
+        "--",
+        "./bin/check",
+        "all",
+    )
+    assert gate_result.returncode == 2, gate_result.stderr
+    gate_row = json.loads((gate_dir / "gates.jsonl").read_text())
+    assert gate_row["candidate_id"] != gate_row["candidate_after_id"]
+    assert gate_row["product_candidate_id"] == gate_row["product_candidate_after_id"]
+
+    # Explicitly declared bookkeeping authority is independently protected.
+    authority_dir = tmp_path / "bookkeeping-authority"
+    initialize(repository, authority_dir, authorities=("phase.md", "LOG.md"))
+    with (repository / "LOG.md").open("a") as log:
+        log.write("changed declared authority\n")
+    refused_authority = run("validate", "--run-dir", str(authority_dir))
+    assert refused_authority.returncode == 2
+    assert "reviewed bookkeeping changed" in refused_authority.stderr

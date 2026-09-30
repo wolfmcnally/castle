@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Run the repository-installed castle command.
+
+set -euo pipefail
+
+# Resolve this entry point through any symlink chain before deriving the
+# repository root, so an installed launcher (for example a ~/bin symlink)
+# selects the repository that owns the script rather than the launcher's own
+# directory.
+entrypoint_path="${BASH_SOURCE[0]}"
+while [[ -L "$entrypoint_path" ]]; do
+  entrypoint_dir="$(cd "$(dirname "$entrypoint_path")" && pwd)"
+  entrypoint_path="$(readlink "$entrypoint_path")"
+  [[ "$entrypoint_path" == /* ]] || entrypoint_path="$entrypoint_dir/$entrypoint_path"
+done
+repo_root="$(cd "$(dirname "$entrypoint_path")/.." && pwd)"
+project_root="$repo_root/project"
+
+toolchain_helper="$repo_root/bin/_python-toolchain"
+if [[ ! -r "$toolchain_helper" ]]; then
+  echo "CASTLE ERROR missing required file: bin/_python-toolchain" >&2
+  exit 1
+fi
+source "$toolchain_helper"
+python_toolchain_init CASTLE
+
+# Deliberately no `cd`. Every core command takes a `--root <store-root>` the
+# caller spells, and the CLI never resolves or expands it, so the caller's
+# working directory is what a relative root must resolve against. A launcher
+# that moved to the repository root would silently place a relative store
+# inside this checkout.
+python_toolchain_probe
+exec uv run --project "$project_root" --locked "${python_toolchain_uv_args[@]}" castle "$@"

@@ -1,0 +1,42 @@
+{
+  "admissions": 42,
+  "baseline": {
+    "families": 817,
+    "leaves": 1164
+  },
+  "by_kind": {
+    "gate": {
+      "families": 17,
+      "leaves": 17
+    },
+    "hook": {
+      "families": 5,
+      "leaves": 5
+    },
+    "pytest": {
+      "families": 141,
+      "leaves": 196
+    }
+  },
+  "current": {
+    "families": 163,
+    "leaves": 218
+  },
+  "dispositions": {
+    "consolidate": 778,
+    "delete": 195,
+    "retain": 191
+  },
+  "families": 163,
+  "family_ratio": 0.19951040391676866,
+  "leaf_ratio": 0.1872852233676976,
+  "leaves": 218,
+  "post_reset_retirements": 15,
+  "recall": {
+    "historical_defect": 0.9166666666666666,
+    "holdout_mutant": 1.0
+  },
+  "schema": "agentic.proof_estate.v2",
+  "state": "valid",
+  "unspent_retirements": 0
+}

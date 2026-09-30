@@ -1,0 +1,24 @@
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Agentic harness runtime state
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+.claude/projects/
+.codex/cache/
+.kickoff/
+
+# Root-level methodology test runtime state
+__pycache__/
+.pytest_cache/
+
+
+# Checkout-owned managed runtime
+.runtime/
+
+# Excluded operator records retained during approved public alignment
+.private-development/
