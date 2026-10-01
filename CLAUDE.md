@@ -33,6 +33,7 @@ A standalone content-addressable snapshot store with a Python library and CLI. T
 - [Platform capabilities and cloning limits](briefs/cross-platform-cloning.md)
 - [Linux qualification, release preparation and excision question](briefs/release-and-deployment-readiness.md)
 - [Content excision — draft proposal](briefs/content-excision.md)
+- [Coordinated namespace CRUD — proposed architecture](briefs/coordinated-namespace-crud.md)
 
 ## Project surfaces and conventions
 
