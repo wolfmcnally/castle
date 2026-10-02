@@ -267,4 +267,4 @@ This runs lint, format validation and every retained package test. See [CONTRIBU
 
 ## Release candidate
 
-Version 0.1.0 is an unreleased candidate under the [MIT license](LICENSE). The [changelog](CHANGELOG.md) states the candidate scope, and the [release procedure](RELEASE.md) covers local artifact creation and a disposable clean-install smoke check. Tagging and publication require the maintainer’s approval of the exact artifacts and supported capability scope.
+Version 0.1.1 is a patch release under the [MIT license](LICENSE). GitHub Releases records publication status. The [changelog](CHANGELOG.md) states the release scope, and the [release procedure](RELEASE.md) covers local artifact creation and a disposable clean-install smoke check. Tagging and publication require the maintainer’s approval of the exact artifacts and supported capability scope.

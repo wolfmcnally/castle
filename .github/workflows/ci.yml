@@ -29,6 +29,6 @@ jobs:
         shell: bash
         run: |
           uv venv --managed-python --python 3.12 "${RUNNER_TEMP}/castle-wheel-venv"
-          uv pip install --python "${RUNNER_TEMP}/castle-wheel-venv/bin/python" --no-deps "${RUNNER_TEMP}/castle-dist/castle-0.1.0-py3-none-any.whl"
+          uv pip install --python "${RUNNER_TEMP}/castle-wheel-venv/bin/python" --no-deps "${RUNNER_TEMP}/castle-dist/castle-0.1.1-py3-none-any.whl"
           cd "$RUNNER_TEMP"
           "${RUNNER_TEMP}/castle-wheel-venv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/package-smoke.py"

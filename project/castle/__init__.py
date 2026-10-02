@@ -16,4 +16,4 @@ the sole sanctioned way a store root comes into existence, the migration
 command's lazy import, and one error rendering.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

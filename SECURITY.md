@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Version 0.1.0 is the initial release candidate. Until publication there is no stable released version. Maintainers assess reports against the current default branch and the latest published release.
+The 0.1.x series is pre-1.0. Maintainers assess reports against the current default branch and the latest published release listed on GitHub Releases.
 
 ## Reporting a vulnerability
 

@@ -30,4 +30,4 @@ The portable core supports ingest, lookup, materialization, journal verification
 
 ## License and release
 
-MIT, copyright 2026 Wolf McNally. Version 0.1.0 is the first public tagged release target; GitHub Releases records publication status. [Provenance](PROVENANCE.md) distinguishes sourced implementation/proof evidence from new release validation. [Release procedure](project/RELEASE.md) covers inspected artifacts and isolated installation.
+MIT, copyright 2026 Wolf McNally. Version 0.1.1 repairs ingest preservation after uncertain journal writes without changing the public API or store format; GitHub Releases records publication status. [Provenance](PROVENANCE.md) distinguishes sourced implementation/proof evidence from new release validation. [Release procedure](project/RELEASE.md) covers inspected artifacts and isolated installation.

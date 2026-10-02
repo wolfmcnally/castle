@@ -1,6 +1,6 @@
 # Preparing a release
 
-Version 0.1.0 is the first public release target; GitHub Releases records publication status. The package includes the delivered portable core, deliberate v1 migration, Darwin-only clone/merge, and portable successor-epoch excision described in the README. The changelog states that scope; it is not a publication record.
+Version 0.1.1 is a patch release of the existing 0.1.x contract; GitHub Releases records publication status. The package includes the delivered portable core, deliberate v1 migration, Darwin-only clone/merge, and portable successor-epoch excision described in the README. The changelog states that scope; it is not a publication record.
 
 ## Build local artifacts
 
@@ -33,7 +33,7 @@ uv venv --managed-python --python 3.12 "$CASTLE_RELEASE_DIR/venv"
 Install the exact wheel without resolving runtime dependencies:
 
 ```bash
-uv pip install --python "$CASTLE_RELEASE_DIR/venv/bin/python" --no-deps "$CASTLE_RELEASE_DIR/dist/castle-0.1.0-py3-none-any.whl"
+uv pip install --python "$CASTLE_RELEASE_DIR/venv/bin/python" --no-deps "$CASTLE_RELEASE_DIR/dist/castle-0.1.1-py3-none-any.whl"
 ```
 
 ```bash
@@ -44,7 +44,7 @@ cd "$CASTLE_RELEASE_DIR"
 ./venv/bin/python -c 'import castle; print(castle.__version__, castle.__file__)'
 ```
 
-Expect version `0.1.0` and a module path inside this new environment. Inspect the actual command inventory:
+Expect version `0.1.1` and a module path inside this new environment. Inspect the actual command inventory:
 
 ```bash
 ./venv/bin/castle --help

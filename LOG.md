@@ -184,3 +184,45 @@ Persisted learning: `lessons/jasmine-lyrebird.md` records the diagnosis and the 
 Verification: the workflow family passed directly and in the full candidate gate. `bin/lessons validate` passed. `bin/test-governance validate` remains valid at 163 families and 218 executable leaves, with zero unspent retirement budget; no family or leaf growth. No graduation, permission change, fallback, phase-status edit, or push occurred. The diagnosed launcher-environment failure also yielded `lessons/bronze-tench.md`; its correction was verified by the successful 196-test full run.
 
 Remaining human criteria: none for this authorized correction. Candidate lessons remain provisional. Final handoff and local commit follow this record; no later tracked write will claim their outcomes.
+
+## 2026-10-02 16:13 — END (correction)
+Castle 0.1.1 patch release candidate prepared and locally qualified.
+
+Execution trace: fd5e4ca48c854ecc8f0ab74ca45c837e
+
+The operator explicitly authorized publishing patch release 0.1.1: "Do the patch release." This supersedes the preservation repair's prior local-only hold for this release. Normal fast-forward delivery, a new patch tag and GitHub Release are authorized; no historical tag or history rewrite, registry publication, live-store operation, consumer pin change or namespace implementation is included.
+
+Follow-up route:
+- Direct fix for mechanical release metadata, lockfile and CI version expectations, with accurate patch and durability notes. The independently reviewed runtime repair and tests remain byte-identical. Original configured Claude subscription advice and all nine dispositions are carried with their original provenance; no new advisory invocation is claimed.
+- Full candidate-bound evidence and both full close gates remain mandatory. No historical roadmap status or numeric dashboard is changed by this standalone release correction.
+
+Files changed:
+- `project/pyproject.toml`, `project/uv.lock`, `project/castle/__init__.py` — consistent 0.1.1 version; dependency pins retained and locked check passed.
+- `.github/workflows/ci.yml`, `.github/scripts/package-smoke.py` — exact 0.1.1 wheel and installed-version expectations.
+- `project/CHANGELOG.md`, `project/RELEASE.md`, `project/README.md`, `README.md`, `SECURITY.md` — patch scope, publication-status guidance and accurate uncertainty/recovery limits.
+- `EXECUTION_LOG.jsonl`, `LOG.md` — sanitized real acceptance evidence and append-only release authorization/qualification record.
+
+Build status:
+- Candidate-bound `./bin/check all`: PASS, 196 tests in 142.97 seconds; lint, formatting and every policy check passed with zero warnings. Full-tree identity b0f9fa6582791beb6dae79aaace046cf98be5effa16a0dc93cc92e85f80f3ec0 and product identity 7424e3afcf5934bb60e5d04a7239873a9ee513789db9fdd9ef47a0a4883b3900 stayed unchanged across the gate.
+- Gate 34a666afcb8c452709762b22e9b9a78255d0a5fe28a37b70950bb89af5a94e47: complete diagnostics reviewed. Acceptance validation and finalized timing-summary validation passed.
+- Wheel and source archive built with uv 0.9.26, pinned hatchling 1.32.0 and managed Python 3.12.12. Both include MIT license; metadata is 0.1.1 and the wheel declares no runtime dependencies. Archive source bytes match the candidate. Wheel inventory contains only package modules, metadata and license; source archive contains standalone package material and synthetic tests, with no repository planning, execution evidence, stores or private inputs.
+- Exact wheel installed without dependencies outside the checkout on native macOS arm64 and Linux arm64. Import containment, version, CLI help/init/ingest/stat/verify/rebuild-index/verify and journal.v2 smoke passed on both. Linux uv copied files after a cross-filesystem hardlink warning; this did not affect installed contents or smoke.
+- Inspected wheel SHA-256: 61c980285dd8e067bcb99d40addd08c9297c0da37a9316cacf83460532d9f3b6.
+- Inspected source archive SHA-256: be7c24b234162a6674c702fc742b5f8628d887b17ec2187c78e1ea3dd9982259.
+- Public-scope audit covered the five unpublished commits and their 28 changed blobs/additions, tracked path inventory and release delta: no private tracked paths, credential-pattern findings or private-source references in additions. Manual scope review confirms proposed namespace documents and sanitized methodology records are public checkout material; package archives exclude them.
+- Installed repository hooks verified. Handoff gate remains pending after this tracked record; delivery requires the final bare `./bin/check all`. The exact committed candidate must also pass hosted macOS/Linux full gates and clean-wheel smoke before tag/publication.
+
+Acceptance:
+- Objective: prepared version consistency, accurate patch scope, preserved API/format/platform scope, inspected artifact identities/license/source bytes, disposable exact-wheel platform smoke and complete candidate gate.
+- Parked for the user: none for this explicitly authorized patch publication. Power-loss recovery and proof that an earlier failed write-back became durable remain outside delivered claims.
+
+Delivery:
+- Authorized by "Do the patch release." Commit and normal fast-forward push after handoff, then require exact-commit hosted CI before new v0.1.1 tag and GitHub Release. Publish only the inspected wheel, source archive and SHA256SUMS, then download and verify the published bytes and installation. No PyPI publication or unrelated repository mutation.
+
+Lessons:
+- None newly filed; the existing configured-review and environment-scope lessons remain applicable and were followed. Lesson schema passed. Timeout recommendation had no target with the required 30 successful samples and reported ignored historical malformed rows; no timeout configuration was changed.
+
+Remaining:
+- Final bare handoff gate, exact commit, push, hosted CI, new tag, publication and download/install verification occur after this record and are reported from observed results without later tracked writes.
+- An original ingest failure remains unconfirmed after later successful synchronization, verification or receipt reconstruction. No uncertain-write protocol, automatic partial-tail/orphan recovery, schema/API change or namespace feature is delivered.
+- Test protocol: the release wheel's `castle --version` must report `castle 0.1.1`; the existing isolated package smoke verifies the CLI and journal format on disposable data. No live store is required.
