@@ -21,3 +21,13 @@ Lessons: changing even a display label inside a digest-bound inventory requires 
 Scope: Complete approved public0.1.0 package and contributor qualification after compact identifier handoff.
 Changes: Preserve excluded operator files under ignored.private-development during normal checkout alignment; normalize three inherited extraEOF blank lines without changing license text; add isolated exactwheel CLI/journal.v2 smoke to both hosted platforms.
 Verification: Migration handoff passed196tests andallpolicygates; public oldnamespace lexicalscan clean. Exactartifact validation and final systemBash/full/hosted gates remain required; no live store/client migration is performed here.
+
+## 2026-10-01 22:10 — TAUGHT FROM TEMPLATE
+
+Source: agentic starter template @ 147d5fc. Scope: one correction, taught on the operator's instruction of 2026-10-01 to carry it to every repository holding a hand-added usage mapping. Items applied: 1, by tier T1=0/T2=1/T3=0/T4=0. Parity heals applied: 0 (AUTO); 0 surfaced as DECIDE. Stale-in-light-of-teaching migrations: 1 (AUTO); 0 DECIDE; 0 DEFER. Unharvested methodology lessons surfaced for `learn`: not assessed in this narrow pass. Files touched: 5.
+
+**What changed.** `lib/agentic_starter/workflow.py` now applies an additional usage group that names the model it meters to a target of that model and to no other; a group that names no model still refuses as ambiguous. `tests/test_kickoff_config.py` proves the three cases, and `policies/role-models.md` states the rule. The one provider group reported today is a fallback allowance for a single named model that is not a review target here (retrieved 2026-10-01).
+
+**Stale migration.** `kickoff.yaml` carried a custom target that restated the built-in one only to add a usage mapping. That mapping excluded every additional group by an explicit mapping, which also silenced the refusal for any group a provider adds later. The custom target is removed, so the built-in target and the new rule apply. No model, effort, timeout or budget value changed.
+
+**Checks.** Configuration validation, the configuration tests and the new rule against the live usage reading passed before this record. Independent review is not applicable because this is primary one-shot methodology work. The one full gate follows this record.

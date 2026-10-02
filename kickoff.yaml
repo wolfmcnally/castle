@@ -20,21 +20,7 @@ workflow:
       reviewer: [opus]
       critic: [opus]
   allowed_harnesses: [claude, codex]
-  targets:
-    astra:
-      harness: codex
-      model: gpt-6-astra
-      provider: openai
-      backend: direct
-      auth: subscription
-      efforts: [low, medium, high, xhigh, max]
-      # Shared account windows always apply. This explicit mapping excludes
-      # additional groups; revisit it when the provider adds or renames one.
-      # As of 2026-09-13 the only additional group is explicitly named Spark.
-      usage_windows: [primary_window]
-      terms: operator-configured subscription access
-      credential_env: []
-      backend_env: {}
+  targets: {}
 
 # Optional project- or harness-specific keys may be added here. The current
 # manager preserves unknown extension data without interpreting it.
