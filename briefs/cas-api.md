@@ -128,6 +128,12 @@ file.
   `object_stat`, and `store_stat` preserve their Phase-37 behavior and JSON
   shapes.
 
+Before each ingest publication, Castle holds the stable journal lock, validates the complete appendable journal, compares its folded object and name rows with the index, checks the object inventory for unresolved residue and missing journaled files, and synchronizes the current journal descriptor. Only an empty journal may bootstrap a missing index. Staging occurs inside this admitted locked interval. This admission scans journal, index and inventory for every file and serializes staging; it adds no persisted recovery cursor or state.
+
+A failure before the journal append attempt still cleans up that operation's new object before releasing the stable lock; on macOS this clears only its deletion-prohibiting user-immutable flag when present. Once append is attempted, write, flush or synchronization failure retains the published object and all journal evidence, propagates the failure, and returns no receipt. Visibility is not proof of successful synchronization. An identical repeated sighting can leave the folded index unchanged despite an uncertain append, so subsequent ingest still requires the journal checkpoint.
+
+A complete valid append whose index is stale requires explicit `rebuild-index` before ingest can continue. Rebuild validates appendability and synchronizes the current journal inode under the stable lock before reconstructing the cache, preserving remote rows. Unterminated tails and unjournaled objects refuse; Castle does not truncate, delete or silently adopt them. Rebuild cannot restore missing object bytes, and its returned row counts are not a store-health verdict; callers must verify the recovered store. Verification checks visible consistency and content, not power-loss durability.
+
 Castle owns its streaming file-hash helper. `castle.store_merge` consumes that
 implementation; Castle does not import a consumer-specific hashing module and does not duplicate
 the algorithm in a second runtime module.

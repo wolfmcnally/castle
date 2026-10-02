@@ -34,6 +34,7 @@ from typing import Any
 
 from castle.journal import (
     CAS_JOURNAL_EVENT_SCHEMA,
+    JOURNAL_FILENAME,
     CastleError,
     JournalError,
     append_record,
@@ -878,7 +879,14 @@ def rebuild_index_under_lock(store: Path) -> dict[str, int]:
     """
     store = Path(store)
     _require_active(store)
-    records = read_journal(store)
+    # Merge may have replaced the journal while its caller still holds the
+    # old descriptor. Check and synchronize the current inode under the lock.
+    # Visible bytes after a failed append fsync do not establish durability.
+    with (store / JOURNAL_FILENAME).open("r+", encoding="utf-8") as authority:
+        require_appendable_journal(authority)
+        records = read_journal(store)
+        authority.flush()
+        os.fsync(authority.fileno())
     return _rebuild_authority_index(store, records)
 
 
@@ -1399,34 +1407,34 @@ def _ingest_one(
         raise CasError("media refinement requires an existing object")
     # Establish lifecycle authority before staging makes an absent root nonempty.
     ensure_store(store)
-    if not _lexists(destination):
-        temporary = _stage_object(source, destination, cas_id)
-    # One structured guard owns every filesystem effect from staging onward. A
-    # staged temporary is dropped on every exit until the rename publishes it
-    # (then `temporary` is cleared); a freshly published object is dropped on
-    # every exit until its record is durably journaled (then
-    # `published_unjournaled` is cleared). So a failure entering the lock,
-    # opening or querying the index, sealing, or fsyncing leaves neither an
-    # orphaned `.cas-*.tmp` for the tree inventory nor an unjournaled object for
-    # rebuild to refuse on.
-    try:
-        with journal_lock(store) as journal:
-            # Under the lock and before anything is published: the journal we
-            # are about to extend must already be strict appendable v2, or this
-            # append is what makes the store unreadable. The catch is the
-            # package-root error, not the journal-content child: the check
-            # reaches an identity validator that raises the root error on a
-            # malformed stored identity, so a bare catch of the child would let
-            # that tail escape the per-file collector. Its scope is exactly this
-            # one call — staging precedes it and publication follows it, both
-            # outside — so broadening it would cover neither; the temp it drops
-            # is also swept by the outer guard, which is the real owner.
-            try:
-                journal_tail = require_appendable_journal(journal)
-            except CastleError:
-                if temporary is not None:
-                    temporary.unlink(missing_ok=True)
-                raise
+    # Stage only after admission under the stable lock: inventory checks
+    # must distinguish unresolved residue from another writer's active temp.
+    # Cleanup owns a published object only until append is attempted. Once a
+    # write/flush/fsync can have exposed a record, retain both blob and journal
+    # evidence on failure; uncertainty is not proof that the blob is unowned.
+    with journal_lock(store) as journal:
+        try:
+            # Admit only strict, appendable authority before staging or
+            # publication. Failures remain visible to the per-file collector.
+            journal_tail = require_appendable_journal(journal)
+            records = read_journal(store)
+            objects, names = expected_index_rows(records)
+            if not _lexists(store / INDEX_FILENAME):
+                if records:
+                    raise CasError("index missing; rebuild-index required before ingest")
+                with _connect_index(store):
+                    pass
+            errors = _index_errors(store, objects, names)
+            if any(not object_path(store, identity).is_file() for identity in objects):
+                errors.append("journaled object missing")
+            if errors:
+                raise CasError(
+                    "; ".join(errors) + "; rebuild-index and verify required before ingest"
+                )
+            # Resynchronize even a repeated sighting whose folded index rows
+            # did not change. No new publication precedes this checkpoint.
+            journal.flush()
+            os.fsync(journal.fileno())
             with _connect_index(store) as connection:
                 object_row = connection.execute(
                     "SELECT first_seen_utc, batch FROM objects WHERE cas_id = ?",
@@ -1458,14 +1466,9 @@ def _ingest_one(
                     temporary = _stage_object(source, destination, cas_id)
                 os.rename(temporary, destination)
                 temporary = None
-                # The rename publishes the object before it is sealed and
-                # journaled, so until the append below it is poison: present in
-                # the tree with no journal record, the exact state rebuild
-                # refuses on. It is retained only once sealing has completed and
-                # been verified and the record is durably journaled; any failure
-                # before then drops it through the outer guard. A sync-managed
-                # parent may also rewrite cloned-file metadata on publication, so
-                # immutability is reasserted and verified after the rename.
+                # Before the append attempt, failures can safely remove this
+                # new object. Reassert posture after rename because a sync-managed
+                # parent may rewrite cloned-file metadata on publication.
                 published_unjournaled = destination
                 _seal_object(store, destination, cas_id)
                 if not _write_protected(destination.lstat()):
@@ -1495,17 +1498,24 @@ def _ingest_one(
                 # Validate before the append so a rejected record never lands in
                 # the journal ahead of an index that would refuse it.
                 _validate_index_record(connection, record, media_refinement)
-                append_record(journal, record)
-                # Durably journaled: the object is authoritative now, so it is no
-                # longer poison and the index write below is a disposable cache
-                # update whose failure a rebuild can repair.
+                # The append may become visible before it reports failure.
+                # Retaining bytes is safe; deleting a referenced blob is not.
                 published_unjournaled = None
+                append_record(journal, record)
+                # Only successful append synchronization permits index update
+                # and a receipt. An uncertain append returns its original error.
                 _index_record(connection, record, media_refinement=media_refinement)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
-        if published_unjournaled is not None:
-            published_unjournaled.unlink(missing_ok=True)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+            if published_unjournaled is not None:
+                # Sealing may have set Darwin's deletion-prohibiting flag. Only
+                # this preappend-owned object can be unsealed for safe cleanup.
+                flags = getattr(published_unjournaled.lstat(), "st_flags", 0)
+                mask = getattr(stat, "UF_IMMUTABLE", 0)
+                if hasattr(os, "chflags") and flags & mask:
+                    os.chflags(published_unjournaled, flags & ~mask)
+                published_unjournaled.unlink(missing_ok=True)
     current_sighting = NameSighting(
         source_root_id=source_root_id,
         original_relpath=original_relpath,

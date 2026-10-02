@@ -677,6 +677,349 @@ def test_write_path_roundtrips_and_incremental_index_equals_the_fold(
         assert cas._clone_file(source / "top.txt", cloned) is False
 
 
+def _journal_sync_failure_preserves_content(parent: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Real post-write journal fsync failure must not delete referenced bytes."""
+    import errno
+
+    for code in (errno.ENOSPC, errno.EIO):
+        case = parent / str(code)
+        store = case / "store"
+        baseline = _write_source(case / "source", "base.txt", b"baseline bytes\n")
+        base_receipt = cas.ingest_file(store, baseline, "base")
+        remote = (base_receipt.cas_id, "archive", "key", "uploaded", "verified")
+        _seed_remotes(store, [remote, remote])
+        source = _write_source(case / "source", "new.txt", b"preserve uncertain append\n")
+        expected = _digest(source.read_bytes())
+        log = store / journal.JOURNAL_FILENAME
+        before = log.read_bytes()
+        identity = (log.stat().st_dev, log.stat().st_ino)
+        real_sync = os.fsync
+        calls = []
+
+        def fail_journal_sync(descriptor: int) -> None:
+            info = os.fstat(descriptor)
+            if (info.st_dev, info.st_ino) == identity and info.st_size > len(before):
+                calls.append(log.read_bytes())
+                raise OSError(code, "injected uncertain journal sync")
+            real_sync(descriptor)
+
+        with monkeypatch.context() as controlled:
+            controlled.setattr(os, "fsync", fail_journal_sync)
+            with pytest.raises(OSError, match="injected uncertain journal sync") as failure:
+                cas.ingest_file(store, source, "new")
+        assert failure.value.errno == code
+        assert len(calls) == 1
+        records = journal.read_journal(store)
+        assert len(records) == 2 and records[-1]["cas_id"] == expected
+        assert log.read_bytes().startswith(before)
+        assert cas.object_path(store, expected).read_bytes() == source.read_bytes()
+        assert cas.verify(store).exit_code == cas.VERIFY_INDEX_DRIFT
+        with pytest.raises(cas.CasError, match="required before ingest"):
+            cas.ingest_file(store, source, "new")
+        assert len(journal.read_journal(store)) == 2
+        with monkeypatch.context() as controlled:
+            controlled.setattr(os, "fsync", fail_journal_sync)
+            with pytest.raises(OSError, match="injected uncertain journal sync"):
+                cas.rebuild_index(store)
+        assert cas.verify(store).exit_code == cas.VERIFY_INDEX_DRIFT
+        assert cas.rebuild_index(store) == {"objects": 2, "names": 2, "remotes": 2}
+        assert Counter(cas._snapshot_remotes(store)) == Counter([remote, remote])
+        assert cas.verify(store).ok
+        retry = cas.ingest_file(store, source, "new")
+        assert retry.outcome == "dedup"
+        assert retry.object_first_seen_utc == records[-1]["at"]
+        assert retry.first_sighting.recorded_utc == records[-1]["at"]
+        assert len(journal.read_journal(store)) == 3 and cas.verify(store).ok
+        # Cache reconstruction cannot restore authoritative bytes. Admission
+        # refuses even after a rebuild whose row-count result is not health.
+        cas.object_path(store, expected).unlink()
+        cas.rebuild_index(store)
+        assert cas.verify(store).exit_code == cas.VERIFY_MISSING_OBJECT
+        with pytest.raises(cas.CasError, match="journaled object missing"):
+            cas.ingest_file(store, source, "new")
+
+    # A failed duplicate sighting can leave the folded rows unchanged. A clean
+    # verify result then says nothing about whether those visible bytes synced.
+    case = parent / "duplicate"
+    store = case / "store"
+    source = _write_source(case / "source", "same.txt", b"same sighting\n")
+    baseline = cas.ingest_file(store, source, "same")
+    log = store / journal.JOURNAL_FILENAME
+    before = log.read_bytes()
+    identity = (log.stat().st_dev, log.stat().st_ino)
+    real_sync = os.fsync
+    hits = []
+
+    def fail_duplicate_sync(descriptor: int) -> None:
+        info = os.fstat(descriptor)
+        if (info.st_dev, info.st_ino) == identity and info.st_size > len(before):
+            hits.append(True)
+            raise OSError(errno.EIO, "injected duplicate journal sync")
+        real_sync(descriptor)
+
+    with monkeypatch.context() as controlled:
+        controlled.setattr(os, "fsync", fail_duplicate_sync)
+        with pytest.raises(OSError, match="injected duplicate journal sync"):
+            cas.ingest_file(store, source, "same")
+        assert len(journal.read_journal(store)) == 2
+        assert cas.verify(store).ok
+        uncertain = log.read_bytes()
+        with pytest.raises(OSError, match="injected duplicate journal sync"):
+            cas.ingest_file(store, source, "same")
+        assert log.read_bytes() == uncertain
+    assert hits == [True, True]
+    retry = cas.ingest_file(store, source, "same")
+    assert retry.outcome == "dedup"
+    assert retry.object_first_seen_utc == baseline.object_first_seen_utc
+    assert retry.first_sighting == baseline.first_sighting
+    assert len(journal.read_journal(store)) == 3 and cas.verify(store).ok
+
+
+def _journal_stream_failure_preserves_evidence(
+    parent: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exercise real buffered writes/close; do not replace append_record."""
+    import errno
+
+    for mode in ("zero", "partial", "flush-before", "flush-after"):
+        case = parent / mode
+        store = case / "store"
+        baseline = _write_source(case / "source", "base.txt", b"base\n")
+        cas.ingest_file(store, baseline, "base")
+        source = _write_source(case / "source", "new.txt", b"uncertain stream\n")
+        expected = _digest(source.read_bytes())
+        log = store / journal.JOURNAL_FILENAME
+        before = log.read_bytes()
+        real_open = Path.open
+        injections = []
+
+        class Stream:
+            def __init__(self, handle: Any) -> None:
+                self.handle = handle
+                self.touched = False
+
+            def __getattr__(self, name: str) -> Any:
+                return getattr(self.handle, name)
+
+            def __enter__(self) -> Any:
+                self.handle.__enter__()
+                return self
+
+            def __exit__(self, *args: Any) -> Any:
+                return self.handle.__exit__(*args)
+
+            def write(self, value: str) -> int:
+                self.touched = True
+                if mode in ("zero", "partial"):
+                    if mode == "partial":
+                        self.handle.write(value[: len(value) // 2])
+                        self.handle.flush()
+                    injections.append(mode)
+                    raise OSError(errno.EIO, "injected append stream")
+                return self.handle.write(value)
+
+            def flush(self) -> None:
+                if self.touched and mode.startswith("flush"):
+                    if mode == "flush-after":
+                        self.handle.flush()
+                    injections.append(mode)
+                    raise OSError(errno.EIO, "injected append stream")
+                self.handle.flush()
+
+        def open_stream(path: Path, *args: Any, **kwargs: Any) -> Any:
+            handle = real_open(path, *args, **kwargs)
+            mode = args[0] if args else kwargs.get("mode", "r")
+            return Stream(handle) if path == log and mode == "a+" else handle
+
+        with monkeypatch.context() as controlled:
+            controlled.setattr(Path, "open", open_stream)
+            with pytest.raises(OSError, match="injected append stream"):
+                cas.ingest_file(store, source, "new")
+        assert injections == [mode]
+        assert cas.object_path(store, expected).read_bytes() == source.read_bytes()
+        after = log.read_bytes()
+        assert after.startswith(before)
+        assert after == before if mode == "zero" else len(after) > len(before)
+        with pytest.raises(journal.CastleError, match="journal|ingest"):
+            cas.ingest_file(store, source, "new")
+        assert log.read_bytes() == after
+        if mode in ("zero", "partial"):
+            with pytest.raises(journal.CastleError, match="journal|paths"):
+                cas.rebuild_index(store)
+            assert log.read_bytes() == after
+            assert cas.object_path(store, expected).read_bytes() == source.read_bytes()
+        else:
+            assert len(journal.read_journal(store)) == 2
+            cas.rebuild_index(store)
+            assert cas.verify(store).ok
+            assert cas.ingest_file(store, source, "new").outcome == "dedup"
+
+    case = parent / "preappend"
+    store = case / "store"
+    baseline = _write_source(case / "source", "base.txt", b"base\n")
+    cas.ingest_file(store, baseline, "base")
+    source = _write_source(case / "source", "new.txt", b"preappend cleanup\n")
+    expected = _digest(source.read_bytes())
+    before = (store / journal.JOURNAL_FILENAME).read_bytes()
+    real_sync = os.fsync
+    hit = []
+
+    def fail_object_directory(descriptor: int) -> None:
+        info = os.fstat(descriptor)
+        if stat.S_ISDIR(info.st_mode) and cas.object_path(store, expected).exists():
+            hit.append(True)
+            raise OSError(errno.EIO, "injected preappend directory sync")
+        real_sync(descriptor)
+
+    real_unlink = Path.unlink
+    cleanup_checks = []
+
+    def check_cleanup_lock(path: Path, *args: Any, **kwargs: Any) -> None:
+        if path == cas.object_path(store, expected):
+            # Independent process and actual flock: ownership cannot change
+            # through a cooperating merge before preappend deletion completes.
+            script = """import fcntl, sys
+with open(sys.argv[1], "r+") as handle:
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.exit(0)
+sys.exit(1)
+"""
+            checked = subprocess.run(
+                [sys.executable, "-c", script, str(store / journal.JOURNAL_LOCK_FILENAME)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            assert checked.returncode == 0, checked.stderr or "cleanup released journal lock"
+            cleanup_checks.append(True)
+        real_unlink(path, *args, **kwargs)
+
+    with monkeypatch.context() as controlled:
+        controlled.setattr(os, "fsync", fail_object_directory)
+        controlled.setattr(Path, "unlink", check_cleanup_lock)
+        with pytest.raises(OSError, match="injected preappend directory sync"):
+            cas.ingest_file(store, source, "new")
+    assert hit == cleanup_checks == [True]
+    assert not cas.object_path(store, expected).exists()
+    assert not list(store.rglob(".cas-*.tmp"))
+    assert (store / journal.JOURNAL_FILENAME).read_bytes() == before
+    assert cas.verify(store).ok
+
+    if _IMMUTABLE_SUPPORTED:
+        for boundary in ("object-sync", "directory-sync", "journal-sync"):
+            case = parent / ("immutable-" + boundary)
+            store = case / "store"
+            journal.ensure_store(store)
+            cas._run_xattr(["-w", "com.dropbox.ignored", "1", str(store)])
+            baseline = _write_source(case / "source", "base.txt", b"sealed base\n")
+            source = _write_source(case / "source", "new.txt", b"sealed new\n")
+            target = cas.object_path(store, _digest(source.read_bytes()))
+            log = store / journal.JOURNAL_FILENAME
+            try:
+                base_receipt = cas.ingest_file(store, baseline, "base")
+                assert (
+                    cas.object_path(store, base_receipt.cas_id).stat().st_flags & stat.UF_IMMUTABLE
+                )
+                before = log.read_bytes()
+                identity = (log.stat().st_dev, log.stat().st_ino)
+                real_sync = os.fsync
+                hits = []
+
+                def fail_immutable_sync(descriptor: int) -> None:
+                    info = os.fstat(descriptor)
+                    target_info = target.stat() if target.exists() else None
+                    is_target = target_info is not None and (info.st_dev, info.st_ino) == (
+                        target_info.st_dev,
+                        target_info.st_ino,
+                    )
+                    fail = (
+                        (boundary == "object-sync" and is_target)
+                        or (
+                            boundary == "directory-sync"
+                            and stat.S_ISDIR(info.st_mode)
+                            and target.exists()
+                        )
+                        or (
+                            boundary == "journal-sync"
+                            and (info.st_dev, info.st_ino) == identity
+                            and info.st_size > len(before)
+                        )
+                    )
+                    if fail:
+                        hits.append(True)
+                        assert target.stat().st_flags & stat.UF_IMMUTABLE
+                        raise OSError(errno.EIO, "injected immutable " + boundary)
+                    real_sync(descriptor)
+
+                with monkeypatch.context() as controlled:
+                    controlled.setattr(os, "fsync", fail_immutable_sync)
+                    with pytest.raises(OSError, match="injected immutable " + boundary) as failure:
+                        cas.ingest_file(store, source, "new")
+                assert failure.value.errno == errno.EIO and hits == [True]
+                if boundary == "journal-sync":
+                    assert target.read_bytes() == source.read_bytes()
+                    assert target.stat().st_flags & stat.UF_IMMUTABLE
+                    assert len(journal.read_journal(store)) == 2
+                    cas.rebuild_index(store)
+                    assert cas.ingest_file(store, source, "new").outcome == "dedup"
+                else:
+                    assert not target.exists()
+                    assert log.read_bytes() == before
+                    assert cas.verify(store).ok
+                    assert cas.ingest_file(store, source, "new").outcome == "stored"
+                assert cas.verify(store).ok
+            finally:
+                # Only flags on this test's disposable store are cleared.
+                for path in store.rglob("*"):
+                    if path.is_file():
+                        flags = path.stat().st_flags
+                        if flags & stat.UF_IMMUTABLE:
+                            os.chflags(path, flags & ~stat.UF_IMMUTABLE)
+
+
+def _journal_interrupted_child_requires_reconciliation(parent: Path) -> None:
+    """Process exit after real append is not a power-loss durability proof."""
+    source = _write_source(parent / "source", "new.txt", b"child uncertain append\n")
+    store = parent / "store"
+    journal.ensure_store(store)
+    script = r"""import os, sys
+from pathlib import Path
+from castle import cas, journal
+store, source = map(Path, sys.argv[1:])
+path = store / journal.JOURNAL_FILENAME
+identity = (path.stat().st_dev, path.stat().st_ino)
+real = os.fsync
+def die(fd):
+    info = os.fstat(fd)
+    if (info.st_dev, info.st_ino) == identity and info.st_size:
+        os._exit(77)
+    real(fd)
+os.fsync = die
+cas.ingest_file(store, source, "child")
+raise AssertionError("receipt returned")
+"""
+    child = subprocess.run(
+        [sys.executable, "-c", script, str(store), str(source)],
+        env=_child_env(),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert child.returncode == 77, child.stderr
+    expected = _digest(source.read_bytes())
+    assert cas.object_path(store, expected).read_bytes() == source.read_bytes()
+    assert len(journal.read_journal(store)) == 1
+    with pytest.raises(cas.CasError, match="required before ingest"):
+        cas.ingest_file(store, source, "child")
+    cas.rebuild_index(store)
+    assert cas.verify(store).ok
+    assert cas.ingest_file(store, source, "child").outcome == "dedup"
+
+
 def test_publication_is_atomic_write_if_absent_resealed_no_residue(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -771,6 +1114,10 @@ def test_publication_is_atomic_write_if_absent_resealed_no_residue(
     assert not cas.object_path(corrupt_store, expected_id).exists()
     assert not copies[0].exists()
     assert list(corrupt_store.rglob(".cas-*.tmp")) == []
+
+    _journal_sync_failure_preserves_content(tmp_path / "journal-errors", monkeypatch)
+    _journal_stream_failure_preserves_evidence(tmp_path / "stream-errors", monkeypatch)
+    _journal_interrupted_child_requires_reconciliation(tmp_path / "child-error")
 
 
 @pytest.mark.parametrize(
