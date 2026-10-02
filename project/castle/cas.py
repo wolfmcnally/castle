@@ -879,8 +879,8 @@ def rebuild_index_under_lock(store: Path) -> dict[str, int]:
     """
     store = Path(store)
     _require_active(store)
-    # Merge may have replaced the journal while its caller still holds the
-    # old descriptor. Check and synchronize the current inode under the lock.
+    # Merge may have replaced the journal. Open by path to check and
+    # synchronize the current inode while holding the stable sidecar lock.
     # Visible bytes after a failed append fsync do not establish durability.
     with (store / JOURNAL_FILENAME).open("r+", encoding="utf-8") as authority:
         require_appendable_journal(authority)
@@ -1428,9 +1428,23 @@ def _ingest_one(
             if any(not object_path(store, identity).is_file() for identity in objects):
                 errors.append("journaled object missing")
             if errors:
-                raise CasError(
-                    "; ".join(errors) + "; rebuild-index and verify required before ingest"
+                inventory_error = any(
+                    error.startswith(
+                        (
+                            "unjournaled objects:",
+                            "invalid object paths:",
+                            "journaled object missing",
+                        )
+                    )
+                    for error in errors
                 )
+                remedy = (
+                    "; rebuild-index cannot resolve object inventory; "
+                    "operator action required before ingest"
+                    if inventory_error
+                    else "; rebuild-index and verify required before ingest"
+                )
+                raise CasError("; ".join(errors) + remedy)
             # Resynchronize even a repeated sighting whose folded index rows
             # did not change. No new publication precedes this checkpoint.
             journal.flush()
@@ -1462,8 +1476,7 @@ def _ingest_one(
                     if not _write_protected(destination.lstat()):
                         raise CasError(f"existing object remained writable: {cas_id}")
             else:
-                if temporary is None:
-                    temporary = _stage_object(source, destination, cas_id)
+                temporary = _stage_object(source, destination, cas_id)
                 os.rename(temporary, destination)
                 temporary = None
                 # Before the append attempt, failures can safely remove this

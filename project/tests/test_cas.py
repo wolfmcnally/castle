@@ -735,7 +735,9 @@ def _journal_sync_failure_preserves_content(parent: Path, monkeypatch: pytest.Mo
         cas.object_path(store, expected).unlink()
         cas.rebuild_index(store)
         assert cas.verify(store).exit_code == cas.VERIFY_MISSING_OBJECT
-        with pytest.raises(cas.CasError, match="journaled object missing"):
+        with pytest.raises(
+            cas.CasError, match="journaled object missing.*operator action required"
+        ):
             cas.ingest_file(store, source, "new")
 
     # A failed duplicate sighting can leave the folded rows unchanged. A clean
@@ -781,7 +783,7 @@ def _journal_stream_failure_preserves_evidence(
     """Exercise real buffered writes/close; do not replace append_record."""
     import errno
 
-    for mode in ("zero", "partial", "flush-before", "flush-after"):
+    for mode in ("zero", "newline", "partial", "flush-before", "flush-after"):
         case = parent / mode
         store = case / "store"
         baseline = _write_source(case / "source", "base.txt", b"base\n")
@@ -816,6 +818,10 @@ def _journal_stream_failure_preserves_evidence(
                         self.handle.flush()
                     injections.append(mode)
                     raise OSError(errno.EIO, "injected append stream")
+                if mode == "newline" and value == "\n":
+                    self.handle.flush()
+                    injections.append(mode)
+                    raise OSError(errno.EIO, "injected append stream")
                 return self.handle.write(value)
 
             def flush(self) -> None:
@@ -840,19 +846,90 @@ def _journal_stream_failure_preserves_evidence(
         after = log.read_bytes()
         assert after.startswith(before)
         assert after == before if mode == "zero" else len(after) > len(before)
-        with pytest.raises(journal.CastleError, match="journal|ingest"):
+        refusal = (
+            "unjournaled objects.*operator action required"
+            if mode == "zero"
+            else "terminal newline"
+            if mode in ("partial", "newline")
+            else "objects table differs from journal.*rebuild-index"
+        )
+        with pytest.raises(journal.CastleError, match=refusal):
             cas.ingest_file(store, source, "new")
         assert log.read_bytes() == after
-        if mode in ("zero", "partial"):
-            with pytest.raises(journal.CastleError, match="journal|paths"):
+        if mode in ("zero", "partial", "newline"):
+            index_before = (store / cas.INDEX_FILENAME).read_bytes()
+            rebuild_refusal = (
+                "paths absent from the journal" if mode == "zero" else "terminal newline"
+            )
+            if mode == "newline":
+                # The JSON is complete: the ordinary reader accepts it, so only
+                # rebuild's appendability check can reject this authority.
+                assert len(journal.read_journal(store)) == 2
+                assert not after.endswith(b"\n")
+            with pytest.raises(journal.CastleError, match=rebuild_refusal):
                 cas.rebuild_index(store)
             assert log.read_bytes() == after
+            assert (store / cas.INDEX_FILENAME).read_bytes() == index_before
             assert cas.object_path(store, expected).read_bytes() == source.read_bytes()
         else:
             assert len(journal.read_journal(store)) == 2
             cas.rebuild_index(store)
             assert cas.verify(store).ok
             assert cas.ingest_file(store, source, "new").outcome == "dedup"
+
+    # Index absence is repairable; stranded staging bytes are not silently
+    # adopted. Both refusals preserve authority and cache bytes.
+    case = parent / "inventory"
+    store = case / "store"
+    source = _write_source(case / "source", "base.txt", b"inventory base\n")
+    baseline = cas.ingest_file(store, source, "base")
+    log = store / journal.JOURNAL_FILENAME
+    index = store / cas.INDEX_FILENAME
+    saved = case / "saved-index.sqlite"
+    index.rename(saved)
+    before = log.read_bytes()
+    with pytest.raises(cas.CasError, match="^index missing; rebuild-index required before ingest$"):
+        cas.ingest_file(store, source, "base")
+    assert not index.exists() and log.read_bytes() == before
+    saved.rename(index)
+    index_before = index.read_bytes()
+    residue = cas.object_path(store, baseline.cas_id).parent / ".cas-stranded.tmp"
+    residue.write_bytes(b"unowned staging bytes")
+    with pytest.raises(cas.CasError, match="invalid object paths.*operator action required"):
+        cas.ingest_file(store, source, "base")
+    with pytest.raises(cas.CasError, match="paths absent from the journal"):
+        cas.rebuild_index(store)
+    assert residue.read_bytes() == b"unowned staging bytes"
+    assert log.read_bytes() == before and index.read_bytes() == index_before
+    residue.unlink()
+
+    # Replacement does not change the stable lock inode. Rebuild must sync the
+    # current journal inode even while the caller holds its old descriptor.
+    with cas.journal_lock(store) as old_authority:
+        old_identity = (
+            os.fstat(old_authority.fileno()).st_dev,
+            os.fstat(old_authority.fileno()).st_ino,
+        )
+        replacement = case / "replacement-journal"
+        replacement.write_bytes(before)
+        replacement.replace(log)
+        current_identity = (log.stat().st_dev, log.stat().st_ino)
+        assert current_identity != old_identity
+        real_sync = os.fsync
+        synchronized = []
+
+        def current_inode_sync(descriptor: int) -> None:
+            info = os.fstat(descriptor)
+            identity = (info.st_dev, info.st_ino)
+            if identity in (old_identity, current_identity):
+                synchronized.append(identity)
+            real_sync(descriptor)
+
+        with monkeypatch.context() as controlled:
+            controlled.setattr(os, "fsync", current_inode_sync)
+            assert cas.rebuild_index_under_lock(store) == {"objects": 1, "names": 1, "remotes": 0}
+        assert synchronized == [current_identity]
+    assert log.read_bytes() == before and cas.verify(store).ok
 
     case = parent / "preappend"
     store = case / "store"
@@ -874,11 +951,12 @@ def _journal_stream_failure_preserves_evidence(
     real_unlink = Path.unlink
     cleanup_checks = []
 
-    def check_cleanup_lock(path: Path, *args: Any, **kwargs: Any) -> None:
-        if path == cas.object_path(store, expected):
-            # Independent process and actual flock: ownership cannot change
-            # through a cooperating merge before preappend deletion completes.
-            script = """import fcntl, sys
+    staging_checks = []
+    real_stage = cas._stage_object
+
+    def require_locked(boundary: str) -> None:
+        # An independent process cannot acquire the actual stable lock.
+        script = """import fcntl, sys
 with open(sys.argv[1], "r+") as handle:
     try:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -886,23 +964,33 @@ with open(sys.argv[1], "r+") as handle:
         sys.exit(0)
 sys.exit(1)
 """
-            checked = subprocess.run(
-                [sys.executable, "-c", script, str(store / journal.JOURNAL_LOCK_FILENAME)],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
-            )
-            assert checked.returncode == 0, checked.stderr or "cleanup released journal lock"
+        checked = subprocess.run(
+            [sys.executable, "-c", script, str(store / journal.JOURNAL_LOCK_FILENAME)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert checked.returncode == 0, checked.stderr or f"{boundary} released journal lock"
+
+    def check_staging_lock(*args: Any, **kwargs: Any) -> Path:
+        require_locked("staging")
+        staging_checks.append(True)
+        return real_stage(*args, **kwargs)
+
+    def check_cleanup_lock(path: Path, *args: Any, **kwargs: Any) -> None:
+        if path == cas.object_path(store, expected):
+            require_locked("cleanup")
             cleanup_checks.append(True)
         real_unlink(path, *args, **kwargs)
 
     with monkeypatch.context() as controlled:
         controlled.setattr(os, "fsync", fail_object_directory)
         controlled.setattr(Path, "unlink", check_cleanup_lock)
+        controlled.setattr(cas, "_stage_object", check_staging_lock)
         with pytest.raises(OSError, match="injected preappend directory sync"):
             cas.ingest_file(store, source, "new")
-    assert hit == cleanup_checks == [True]
+    assert hit == cleanup_checks == staging_checks == [True]
     assert not cas.object_path(store, expected).exists()
     assert not list(store.rglob(".cas-*.tmp"))
     assert (store / journal.JOURNAL_FILENAME).read_bytes() == before
@@ -1115,6 +1203,8 @@ def test_publication_is_atomic_write_if_absent_resealed_no_residue(
     assert not copies[0].exists()
     assert list(corrupt_store.rglob(".cas-*.tmp")) == []
 
+    monkeypatch.setattr(cas.os, "rename", real_rename)
+    monkeypatch.setattr(cas, "_stage_object", real_stage)
     _journal_sync_failure_preserves_content(tmp_path / "journal-errors", monkeypatch)
     _journal_stream_failure_preserves_evidence(tmp_path / "stream-errors", monkeypatch)
     _journal_interrupted_child_requires_reconciliation(tmp_path / "child-error")

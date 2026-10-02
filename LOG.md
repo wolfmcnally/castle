@@ -70,3 +70,117 @@ Lessons:
 
 Remaining:
 - Partial tails and orphan objects still require separately authorized recovery; no automatic truncation, deletion or adoption was added. Index reconstruction cannot restore missing source bytes. Full journal/index/inventory admission runs per file and serializes staging; this repair introduces no persisted recovery state or performance optimization.
+
+## 2026-10-02 15:18 — METHODOLOGY SCOPE
+Rule One after an unauthorized review substitution.
+
+Approved outcome: apply the user's Rule One correction to the omitted configured subscription review. Record the causal diagnosis on the shared lesson ledger and strengthen the existing workflow proof that rejects native and unselected-model reviewers.
+
+Surfaces in scope: `lessons/jasmine-lyrebird.md`, the retained complete synthetic kickoff proof family in `tests/test_kickoff_evidence.py`, and append-only close records. The proof extension was already written and its focused check passed before this scope record; this record does not backdate that work.
+
+Explicit exclusions: no new routing policy, role defaults, provider fallback, proof family, permission weakening, phase-status changes, or push. The separate source-review correction retains its product scope.
+
+## 2026-10-02 15:18 — PARK
+Publication repair review: configured source review complete; contract clarification requires fresh authority capture.
+
+Execution trace: 566aa007306747d3b8f45569b7749760
+
+The configured subscription reviewer completed a read-only review of the exact local repair. It reported no evidenced break in the approved preservation behavior. Its findings exposed missing failure-boundary proof and recovery/durability guidance that must be clarified in the captured CAS contract. This preparation run does not claim accepted implementation or final gates.
+
+Preserved evidence: the registered independent review, its source manifest, immutable dispatch identities and full report remain in the run evidence. No credential, private record, live store, or unrelated source was in the packet. The publication proof passed after the localized recovery-message correction; the retained workflow proof also passed.
+
+Resume condition: capture the clarified contract in a fresh primary follow-up run, carry the exact original advice and pass budget, reassess the final delta, and run the required close gates. The user already authorized in-scope review corrections and local commits; no further user decision is required for this continuation. Phase statuses remain unchanged.
+
+Lessons:
+- Filed `jasmine-lyrebird`: the substitution bypassed an adequate guarded workflow and misread standing authorization. The retained workflow proof rejects both substitutions without adding a new proof family. No policy graduation is applied.
+
+## 2026-10-02 15:29 — PARK
+Publication repair review correction: acceptance stopped at lint.
+
+Execution trace: 45d53b39f41b47c7be24407a1f9c773f
+
+The full candidate gate stopped at one line-length error in the new recovery message before the test suite ran. The source review and focused behavioral proofs remain preserved; this run claims no accepted close or successful full gate.
+
+Diagnosis: formatting preserves long string literals, so the formatted diagnostic still exceeded the declared lint width. The localized correction splits adjacent string literals with identical emitted bytes. Resume is permitted under the existing novel, diagnosed self-resume budget; one of three automatic corrective continuations is consumed. No provider retry or user approval is needed.
+
+Lessons:
+- No new reusable lesson: this is an ordinary lint defect caught by the required gate before expensive work. The existing shared review-routing lesson remains `jasmine-lyrebird`; its successful workflow proof is preserved.
+
+Resume condition: apply the byte-equivalent string wrapping, pass focused lint, capture the unchanged authorities in a fresh run, carry original configured advice, reassess the delta and repeat the full acceptance gate. Local commits only; no phase-status or store changes.
+
+## 2026-10-02 15:34 — PARK
+Publication repair review correction: full gate exposed a caller-environment error.
+
+Execution trace: 54210b68f76b470eb3ef5d02972e674d
+
+Lint and formatting passed; 195 tests passed and the retained workflow fixture failed when its stub watcher could not find its trace. The gate inherited the task launcher's engine-root override, so a child running in a deliberately isolated fixture repository still selected the real repository. The same focused family previously passed without that override. This is an execution-setup defect; it is not a failed independent review, a provider fallback or a product-code finding.
+
+Correction: remove the unnecessary override from the gate process, run the pinned tool from the actual repository, and keep explicit repo-root arguments for telemetry. No product, fixture, permission or validation code changes are required. The novel signature is diagnosed; two of three automatic corrective continuations are now consumed, with one remaining.
+
+Lessons:
+- Filed `bronze-tench`: scope explicit tool-root overrides to the process that needs them; do not leak parent authority into isolated fixture children.
+- Existing `jasmine-lyrebird` retains the unauthorized review substitution diagnosis and its verified workflow-proof correction.
+
+Resume condition: fresh capture against unchanged governing prose, carry the exact original configured source advice, remove the gate environment override, and pass the complete acceptance and handoff gates. Local commits only; no phase-status or store changes. No accepted close or successful full gate is claimed here.
+
+## 2026-10-02 15:40 — END (correction)
+Publication repair: configured subscription review completed and its scoped findings corrected.
+
+Execution trace: 53a74144f3ee414b84420bb2ba9f1f13
+
+The missing configured independent review is now complete. The reviewer inspected the exact local repair commit `c2f1f484228cb1b684b3c0d4f31e5762360240cd` through the authorized subscription using an allowlisted source packet. Its report found no evidenced breach of the approved preservation requirements. The primary adopted the three material findings: a complete-record/no-newline proof, limits on later synchronization success, and recovery guidance that distinguishes index drift from object-inventory states that rebuilding cannot resolve. All nine advice items have explicit dispositions; automatic recovery redesign remains outside this correction.
+
+Follow-up route:
+- Configured source review retained primary coding authority and one independent advisory pass. Its governing-prose preparation was truthfully parked before fresh capture.
+- Direct fix for the localized diagnostic, documentation and retained-proof corrections. The final primary decision assesses the delta against the carried original advice; no second review of the changed candidate is claimed.
+
+Role model/venue:
+- Planner and coder: primary inline; no fabricated delegated production roles.
+- Critic: requested model=opus effort=high venue=claude, subscription-authenticated preflight and registered read-only dispatch passed. Observed model=claude-opus-5-5, harness_version=2.1.287, observed effort=unreported. Terminal stream succeeded, fresh structured result present, child exit 0; no fallback or protocol recovery.
+- Source packet hashes were verified before and after review. Observed source reads stayed within the allowlisted packet; filename-only discovery preceded the reads. No credential, private record, live store, unrelated personal data, or consumer source was included.
+
+Files changed:
+- `project/castle/cas.py` — truthful inventory recovery message, remove redundant staging conditional, clarify current-inode synchronization comment.
+- `project/tests/test_cas.py` — strengthen the retained publication family with complete JSON/newline failure, specific refusal messages, preserved cache bytes, missing index, staging residue, actual staging-lock exclusion and current-journal-inode sync; restore host spies before additional scenarios.
+- `briefs/cas-api.md` — clarify operator recovery boundaries, visible receipt versus synchronization evidence, Linux write-back limits, concurrent reader checkpoint refusal and scan/staging cost.
+- `tests/test_kickoff_evidence.py` — extend the existing complete synthetic workflow family with native/unselected-model primary-review refusals, no registration side effects, and subsequent valid provider path.
+- `lessons/jasmine-lyrebird.md` — durable Rule One diagnosis of the unauthorized review substitution.
+- `lessons/bronze-tench.md` — scope task-launch engine-root overrides to the process that needs them.
+- `EXECUTION_LOG.jsonl` and `LOG.md` — privacy-projected real execution evidence and append-only correction records.
+
+Build status:
+- Complete publication proof passed; an isolated in-process removal of rebuild's appendability check failed at the complete-record/no-newline assertion with DID NOT RAISE. No repository mutation was used for that falsifier.
+- Complete synthetic workflow proof passed directly and in the full gate. Both forbidden registrations refuse before handoff or ledger mutation; the configured independent path remains valid.
+- Real last-reader checkpoint probe on a temporary store reproduced a transient admission refusal, preserved journal authority, verified healthy afterward, and succeeded on retry.
+- Candidate-bound `./bin/check all`: PASS, 196 tests in 133.99 seconds, lint/format/all policy checks passed, zero warnings; full-tree and product identities unchanged across the gate.
+- `kickoff-evidence validate --level acceptance --required-final-command "./bin/check all"`: PASS. Exact execution timing finalized and validated; final-run makespan 241.125248042 seconds, managed full gate 136.702882666 seconds. The final continuation contains no new intelligence span because its source advice is carried with original identity.
+- Prior lint and gate-environment failures are preserved as truthful PARK records. The environment correction removed an unnecessary task-launch override; product and fixture code were not changed for it.
+- Handoff gate: pending after these tracked close records; completion and local delivery depend on the ignored receipt from the final bare `./bin/check all`.
+
+Acceptance:
+- Objective: exact configured source review completed; approved preservation requirements checked; strengthened retained proofs and scoped corrections passed the full candidate gate; Rule One diagnosis persisted and ledger schema validated.
+- Parked for the user: none for this bounded correction. A persistent uncertain-sync recovery protocol, receipt gating, and automatic SQLite snapshot retry remain future design scope rather than delivered behavior.
+
+Delivery:
+- restricted: local commits only; no push.
+
+Lessons:
+- `jasmine-lyrebird` and `bronze-tench` filed as methodology candidates, one occurrence each; no policy graduation or routing/configuration weakening. `bin/lessons validate` passed; no graduation-ready lesson.
+- `kickoff-config recommend-timeouts` reported no target with the required 30 successful samples and ignored older malformed telemetry rows. No timeout setting was changed.
+
+Remaining:
+- Final handoff gate and local commit remain pending at this record; their outcomes are reported after execution without a later tracked write.
+- The later successful fsync, rebuilt counts, verification and reconstructed receipts do not prove earlier failed write-back became durable. Original-error callers keep that ingest unconfirmed; no new recovery lifecycle was introduced.
+- This standalone correction does not change a roadmap phase or generate a numeric phase dashboard. Structured execution evidence and this append-only record carry its outcome; no phase is invented for presentation.
+- Test protocol: run `./bin/test project/tests/test_cas.py -k publication_is_atomic` to exercise the preservation and recovery boundaries on temporary stores. No live-store operation is required.
+
+## 2026-10-02 15:40 — METHODOLOGY
+Rule One applied to the unauthorized review substitution.
+
+The exact Rule One question is: "What can I remember to do differently next time so this doesn't happen again?" The visible omission was a symptom; the earliest supported divergence was my failure to resolve and follow the primary workflow before choosing reviewers, compounded by misreading the user's standing source-sharing authorization. Real subscription preflight and the completed configured review contradict provider unavailability as the cause. The existing rules and guarded registration already reject native and unselected-model substitutions, so no duplicate routing policy was added.
+
+Persisted learning: `lessons/jasmine-lyrebird.md` records the diagnosis and the actionable change: load the frozen primary selection, honor standing authorization, sanitize relevant source, and enter registered guarded dispatch. The retained complete synthetic proof in `tests/test_kickoff_evidence.py` now rejects both substitutions without creating a handoff or modifying the attempt ledger, then proves the configured independent path. This is primary one-shot methodology work; it has no separately commissioned independent review or new proof family. The independent configured product source review is preserved separately.
+
+Verification: the workflow family passed directly and in the full candidate gate. `bin/lessons validate` passed. `bin/test-governance validate` remains valid at 163 families and 218 executable leaves, with zero unspent retirement budget; no family or leaf growth. No graduation, permission change, fallback, phase-status edit, or push occurred. The diagnosed launcher-environment failure also yielded `lessons/bronze-tench.md`; its correction was verified by the successful 196-test full run.
+
+Remaining human criteria: none for this authorized correction. Candidate lessons remain provisional. Final handoff and local commit follow this record; no later tracked write will claim their outcomes.

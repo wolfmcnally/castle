@@ -1243,6 +1243,39 @@ def _assert_complete_synthetic_kickoff(
         assert dispatched.returncode == 0, dispatched.stderr
 
     if primary:
+        # Primary review must use the frozen independent provider selection,
+        # even when a dormant delegated role pin names the invoking model.
+        attempt_ledger = run_dir / "role-attempts.jsonl"
+        original_attempts = attempt_ledger.read_bytes()
+        for harness, message in (
+            ("native", "primary mode only dispatches independent review instances"),
+            ("codex", "role differs from frozen primary workflow"),
+        ):
+            forbidden = run_dir / f"forbidden-{harness}.json"
+            refused = run(
+                "register-role-attempt",
+                "--run-dir",
+                str(run_dir),
+                "--operation",
+                "role.code-review",
+                "--attempt",
+                "1",
+                "--role",
+                "critic",
+                "--harness",
+                harness,
+                "--model",
+                "astra",
+                "--effort",
+                "high",
+                "--reason",
+                "initial",
+                "--output",
+                str(forbidden),
+            )
+            assert refused.returncode != 0 and message in refused.stderr
+            assert not forbidden.exists()
+            assert attempt_ledger.read_bytes() == original_attempts
         plan = tmp_path / "primary-plan.md"
         plan.write_text("# Plan\n\nImplement VALUE = 2 and run the complete gate.\n")
         captured_plan = run("capture-plan", "--run-dir", str(run_dir), "--plan", str(plan))
