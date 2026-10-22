@@ -45,3 +45,9 @@ Use namespace §§14–16 and 20 for typed operations, recursive file/directory 
 - [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§3–6, 8, and 12; exact contracts §§14–20.
 - [CAS contract](../briefs/cas-api.md), immutable content and write path.
 - [CRDT semantics](../briefs/crdt-semantics.md), the unchanged CAS authority boundary.
+
+## Delivered publication prerequisite
+
+Use `castle.cas_recovery.PublicationRequest` and `PublicationReceipt` with the exact public signatures `publish_namespace_content(cas_root, operation_root, expected_identity, publication)` and `recover_namespace_publication` with the same arguments. The namespace coordinator already holds the domain admission and CAS stable lock; its integration uses the private `_run_locked` entry while retaining that lock order rather than reacquiring a nonreentrant lock. Persist the immutable recipe in independent SQL ownership before allocating its operation stage/publication slots. Complete publication evidence derives the receipt; no additional receipt file is required. Preserve stage/evidence until the namespace outcome is durable and its owned cleanup is proved.
+
+The low-level publisher uses one conservative storage-recovery refusal. Validate typed requests, immutable input hashes/sizes and effect-none admission before invoking it; evidence-file presence alone does not establish an effect boundary. The completed prerequisite proves process-loss and injected storage errors on synthetic stores, not hardware power-loss or protected deployment. Unreferenced durable CAS content remains retained; no GC follows create/replace recovery.

@@ -1022,6 +1022,17 @@ def test_clone_store_refuses_unsafe_tree_shapes_without_following(
         store_merge.clone_store(source, tmp_path / "destination")
     assert not (tmp_path / "destination").exists()
 
+    if unsafe == "staging":
+        assert placed.read_bytes() == b"residue"
+        placed.unlink()
+        nested = source / "objects" / "sha256" / "aa" / "bb" / placed.name
+        nested.parent.mkdir(parents=True, exist_ok=True)
+        nested.write_bytes(b"owned-shaped residue")
+        with pytest.raises(journal.CastleError, match="^store-merge-transient-artifact:"):
+            store_merge.clone_store(source, tmp_path / "nested-destination")
+        assert nested.read_bytes() == b"owned-shaped residue"
+        assert not (tmp_path / "nested-destination").exists()
+
 
 @pytest.mark.parametrize("authority", ["journal", "object"])
 def test_clone_store_refuses_hardlinked_authority_without_mutation(

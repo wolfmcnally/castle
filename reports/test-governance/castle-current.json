@@ -49,12 +49,10 @@
     "pytest:project/tests/test_cas.py::test_index_rebuilds_from_journal_and_object_tree",
     "pytest:project/tests/test_cas.py::test_ingest_refusal_matrix",
     "pytest:project/tests/test_cas.py::test_media_detection_refuses_forged_proof",
-    "pytest:project/tests/test_cas.py::test_object_path_is_pure_function_of_identity",
     "pytest:project/tests/test_cas.py::test_publication_is_atomic_write_if_absent_resealed_no_residue",
-    "pytest:project/tests/test_cas.py::test_seal_refuses_object_that_does_not_match_identity",
     "pytest:project/tests/test_cas.py::test_store_lifecycle_refuses_before_content_io",
-    "pytest:project/tests/test_cas.py::test_verify_clean_store_exits_zero",
     "pytest:project/tests/test_cas.py::test_write_path_roundtrips_and_incremental_index_equals_the_fold",
+    "pytest:project/tests/test_cas_recovery.py::test_owned_publication_recovery_protocol",
     "pytest:project/tests/test_cli.py::test_every_error_category_becomes_one_error_line_and_the_categories_are_distinct",
     "pytest:project/tests/test_cli.py::test_import_discipline",
     "pytest:project/tests/test_cli.py::test_ingest_then_get_round_trips_byte_identically",
@@ -94,6 +92,8 @@
     "pytest:project/tests/test_merge.py::test_merge_into_unions_disjoint_objects",
     "pytest:project/tests/test_merge.py::test_opposite_direction_merges_cannot_deadlock",
     "pytest:project/tests/test_merge.py::test_public_api_signatures_and_none_returns",
+    "pytest:project/tests/test_namespace.py::test_namespace_restart_and_storage_faults",
+    "pytest:project/tests/test_namespace.py::test_namespace_transactions_and_admission",
     "pytest:tests/test_check.py::test_all_is_default_locked_ordered_and_cwd_independent",
     "pytest:tests/test_check.py::test_all_policy_failure_cannot_be_masked_by_later_policy_output",
     "pytest:tests/test_check.py::test_authoritative_runtime_probe_failure_stops_before_gate_without_fallback",
@@ -182,15 +182,8 @@
     "pytest:tests/test_treatise.py::test_an_external_fact_without_a_retrieval_date_fails",
     "pytest:tests/test_treatise.py::test_the_repository_own_treatises_validate"
   ],
-  "inventory_sha256": "056d040d99209c44d60942b2fbf29aa318ba21121f05bb81e35f06222af07d41",
+  "inventory_sha256": "0dab6865d6d785b7522bdd86104f88528ba8789bb3c91a204bbdb4b92095e25d",
   "proofs": [
-    {
-      "family": "pytest:project/tests/test_cas.py::test_object_path_is_pure_function_of_identity",
-      "id": "pytest:project/tests/test_cas.py::test_object_path_is_pure_function_of_identity",
-      "kind": "pytest",
-      "selector": "project/tests/test_cas.py::test_object_path_is_pure_function_of_identity",
-      "source_path": "project/tests/test_cas.py"
-    },
     {
       "family": "pytest:project/tests/test_cas.py::test_media_detection_refuses_forged_proof",
       "id": "pytest:project/tests/test_cas.py::test_media_detection_refuses_forged_proof",
@@ -199,24 +192,10 @@
       "source_path": "project/tests/test_cas.py"
     },
     {
-      "family": "pytest:project/tests/test_cas.py::test_seal_refuses_object_that_does_not_match_identity",
-      "id": "pytest:project/tests/test_cas.py::test_seal_refuses_object_that_does_not_match_identity",
-      "kind": "pytest",
-      "selector": "project/tests/test_cas.py::test_seal_refuses_object_that_does_not_match_identity",
-      "source_path": "project/tests/test_cas.py"
-    },
-    {
       "family": "pytest:project/tests/test_cas.py::test_index_rebuilds_from_journal_and_object_tree",
       "id": "pytest:project/tests/test_cas.py::test_index_rebuilds_from_journal_and_object_tree",
       "kind": "pytest",
       "selector": "project/tests/test_cas.py::test_index_rebuilds_from_journal_and_object_tree",
-      "source_path": "project/tests/test_cas.py"
-    },
-    {
-      "family": "pytest:project/tests/test_cas.py::test_verify_clean_store_exits_zero",
-      "id": "pytest:project/tests/test_cas.py::test_verify_clean_store_exits_zero",
-      "kind": "pytest",
-      "selector": "project/tests/test_cas.py::test_verify_clean_store_exits_zero",
       "source_path": "project/tests/test_cas.py"
     },
     {
@@ -344,6 +323,13 @@
       "kind": "pytest",
       "selector": "project/tests/test_cas.py::test_store_lifecycle_refuses_before_content_io",
       "source_path": "project/tests/test_cas.py"
+    },
+    {
+      "family": "pytest:project/tests/test_cas_recovery.py::test_owned_publication_recovery_protocol",
+      "id": "pytest:project/tests/test_cas_recovery.py::test_owned_publication_recovery_protocol",
+      "kind": "pytest",
+      "selector": "project/tests/test_cas_recovery.py::test_owned_publication_recovery_protocol",
+      "source_path": "project/tests/test_cas_recovery.py"
     },
     {
       "family": "pytest:project/tests/test_cli.py::test_shipped_command_set_is_exactly_the_realized_set",
@@ -820,6 +806,20 @@
       "kind": "pytest",
       "selector": "project/tests/test_merge.py::test_opposite_direction_merges_cannot_deadlock",
       "source_path": "project/tests/test_merge.py"
+    },
+    {
+      "family": "pytest:project/tests/test_namespace.py::test_namespace_transactions_and_admission",
+      "id": "pytest:project/tests/test_namespace.py::test_namespace_transactions_and_admission",
+      "kind": "pytest",
+      "selector": "project/tests/test_namespace.py::test_namespace_transactions_and_admission",
+      "source_path": "project/tests/test_namespace.py"
+    },
+    {
+      "family": "pytest:project/tests/test_namespace.py::test_namespace_restart_and_storage_faults",
+      "id": "pytest:project/tests/test_namespace.py::test_namespace_restart_and_storage_faults",
+      "kind": "pytest",
+      "selector": "project/tests/test_namespace.py::test_namespace_restart_and_storage_faults",
+      "source_path": "project/tests/test_namespace.py"
     },
     {
       "family": "pytest:tests/test_check.py::test_all_is_default_locked_ordered_and_cwd_independent",

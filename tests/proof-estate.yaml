@@ -50,9 +50,9 @@ critical_risks:
 families:
 - id: castle-cas
   kind: pytest
-  selectors: ["project/tests/test_cas.py"]
-  source_paths: ["project/tests/test_cas.py"]
-  covers: ["project/tests/test_cas.py", "project/castle/cas.py", "project/castle/excision.py"]
+  selectors: ["project/tests/test_cas.py", "project/tests/test_cas_recovery.py"]
+  source_paths: ["project/tests/test_cas.py", "project/tests/test_cas_recovery.py"]
+  covers: ["project/tests/test_cas.py", "project/tests/test_cas_recovery.py", "project/castle/cas.py", "project/castle/cas_recovery.py", "project/castle/excision.py"]
   contract: "CAS authority, lifecycle closure, exact retained reconstruction, bound recovery and private receipts have independent executable witnesses."
   risk_class: product-contract
   oracle: "Exact set difference and remote multisets prove removal; damaged-state snapshots prove non-destruction; literal receipts and sensitive-token controls prove privacy."

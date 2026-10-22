@@ -606,3 +606,114 @@ User Demo: Disposable namespace workflow through `./bin/python project/examples/
 Test protocol: run `./bin/python project/examples/namespace_demo.py`. Expect stable original IDs through rename/move, fresh duplicate IDs with shared content, preserved empty directories, retry equality true, committed status and final revision8. Judge the printed workflow; it uses only temporary synthetic roots.
 
 Remaining: refresh the sanitized report for this accepted correction, run the distinct bare full handoff gate, then commit the complete owned tree locally. New-content publication/recovery, snapshots and epoch excision/fresh DB replacement/protected cleanup remain required deferred work, with no later implementation authorized here.
+
+## 2026-10-22 00:47 — START
+
+Phase 3 — Bounded CAS interruption recovery
+
+Execution trace: 3c5d5826cb5046daa8cfcad68f3d8fb3
+
+Planned work:
+- Add the proposed `project/castle/cas_recovery.py` public recovery owner and its types; integrate the needed evidence/publication hooks into existing `project/castle/cas.py` and `project/castle/journal.py` without changing ordinary strict journal interpretation or inventing new event fields.
+- Persist operation-owned recovery evidence outside the CAS root before the corresponding unsafe publication boundary. Validate exact bytes, journal prefix/event identity, active store identity/epoch, ownership, and lock order before completing an interrupted operation. Handle object-published/journal-missing, incomplete append, complete append/index-stale, and post-completion response loss as distinct states.
+- Preserve target-local remote custody rows when rebuilding derived index state. Unknown residue, unrelated corruption, unreadable remotes, missing required evidence, or lifecycle mismatch stays blocked; ordinary rebuild-index is not broadened into guess-based repair.
+- Add `project/tests/test_cas_recovery.py` with real subprocess kills and independently expected journal/object/index results. Extend existing CAS/journal/merge regression proofs and record proof admission under the shared roadmap.
+
+Authorization: operator approved sequential Phase 3 publication/recovery and necessary Phase 4 new-content creation/replacement on 2026-10-22 UTC. Same retained sole writer, synthetic local stores only. Full review and evidence lanes, Sol inline primary and opposite-harness Opus/high advice. Delivery restriction: “Local commits only for now.” No push, live data, snapshots, excision, DB replacement or expanded permissions.
+
+## 2026-10-22 01:33 — END
+Phase 3 — Owned content publication and bounded recovery
+
+New content can now be durably published by the operation that owns its immutable stage, with exact forward recovery after interruption. The prerequisite is ready for local delivery; it does not yet create a namespace file. The already approved next slice connects creation and replacement to this publisher through the existing coordinator. Nothing further is needed from the operator to continue that approved integration.
+
+Execution trace: 3c5d5826cb5046daa8cfcad68f3d8fb3
+Baseline: 42332a62fdf5c54909f53ee46f1d06deb234eba3.
+
+Files changed:
+- `project/castle/cas_recovery.py` — closed immutable recipe/receipt, prepared/complete operation evidence, deterministic owned copy, exact prefix/event recovery and durable index/completion acknowledgment.
+- `project/castle/cas.py` — one explicit exact owned temporary allowance and extracted existing full object validator; strict default inventory is unchanged.
+- `project/tests/test_cas_recovery.py`, `project/tests/test_cas.py`, `project/tests/test_merge.py` — independent real process-loss and storage-fault proof; complete donor verification assertions relocated without removal; deterministic nested temporary refusal preserved.
+- `tests/proof-estate.yaml`, `reports/test-governance/castle-reset.jsonl`, `reports/test-governance/castle-current.json` — one admitted recovery family/leaf funded by that explicit coverage-preserving relocation; frozen budgets and prior history preserved.
+- `project/README.md` — public publisher prerequisite, caller ownership/admission, conservative errors and process-loss/platform limits.
+- `plan/INDEX.md`, `LOG.md`, `EXECUTION_LOG.jsonl`, downstream Phase4/7 pins and offline report — normal close bookkeeping, with prospective status/ripple/report writes still pending at this record.
+
+Build status:
+- Affected publication/CAS/journal/merge selection:66 passed. Fresh strengthened recovery family:1 passed3.92s, including empty content, changed recipe/actual epoch, valid foreign tail, missing completed evidence and exact injected-fault residue. No warnings.
+- Command-zero and candidate-bound `./bin/check all`: passed; complete diagnostics inspected, zero warnings. All196 retained tests passed. Pre/post product and full-tree identities are equal.
+- Handoff gate: pending after all tracked close writes; local delivery remains contingent on its ignored receipt and a clean verified commit. No push.
+
+Review lane: full, primary advisory. Evidence lane: full. Follow-up route: initial implementation with bounded in-scope code-advice corrections, no extra review.
+
+Role model/venue — orchestrated by Codex:
+- Planner/coder: Sol 6.1/high inline; provider-observed primary model/effort and harness version unreported. No delegated writer.
+- Reviewer/critic: latest requested Opus/high under Claude, one actual plan pass13 observations and one code pass8 observations. Both normal watcher exits and exact candidate/span joins were ingested; all21 findings have primary dispositions. No allowance reset, provider substitute or new reviewer.
+- Observed independent model:claude-opus-5-5; observed effort and harness version unreported unless present in preserved role telemetry. Live configuration-bound real-read preflight passed before mutation. Code adviser could read source but Bash git diff was denied; the primary separately inspected full changed diffs and preserved verification relocation. No denied action was bypassed.
+- Primary adjustments: missing-evidence sighting uniqueness guard, dedup temporary early refusal, stronger request/epoch/foreign-tail and post-fault residue oracles, reuse of existing remote inspector and removal of redundant first-publication hashing under an unchanged lock. Fixed conservative low-level error retained as §17 requires; future coordinator prevalidation must distinguish its effect-none input boundary.
+
+Candidate-bound evidence:
+- Accepted product: 6e27a2d35f3268eace262618fa9ec244f779367c3faefd046e721e252f6bac4a
+- Unchanged implementation full tree: 2951eb17e346d67acb13184ebc3746fbe72adce4fb8d342c39e8851a39477ddc
+- One actual managed final gate, counted from gates.jsonl; diagnostic reviews are observations, not more runs. Acceptance validation and finalized exact timing passed.
+- Proof estate:163 families/218 leaves; frozen baseline and zero-growth budget unchanged, zero unspent retirements. No new effectiveness assay claimed.
+
+### Execution timing
+
+Execution trace: 3c5d5826cb5046daa8cfcad68f3d8fb3
+- Outcome: `success`
+- Makespan: 2760482561000 ns (2760.482561000 s)
+- Intelligence: 815380964042 ns (815.380964042 s)
+- Gates: 170096924000 ns (170.096924000 s)
+- Orchestration: 2760020908084 ns (2760.020908084 s)
+- Wait: 814437679834 ns (814.437679834 s)
+- Retry/rework: 0 ns (0.000000000 s)
+- Failed work: 0 ns (0.000000000 s)
+- Unattributed: 461652916 ns (0.461652916 s)
+- Category totals are interval unions and may overlap.
+
+#### Slowest material spans
+
+- `orchestration.implementation` — category `reconciliation`, attempt 1, outcome `success`: 1986890493917 ns (1986.890493917 s)
+- `orchestration.planning` — category `reconciliation`, attempt 1, outcome `success`: 562873750083 ns (562.873750083 s)
+- `role.code-review` — category `intelligence`, attempt 1, outcome `success`: 449239001167 ns (449.239001167 s)
+- `role.code-review` — category `wait`, attempt 1, outcome `success`: 448778022959 ns (448.778022959 s)
+- `role.plan-review` — category `intelligence`, attempt 1, outcome `success`: 366141962875 ns (366.141962875 s)
+
+
+Startup's two rejected plan drafts, full diagnostics and PARK remain preserved. The operator approved only the exact new-file declaration repair; the same check then passed. That pre-trace wait has no invented monotonic duration. Later native tool help attempted without the known environment and then inside the OS sandbox failed; supported reviewed invocation succeeded. Test fixture signature/style diagnostics and bounded corrections remain intact. The retained worker launcher-status no-grant refusal was not retried; exact own lease plus coordinator ownership evidence supported continued sole-writer custody. Timeout diagnostics are retained read-only and no configuration change follows.
+
+Acceptance:
+- Objective: operation-owned typed publication, immutable staged bytes, exact active binding, deterministic object evidence, journal prefix/event identity, duplicate remote preservation, repeated identical receipt, preserved later events, real child death at each supported publication boundary, freshly established recovery writes after uncertainty, and fail-closed corrupt/unowned/missing evidence with no deletion of unknown bytes. Ordinary CAS strict-format/lifecycle/merge regressions and the complete repository gate passed against this candidate.
+- Parked for the operator: no Phase3 user demo; platform/hardware power-loss and protected-environment/custody qualification remain deferred. Plain authority fsync versus SQLite fullfsync is explicit. Synthetic kills and wrapper faults do not prove every native VFS or hardware boundary, encryption or cross-node atomicity.
+
+Delivery: restricted — “Local commits only, synthetic local stores only; no live data, publishing, grants, snapshots, excision/DB replacement or unrelated deployment expansion.” The separate handoff gate and verified local commit remain pending; no publication or push.
+
+Ripple:
+- AUTO, pending: exact Phase3 completion ledger, preserving the release arrow and earlier accepted phases.
+- AUTO, pending: Phase4 uses the delivered closed recipe/receipt and already-held-lock entry, commits independent ownership before allocation, prevalidates before conservative publication errors and retains unreferenced CAS residue.
+- AUTO, pending: Phase7 records mixed fsync/fullfsync posture and actual environment/hardware qualification boundary.
+- DECIDE:none for this close or the already authorized new-content integration. Snapshots/excision/live stores/publication and later consumer changes remain outside this slice.
+
+Lessons:
+- None newly filed. Existing source-schema, canonical runtime/environment and terminal-log rules cover the orchestration mistakes; exact rejected evidence remains. Missing-evidence idempotency and dedup ownership defects are corrected by strengthened executable cases in the existing recovery family, with no new proof budget or rule graduation.
+- Timeout recommendations remain read-only; incomplete or historical malformed samples are not relabeled as complete measurement.
+
+User Demo: N/A — this is a library recovery prerequisite; consumer-facing recovery presentation lands in Phase 7.
+
+Remaining:
+- Apply/verify accepted ledger, two prepared AUTO pins, actual close log and sanitized offline report; run the separate bare full handoff gate, commit locally and verify clean custody.
+- Continue the approved Phase4 goal-complete new-byte file creation/replacement with its own plan/advice/gates and public synthetic workflow. Publisher foundation alone does not satisfy that goal.
+- Snapshots, epoch excision/database replacement/protected cleanup, hardware qualification and external cross-domain orchestration remain required deferred capabilities. No automatic GC.
+- Test protocol skipped: this prerequisite introduces invariants proved by the automated protocol; end-to-end namespace workflow belongs to the immediately following approved integration.
+
+## 2026-10-22 01:34 — END (bookkeeping)
+
+Phase 3 — Owned content publication and bounded recovery
+
+The exact accepted completion ledger was applied and verified. Earlier accepted phases and the release arrow remain preserved. The two prepared AUTO pins now name the delivered publisher recipe/receipt and held-lock integration rules in Phase4, and mixed authority fsync/index fullfsync qualification in Phase7. The initiative narrative records the existing goal-complete Phase3/4 approval without authorizing deferred snapshots, excision, protected deployment or consuming-repository changes.
+
+Execution trace: 3c5d5826cb5046daa8cfcad68f3d8fb3
+
+Lessons:
+- No new candidate was filed and no rule was graduated. Existing source/schema, environment and log-witness rules cover the bounded mistakes; the actual publication defects are prevented by strengthened existing protocol cases. Lesson validation passed and no graduation-ready candidate was listed. All rejected evidence and counters remain intact.
+
+Sanitized offline report generation follows. The separate bare full handoff gate and verified local-only commit remain pending at this append-only record; no push/publication or live-store operation.

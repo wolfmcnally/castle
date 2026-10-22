@@ -730,7 +730,7 @@ class _UnreadableRemotes(CasError):
     """Existing remote custody rows cannot be read without mutation."""
 
 
-def _authority_paths(store: Path) -> dict[str, Path]:
+def _authority_paths(store: Path, *, owned_temporary: Path | None = None) -> dict[str, Path]:
     """Validate the full structural inventory, including partially removed payload."""
     allowed = {
         "objects",
@@ -776,6 +776,14 @@ def _authority_paths(store: Path) -> dict[str, Path]:
                         and _OBJECT_NAME.fullmatch(relative[4]) is not None
                         and relative[4].startswith(relative[2] + relative[3])
                     )
+                    if item == owned_temporary:
+                        valid = (
+                            len(relative) == 5
+                            and relative[:2] == ("objects", "sha256")
+                            and re.fullmatch(r"[0-9a-f]{2}", relative[2]) is not None
+                            and re.fullmatch(r"[0-9a-f]{2}", relative[3]) is not None
+                            and re.fullmatch(r"\.cas-[0-9a-f]{32}\.tmp", relative[4]) is not None
+                        )
             if not valid or (
                 not stat.S_ISDIR(info.st_mode)
                 if directory_expected
@@ -784,7 +792,7 @@ def _authority_paths(store: Path) -> dict[str, Path]:
                 raise _UnsafeAuthority("unsafe authority inventory")
             if directory_expected:
                 pending.append(item)
-            elif len(relative) == 5:
+            elif len(relative) == 5 and item != owned_temporary:
                 found["sha256:" + item.name] = item
     return found
 
@@ -800,6 +808,27 @@ def _validated_authority(
         raise CasError("incomplete authority")
     records = _read_authority_journal(store)
     objects, names = expected_index_rows(records)
+    if set(paths) != set(objects):
+        raise CasError("authority inventory disagreement")
+    _validate_authority_objects(store, paths, objects)
+    try:
+        remotes = _snapshot_remotes(store)
+    except (OSError, CasError, sqlite3.Error):
+        raise _UnreadableRemotes("unreadable remote rows") from None
+    if any(
+        len(row) != 5 or any(not isinstance(value, str) for value in row) or row[0] not in objects
+        for row in remotes
+    ):
+        raise CasError("invalid remote authority")
+    if derived and _index_errors(store, objects, names):
+        raise CasError("derived authority disagreement")
+    return records, paths, remotes
+
+
+def _validate_authority_objects(
+    store: Path, paths: dict[str, Path], objects: dict[str, tuple[Any, ...]]
+) -> None:
+    """Shared hash/posture check after a caller establishes exact membership."""
     if set(paths) != set(objects):
         raise CasError("authority inventory disagreement")
     try:
@@ -819,18 +848,6 @@ def _validated_authority(
             raise CasError("authority content disagreement")
         if requires_immutable and not getattr(info, "st_flags", 0) & immutable_mask:
             raise _UnsafeAuthority("required object posture unavailable")
-    try:
-        remotes = _snapshot_remotes(store)
-    except (OSError, CasError, sqlite3.Error):
-        raise _UnreadableRemotes("unreadable remote rows") from None
-    if any(
-        len(row) != 5 or any(not isinstance(value, str) for value in row) or row[0] not in objects
-        for row in remotes
-    ):
-        raise CasError("invalid remote authority")
-    if derived and _index_errors(store, objects, names):
-        raise CasError("derived authority disagreement")
-    return records, paths, remotes
 
 
 def _write_fresh_index(

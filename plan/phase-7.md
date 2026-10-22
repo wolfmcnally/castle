@@ -49,3 +49,7 @@ Map the closed typed API and command ownership in namespace §14 exactly, includ
 - [CAS contract](../briefs/cas-api.md), explicit-root CLI and self-contained consumer API.
 - [Platform capabilities](../briefs/cross-platform-cloning.md), platform-specific clone limits.
 - [Release readiness](../briefs/release-and-deployment-readiness.md), exact-artifact and platform evidence.
+
+## Publication durability qualification pin
+
+The delivered owned publisher synchronizes object, journal and operation evidence with plain `os.fsync`/directory sync, while its derived SQLite index additionally sets and reads back `fullfsync=ON`. Do not describe these as a uniform Darwin device-cache flush guarantee. Process termination and wrapper fault injection do not certify hardware power-loss durability. The later environment/platform qualification must report the actual filesystem, VFS and flush behavior before making stronger claims; no adapter deployment, new permission or live-store test is authorized by this pin.

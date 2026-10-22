@@ -301,6 +301,7 @@ def test_index_rebuilds_from_journal_and_object_tree(tmp_path: Path) -> None:
     assert cas.rebuild_index(store) == {"objects": 2, "names": 2, "remotes": 2}
     assert Counter(cas._snapshot_remotes(store)) == Counter([remote, remote])
     assert sorted(_index_object_rows(store)) == expected_objects
+    _verify_clean_missing_and_drift(tmp_path / "verification")
 
 
 # --------------------------------------------------------------------------
@@ -308,7 +309,7 @@ def test_index_rebuilds_from_journal_and_object_tree(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_verify_clean_store_exits_zero(tmp_path: Path) -> None:
+def _verify_clean_missing_and_drift(tmp_path: Path) -> None:
     cas_id = f"sha256:{_FIXED_DIGEST}"
     assert cas.object_relpath(cas_id) == Path("objects") / "sha256" / "ab" / "cd" / _FIXED_DIGEST
     assert cas.object_relpath(cas_id).as_posix() == f"objects/sha256/ab/cd/{_FIXED_DIGEST}"
