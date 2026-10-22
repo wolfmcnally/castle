@@ -34,7 +34,7 @@ User Demo: N/A — this phase refines contracts and exposes no executable user s
 
 ## Brief refs
 
-- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§2–11 and 13.
+- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§2–11 and 13–20.
 - [CAS contract](../briefs/cas-api.md), journal, write path, verification, and explicit-root ownership.
 - [CRDT semantics](../briefs/crdt-semantics.md), authority and within-epoch union.
 - [Excision](../briefs/content-excision.md), retirement and forward recovery.

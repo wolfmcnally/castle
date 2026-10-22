@@ -43,7 +43,7 @@ Use `./bin/setup`, `./bin/test [args...]`, `./bin/check all`, and `./bin/python`
 
 ## Model and review venue
 
-`kickoff.yaml` owns authority mode, model/effort choices, provider eligibility, timeouts and research budgets. Astra under Codex and Opus under Claude Code plan and code inline, with cross-provider advisory review and a fresh primary instance as the single-provider fallback. By the operator's choice on 2026-09-26, Claude-led work is reviewed and critiqued by Astra at high effort (cross-vendor), in both primary and delegated modes. Constrained primaries retain delegated roles. Existing delegated pins and budgets remain available. Optional usage checks and live preflight precede phase mutation; methodology work follows the primary one-shot route below.
+`kickoff.yaml` owns authority mode, model/effort choices, provider eligibility, timeouts and research budgets. As of 2026-10-21, the operator selects current Sol under Codex and Opus under Claude Code for inline planning/coding, with opposite-harness review at high effort. The explicit Sol deployment target pins `gpt-6.1-sol`; the methodology's older built-in alias is not evidence of the current route. Historical Astra records and frozen review counters remain historical evidence. Optional usage checks and live preflight precede phase mutation; methodology work follows the primary one-shot route below.
 
 ## Project-specific skills
 

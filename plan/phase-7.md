@@ -26,6 +26,8 @@ Make the completed library usable through Castle's CLI and document consumer res
 - Existing CAS-only commands, import isolation, and exact artifact smoke remain valid. Supported-platform claims have actual environment-bound evidence; missing Linux or adapter qualification is recorded as not run and cannot be advertised as passed.
 - Manual: the owner judges CLI naming/errors, stale-revision retry, explicit subtree delete, snapshot/export usability, and retry-window behavior. Encrypted custody and real-store seed/purge decisions remain separate owner inputs.
 
+- CLI status/expiry/duplicate/subtree-delete/recovery requests map to the typed library and refusal outcomes. Capability-descriptor mode/root/domain/property checks exercise positive and unsupported fixtures; unknown Unicode data refuses and runtime conversion remains separately authorized.
+
 ## Validation and handoff
 
 Iteration: `./bin/test project/tests/test_namespace_consumers.py project/tests/test_cli.py project/tests/test_hermeticity.py`. The phase-entry plan names the current repository-owned Linux and exact-artifact commands after reading existing CI/tooling; unavailable environments park their claims. Apply the shared two-gate close protocol in [namespace-implementation.md](namespace-implementation.md).
@@ -37,9 +39,13 @@ User Demo: Disposable namespace command workflow.
 - What to look for: familiar current names, stable entry IDs, immutable historical views, preserved empty directories, and clear conflict/error messages. Inspect the chosen export directory and distinguish search lag from lost content.
 - Variations: retry after a lost response; choose a different sibling name after conflict; inspect a snapshot after logical deletion. Do not run confidential purge or real-store conversion as this demo.
 
+## Pinned Phase 1 contracts
+
+Map the closed typed API and command ownership in namespace §14 exactly, including file/directory duplicate, logical subtree deletion, operation status, result expiry and explicit-root recovery; namespace excision remains library-only. Qualify the §19 environment-level protected mode separately from local synthetic behavior, and apply the §20 concurrency/fault contracts. Cross-domain moves remain external orchestration without distributed atomicity.
+
 ## Brief refs
 
-- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§5–12 and scope exclusions.
+- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§5–12 and scope exclusions; exact contracts §§14–20.
 - [CAS contract](../briefs/cas-api.md), explicit-root CLI and self-contained consumer API.
 - [Platform capabilities](../briefs/cross-platform-cloning.md), platform-specific clone limits.
 - [Release readiness](../briefs/release-and-deployment-readiness.md), exact-artifact and platform evidence.

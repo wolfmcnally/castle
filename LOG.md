@@ -226,3 +226,170 @@ Remaining:
 - Final bare handoff gate, exact commit, push, hosted CI, new tag, publication and download/install verification occur after this record and are reported from observed results without later tracked writes.
 - An original ingest failure remains unconfirmed after later successful synchronization, verification or receipt reconstruction. No uncertain-write protocol, automatic partial-tail/orphan recovery, schema/API change or namespace feature is delivered.
 - Test protocol: the release wheel's `castle --version` must report `castle 0.1.1`; the existing isolated package smoke verifies the CLI and journal format on disposable data. No live store is required.
+
+## 2026-10-21 18:42 — START
+
+Phase 1 — Namespace and recovery contract refinement
+
+Review lane: full. Evidence lane: full. Primary planning/coding: current Sol; independent plan/code advice: Opus/high. Preflight real-read probes passed. Delivery restriction: “Local commits only for now.” No runtime or live-store operation is in scope. Governing-prose preparation will be preserved before final-authority qualification.
+
+## 2026-10-21 19:03 — PARK
+Phase 1 — Namespace and recovery contract refinement
+
+Contract preparation is preserved; the phase remains in progress. Current Sol owns local construction and Opus/high supplied independent plan advice. One format-only re-emission corrected report paths; every substantive field was verified unchanged. Both plan allowances remain frozen. Primary source-backed dispositions are retained.
+
+The namespace/CAS briefs and live review route are refined. Intermediate policy validation passed; final focused validation, initial code critique, both full gates, phase close and local commit remain unperformed. No runtime behavior, encryption, live-store operation or acceptance is claimed. The planned seam preserves old authority hashes and captures the final governing prose in a fresh continuation; final critique covers the complete diff from HEAD.
+
+Execution trace: dc5e8b9875b54291b936cb58f683dd78
+Preparation candidate: ee1c7ae100afce19409fa580a5663716234b4693ca28f7eece9d49196b7e9922
+Delivery: restricted — “Local commits only for now.” No commit or push has occurred.
+
+Lessons:
+none filed. Existing scoped-search, explicit-runtime, repository-relative path and fail-closed rules cover the observed failures; exact diagnosis, raw reports, re-emission proof and primary dispositions are preserved. A span-finalization call refused a zero code with interrupted outcome before mutation; the corrected terminal record uses the required nonzero interrupted code. No rule was graduated.
+
+Resume under existing authority: fresh final-authority run carrying original advice/allowances and primary plan decisions; real policy/contract qualification, final critique, then both full gates and local-only delivery. Manual numeric, architecture and protected-environment judgments remain the operator's.
+
+## 2026-10-21 19:04 — START (resumed)
+
+Phase 1 — Namespace and recovery contract refinement
+
+Fresh final-authority qualification continues the preserved contract preparation. Original Opus/high plan advice, exact reviewed plan and substantive dispositions carry forward with both plan allowances frozen; no new planning/review is manufactured. Real remaining work is current policy/contract qualification, initial code critique of the complete diff from HEAD, candidate acceptance and both full gates. The final plan decisions stay within the approved contract-only scope. Numeric/protected-mode judgments remain manual. Delivery remains restricted: “Local commits only for now.”
+
+## 2026-10-21 19:26 — PARK
+Phase 1 — Namespace and recovery contract refinement
+
+Initial Opus/high code advice completed. Fourteen observations are disposed by the primary against source-backed contract corrections; no second code critique or new plan advice is claimed. Original reports, reviewed bytes, dispatch provenance and phase-wide allowances remain preserved. The policy, plan concreteness and delivery checks passed after the delta. Full candidate and handoff gates remain unperformed.
+
+Execution trace: aff333d41963474995a5d30ff7f84a2b
+
+The final authority capture will include the corrected namespace contract, SQLite public-domain durability pin and exact Phase 1 brief references. The primary will carry both original advice reports and record a fresh final-candidate decision. Prospective downstream AUTO references/acceptance remain pending until accepted close; no runtime behavior, IPC service, crypto implementation, conversion, live-store operation or product acceptance is claimed.
+
+Lessons:
+- Filed `merciful-lemur` as a candidate: validate the standalone terminal Lessons witness before append; the rejected original, exact authorized formatting repair and unchanged committed prefix are preserved. No rule was graduated. Source-script match verification refused before source mutation; corrected exact context then applied once.
+
+Delivery: restricted — “Local commits only for now.” No commit or push has occurred. Continue existing authority-capture/qualification work without resetting review budgets. Manual architecture/numeric/protected-environment judgments remain the operator's before downstream adoption.
+
+## 2026-10-21 19:26 — START (resumed)
+
+Phase 1 — Namespace and recovery contract refinement
+
+Final contract qualification resumes with immutable current authority capture and original plan/code advice, all counters preserved. The primary disposed every advisory observation and retains the exact reviewed plan plus source-backed delta assessment. No duplicate advice pass is needed. Remaining work is final primary decision, complete candidate gate, accepted close, mechanical downstream references/acceptance and the separate full handoff gate. Delivery remains restricted: “Local commits only for now.” Runtime implementation and manual product/custody acceptance remain outside this documentation close.
+
+## 2026-10-21 19:34 — PARK
+Phase 1 — Namespace and recovery contract refinement
+
+The implementation full gate failed: 195 tests passed, and one existing generated-command authority-matrix fixture requested medium effort from the newly selected high-only Sol route. Lint and format passed. The policy gate passed earlier; one optional artifact-path warning is explained in its diagnostic review, with full outer capture preserved. No full-gate or phase success is claimed.
+
+Execution trace: 0a1e211a4f6e4a66bc8bc41932681331
+
+Correction is a direct fix: use the selected high effort in that fixture for all four Codex role renderings, retaining every tool/research-authority assertion and the same proof inventory. Keep kickoff configuration, preflight identity, original advice and phase-wide allowances unchanged; do not weaken assertions or dispatch another review. The novel diagnosed failure consumes one self-resume allowance; two remain. All failed gate/receipt/diagnostic artifacts remain preserved.
+
+Lessons:
+- The existing cross-surface fixture/caller verification rule covers this omission: inspect independent command-render fixtures when changing model metadata. No duplicate lesson is filed. The earlier terminal-witness candidate remains provisional; no rule is graduated.
+
+Delivery: restricted — “Local commits only for now.” Continue under the existing minor test-correction authorization with focused proof, then a new complete implementation sequence and the separate handoff gate. No runtime or live-store action is included.
+
+## 2026-10-21 19:34 — START (resumed)
+
+Phase 1 — Namespace and recovery contract refinement
+
+Direct fixture correction resumes after the preserved failed full gate. Configuration/preflight identity and original Opus/high advice are unchanged. Update only the independent render fixture's effort literal; retain all matrix assertions and proof counts. Focused proof precedes the renewed complete implementation sequence; no duplicate review, runtime implementation or product/custody acceptance is implied. Delivery remains restricted: “Local commits only for now.”
+
+## 2026-10-21 19:41 — END
+Phase 1 — Namespace and recovery contract refinement
+
+The namespace contract refinement is ready for local delivery. It now specifies the requested concurrent ACID and filesystem behavior, exact typed requests/results/errors, deterministic bytes, bounded recovery, replacement and protected-execution refusals. These are proposed contracts; no namespace runtime, power-loss reliability, confidential cleanup or encrypted deployment has been implemented or proved by this phase. Product judgment remains with the operator before downstream runtime adoption.
+
+Execution trace: fa48e676a17b45ac93e6ddc1c0432d20
+Baseline: 694e83185a31fdab63fc11ba68efd7a2d968bfbc — delivered project runtime remains unchanged.
+
+Files changed:
+- `briefs/coordinated-namespace-crud.md`, `briefs/cas-api.md` — complete proposed namespace contract and bounded CAS extension, clearly separate from delivered behavior.
+- `docs/sqlite-synchronous.txt`, `docs/README.md` — cataloged public-domain SQLite EXTRA durability excerpt with distinct source/retrieval dates.
+- `CLAUDE.md`, `kickoff.yaml` — current Sol 6.1 with opposite-harness Opus/high advice; historical Astra records and phase-wide counters retained.
+- `plan/phase-1.md` — exact owning brief references. `plan/INDEX.md`, `plan/namespace-implementation.md` and `plan/phase-2.md` through `plan/phase-7.md` have the accepted completion/reference/acceptance edits pending below.
+- `tests/test_research_authority.py` — one existing fixture effort literal now uses selected high effort; every tool-authority assertion and all four role renderings remain intact. No test leaf or runtime behavior was added.
+- `user-actions/namespace-contract.md`, `lessons/merciful-lemur.md`, `LOG.md`, `EXECUTION_LOG.jsonl` — manual boundary, candidate learning and truthful preserved execution history.
+
+Build status:
+- Focused existing research-authority suite: 3 passed. Policy, format, lint, plan concreteness and plan delivery checks passed.
+- Initial full attempt: failed (195 passed, one independent fixture requested unsupported medium effort). Failure/receipt retained. Direct correction selected high in that fixture without changing configuration/preflight or weakening assertions; one self-resume allowance consumed, two remaining.
+- Current implementation sequence: `./bin/check policy` and `./bin/check all` passed against unchanged product and full-tree identities; 196 tests passed in 142.31 seconds. Complete diagnostics reviewed with zero warnings.
+- A prior policy wrapper's absent optional artifact-path diagnostic is explained: it named an existing child-produced artifact rather than a capture destination. Full outer stdout/stderr was retained, no digest was invented, and later gates omit the optional argument.
+- Handoff gate: pending after every tracked close write; local delivery requires the final bare `./bin/check all` and its ignored receipt. No success is pre-claimed.
+
+Review lane: full, primary advisory mode. Evidence lane: full.
+Follow-up route: original full preparation/qualification; final direct fix for one low-risk test-fixture literal after failed full validation.
+
+Role model/venue — orchestrated by Codex:
+- Planner/coder: current Sol 6.1/high inline; native provider-observed model/effort and harness version unreported. No delegated writer or independent self-review substitution.
+- Reviewer: Opus/high under Claude; one comprehensive plan report plus one artifact-only same-session path-format re-emission. Observed model claude-opus-5-5, harness 2.1.307; provider-observed effort unreported. Exact substantive fields were verified unchanged. Both plan allowances remain consumed/frozen; no third pass.
+- Critic: one initial Opus/high Claude pass. Observed model claude-opus-5-5, harness 2.1.307; provider-observed effort unreported. Read-only tool policy refused Bash diff access; the adviser inspected full current contract contents and delivered definitions. Primary reviewed the delta and disposed all observations. No duplicate critique.
+- Preflight: original sandbox DNS failure retained; reviewed host DNS and the one supported retry passed with existing credentials/provider. No provider/billing change, credential exposure, native-denial bypass or persistent elevation.
+- Advice: 9 plan observations and 14 code observations, counted from carried report arrays; 23 explicit primary dispositions, counted from the current decision. Original reports, candidates and dispatch provenance remain available. No advice budget reset.
+
+Candidate-bound evidence:
+- Accepted product: a7979a403a6befdaa2d4840b6862e182abcad6157ad4cb5ffb8086205960ce46
+- Unchanged implementation full tree: e2a0ff2bebc7d1ab9966f3de08e72fbc9a4b6f7b8f14229dec3dbe2d125656ea
+- Active command manifest: 2b9adea35757a841b91b17ae053ee80b5b2fceb80cb081780ceb882908147acd
+- Current acceptance validation: passed immediately after the complete implementation gate. Exact finalized timing summary passed; no incomplete telemetry or fabricated convergence count. Earlier preparation/correction traces preserve their interrupted/error outcomes.
+
+### Execution timing
+- Outcome: `success`
+- Makespan: 313142174458 ns (313.142174458 s)
+- Intelligence: 0 ns (0.000000000 s)
+- Gates: 146577824417 ns (146.577824417 s)
+- Orchestration: 312751480042 ns (312.751480042 s)
+- Wait: 0 ns (0.000000000 s)
+- Retry/rework: 0 ns (0.000000000 s)
+- Failed work: 0 ns (0.000000000 s)
+- Unattributed: 390694416 ns (0.390694416 s)
+- Category totals are interval unions and may overlap.
+
+#### Slowest material spans
+
+- `orchestration.acceptance` — category `reconciliation`, attempt 1, outcome `success`: 293652697459 ns (293.652697459 s)
+- `gate.full` — category `gate`, attempt 1, outcome `success`: 145008711625 ns (145.008711625 s)
+- `orchestration.implementation` — category `reconciliation`, attempt 1, outcome `success`: 17211389583 ns (17.211389583 s)
+- `orchestration.setup` — category `reconciliation`, attempt 1, outcome `success`: 1803470541 ns (1.803470541 s)
+- `gate.policy` — category `gate`, attempt 1, outcome `success`: 1569112792 ns (1.569112792 s)
+
+
+The timing above describes only the final accepted correction trace. Original independent review durations and the failed full gate belong to preserved earlier traces; the offline phase archive will aggregate them without presenting carried advice as new work. Required operator-input ledger: no recorded open park or interval, total method none; this does not invent timing for earlier uninstrumented setup/coordination.
+
+Acceptance:
+- Objective: existing command authority matrix and full repository test/lint/format/policy/catalog integrity, complete diagnostic inspection, unchanged implementation identity, current primary decision and validated evidence.
+- Reviewed specification: public/persisted operation closure, atomic recursive rename/move/duplicate/delete, read consistency and durable retry, distinct epoch excision, bounded publication and marker/crash authority, protected capability/refusal and existing future proof mapping. Runtime behavior remains unproved.
+- Parked for the operator: integer-only metadata and numeric bounds, Unicode/runtime coupling, one lifetime coordinator with in-process callers, fixed live-tree/request limits, visible redacted snapshots and protected-environment/custody choices. `user-actions/namespace-contract.md` must be settled before Phases 2–7 adopt these proposed details. Actual encrypted environment, live conversion/excision and external-copy obligations need separate authority/evidence.
+
+Delivery: restricted — “Local commits only for now.” Local commit follows the final handoff gate; no push, publication, live-store operation, expanded grant, identity migration or consuming-repository edit.
+
+Ripple:
+- AUTO, pending: `plan/INDEX.md` Phase 1 completion and truthful initiative narrative, preserving the existing release row/arrow; Phase 2 remains pending.
+- AUTO, pending: `plan/namespace-implementation.md` and `plan/phase-2.md` through `plan/phase-7.md` — exact §§14–20 references and empirical acceptance for already authorized ACID/CRUD, recovery, snapshot, excision and capability contracts. Existing goals/dependencies remain fixed. Classified against the explicit operator requirements and advice; not claimed applied before close.
+- DECIDE: none for this documentation close. Manual product adoption remains separately parked, not silently authorized runtime work.
+
+Lessons:
+- Filed `merciful-lemur` (methodology candidate, one occurrence): validate terminal Lessons witness before irreversible append. Rejected originals and exact authorized one-byte formatting correction preserve committed prefix/history. No rule graduated; no graduation-ready candidate.
+- Existing cross-surface fixture/definition and exact-schema rules cover the discovered effort fixture omission and local orchestration-input mistakes; no duplicate rule filed. Temporary primary decision list/text and park-summary boolean shape refusals occurred before affected mutations; originals and corrections remain preserved.
+- Recalibration: no target has the required 30 successful samples. The recommendation reader reported 536 incomplete/malformed historical telemetry rows and ignored them; all were inspected as the same historical-reader diagnostic. No row/history deletion or timeout change.
+
+User Demo: N/A — this phase refines contracts and exposes no executable user surface.
+
+Remaining:
+- Apply and verify the exact accepted completion ledger, then the prepared mechanical downstream references/acceptance and narrative; append actual outcomes and generate the sanitized offline report before the final handoff gate.
+- The separate full handoff gate and local commit remain pending at this record. Their actual outcomes are reported afterward without another tracked write.
+- Test protocol: skipped (reason: contract-documentation phase exposes no executable namespace surface; review the named manual contract action before runtime adoption). Existing shipped runtime remains unchanged.
+
+## 2026-10-21 19:44 — END (bookkeeping)
+
+Phase 1 — Namespace and recovery contract refinement
+
+Actual close outcomes: the exact accepted Phase 1 completion ledger was applied and verified before any downstream edit. The prepared AUTO references and empirical Acceptance bullets landed in the roadmap and all six pending phase files, including exact §§14–20 Brief refs. No goal/dependency changed. The initiative narrative is now truthful; the existing release row/arrow remains unchanged and Phase 2 remains pending.
+
+Execution trace: fa48e676a17b45ac93e6ddc1c0432d20
+
+The existing manual contract action remains open before downstream runtime adoption. The candidate lesson remains provisional; lesson validation passed and no graduation-ready candidate was reported. Runtime source and private/consumer repositories were not changed. The sanitized offline report is generated next; the final bare full handoff gate and local-only commit remain pending at this append-only record.
+
+Lessons:
+- No additional lesson filed or graduated. The earlier terminal-witness candidate and exact fixture/definition checks remain the recorded learning; no history or failed evidence was removed.

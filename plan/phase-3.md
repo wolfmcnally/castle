@@ -25,14 +25,20 @@ Provide the versioned durable namespace authority and a qualified forward databa
 - Interrupt fresh-image publication, replacement, sidecar disposal, marker advancement, and completion; resume forward with validated authority, or stay unavailable. Unknown residue is not removed.
 - Independent scan of the owned fresh database/sidecars/staging confirms selected sentinel absence only after cleanup; reference publication or row deletion alone cannot pass that check. Host remanence and external copies remain outside the claim.
 
+- A competing coordinator process receives namespace-coordinator-busy before SQL access; owner death permits recovery. Read-back DELETE/EXTRA settings and qualified journal-unlink directory durability are required before success, and pre-retirement abort restores predecessor readiness only from explicit proofs.
+
 ## Validation and handoff
 
 Iteration: `./bin/test project/tests/test_namespace_store.py project/tests/test_cas_recovery.py`. Apply the shared two-gate close protocol in [namespace-implementation.md](namespace-implementation.md). Qualify locking, directory durability, and replacement on supported local filesystems; any unavailable platform capability is reported honestly and cannot establish its qualification.
 
 User Demo: N/A — durable authority and replacement are library foundations; live namespace interaction lands in Phase 7.
 
+## Pinned Phase 1 contracts
+
+Use namespace §§14, 16, 18–20 for the closed schema, coordinator-only reads, DELETE rollback journaling/EXTRA durability, uncertain SQL outcomes, fresh generations and selection-free marker stages including cleanup-scanned. Check ownership and replacement before every SQLite open; synthetic files establish mechanics only.
+
 ## Brief refs
 
-- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§2–3, 6, 9, and 11–12.
+- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§2–3, 6, 9, and 11–12; exact contracts §§14–20.
 - [CAS contract](../briefs/cas-api.md), strict inventory and explicit roots.
 - [Excision](../briefs/content-excision.md), durability and irreversible recovery boundary.

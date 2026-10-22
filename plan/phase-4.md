@@ -26,14 +26,20 @@ Deliver the complete library capability for ordered current-state document and d
 - Interrupt staging, prepared intent, CAS publication, SQL commit, and response delivery; readers see a complete before/after tree, with no dangling live reference or duplicate namespace effect. Consistent unreferenced CAS residue is reported separately from inconsistent blocked storage.
 - Logical deletion preserves reserved IDs and explicitly retained history; no CAS excision or confidential purge is claimed. Current authority remains separate from CAS union.
 
+- Atomic file/directory duplication preserves the independently frozen membership and exact fresh-ID map under kills. Concurrent threads/tasks through the same owner have one expected-revision winner and a revision-conflict loser; identical retry races have one durable outcome. Result expiry removes only logically eligible outcomes, never claims forensic purge.
+
 ## Validation and handoff
 
 Iteration: `./bin/test project/tests/test_namespace.py project/tests/test_namespace_transactions.py project/tests/test_namespace_store.py project/tests/test_cas_recovery.py`. Apply the shared two-gate close protocol in [namespace-implementation.md](namespace-implementation.md).
 
 User Demo: N/A — this phase delivers the library; interactive command workflows are qualified in Phase 7.
 
+## Pinned Phase 1 contracts
+
+Use namespace §§14–16 and 20 for typed operations, recursive file/directory duplication with explicit fresh-ID maps, serializable mutation and linearizable reads, bounded integer metadata, request/effect limits, durable terminal/pending/retired outcomes and explicit result expiry. Logical recursive deletion is one SQL transaction and does not move the CAS epoch or imply GC.
+
 ## Brief refs
 
-- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§3–6, 8, and 12.
+- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§3–6, 8, and 12; exact contracts §§14–20.
 - [CAS contract](../briefs/cas-api.md), immutable content and write path.
 - [CRDT semantics](../briefs/crdt-semantics.md), the unchanged CAS authority boundary.

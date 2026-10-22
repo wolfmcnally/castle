@@ -292,3 +292,9 @@ Castle’s hermetic network guard remains active and tested.
 ## 10. Independent consumer integration
 
 Consumers select an authorized store root before invoking Castle and import the module that owns the operation. A dependency upgrade and any persisted-format conversion require explicit consumer validation and migration scope. Castle's gate proves only Castle's candidate; no upstream test result qualifies a consumer's live data or authorization boundary.
+
+## Proposed namespace-owned bounded publication extension
+
+As of 2026-10-21, [the coordinated namespace contract](coordinated-namespace-crud.md#17-bounded-cas-publication-and-interruption-repair) specifies a proposed operation-bound publication/recovery interface in project/castle/cas_recovery.py. The proposed publish_namespace_content and recover_namespace_publication functions add protected write-ahead evidence outside the CAS root, exact journal-prefix/event ownership and forward interruption completion. They do not exist in the delivered API yet. Ordinary ingest, strict journal-v2 parsing, root inventory, verification, same-epoch union and delivered excision remain unchanged.
+
+The new interface is deliberately narrower than general store repair: it can finish a proven publication or remove only its proven partial append suffix under stable locks, preserving target-local remotes. Missing/mismatched evidence, unrelated corruption, lifecycle mismatch and unowned residue remain storage-recovery refusals. Namespace live-reference publication is permitted only after a validated durable receipt and consistent CAS authority. The namespace database is separate authority; a SQL commit does not repair CAS state.

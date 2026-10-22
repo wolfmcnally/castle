@@ -25,15 +25,21 @@ Implement and qualify the contract-defined recovery of interrupted namespace-own
 - Existing strict-format, immutable object, CAS-only command, same-epoch union, and excision/retirement behaviors still pass their relevant regression suites.
 - A consistent CAS can be handed to namespace publication only after complete validated storage recovery. No automatic repair claim extends to corruption without operation evidence.
 
+- Every short-write/fsync failure distinguishes a newly established durable publication from merely visible bytes; the deterministic 32-hex temporary shape retains delivered transient/unsafe classification.
+
 ## Validation and handoff
 
 Iteration: `./bin/test project/tests/test_cas_recovery.py project/tests/test_cas.py project/tests/test_journal.py project/tests/test_merge.py`. Apply the shared two-gate close protocol in [namespace-implementation.md](namespace-implementation.md); synthetic subprocess evidence is required, not mocked exceptions alone.
 
 User Demo: N/A — this is a library recovery prerequisite; consumer-facing recovery presentation lands in Phase 7.
 
+## Pinned Phase 1 contracts
+
+Implement the exact bounded publication evidence, deterministic owned temporary name, fsync acknowledgment/recovery boundaries and refusal cases in namespace §§17 and 20; preserve later valid journal events and the complete target-local remotes multiset. The namespace encoding does not replace delivered journal encoding.
+
 ## Brief refs
 
-- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §6 and §12.
+- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §6 and §12; exact contracts §§14–20.
 - [CAS contract](../briefs/cas-api.md), write ordering, strict journal, verification, and remotes.
 - [CRDT semantics](../briefs/crdt-semantics.md).
 - [Excision](../briefs/content-excision.md), lifecycle fencing.

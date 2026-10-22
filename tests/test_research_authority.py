@@ -25,7 +25,7 @@ def render(tmp_path: Path, *, role: str, venue: str) -> list[str]:
         "--model",
         "opus" if venue == "claude" else "sol",
         "--effort",
-        "high" if venue == "claude" else "medium",
+        "high",
         "--prompt-file",
         str(prompt),
         "--result-file" if venue == "claude" else "--required-output-file",

@@ -26,15 +26,21 @@ Coordinate namespace dependency cleanup with Castle's irreversible successor-epo
 - A references-published result leaves service blocked until independent selected-sentinel scans pass for retained owned authority/sidecars/staging/recipes. Row deletion and CAS retirement alone cannot pass purge completion.
 - Verify coherent retained namespace/snapshots on the active successor, old-epoch refusal, and unchanged ordinary CAS/excision laws. No physical erasure or global offline-copy purge is claimed.
 
+- Unlisted disclosing operation/deleted-entry/dependency rows refuse before retirement. Explicit predecessor/successor root arguments bind initial excise and recovery; abort-before-retirement restores the prior marker only with proof that retirement and uncertain writes are absent. Completed status and RecoveryResult expose their distinct safe typed shapes.
+
 ## Validation and handoff
 
 Iteration: `./bin/test project/tests/test_namespace_excision.py project/tests/test_namespace_store.py project/tests/test_namespace_snapshots.py project/tests/test_merge.py`. Apply the shared two-gate close protocol in [namespace-implementation.md](namespace-implementation.md). All destructive exercises use disposable synthetic stores; no real-store excision is authorized by this phase.
 
 User Demo: N/A — destructive cutover is demonstrated by disposable behavioral proofs, not a request for the owner to purge real content interactively.
 
+## Pinned Phase 1 contracts
+
+Use namespace §§14, 16–20 for exhaustive excision selectors, shared-owner refusal, snapshot replacement/drop decisions, safe selection-free completion, UUID-only retired reservations, explicit-root recovery and fresh database cleanup. References-published is internal and blocked; neither completion nor a later fsync proves an earlier failed write was durable.
+
 ## Brief refs
 
-- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§8–9, 11–12.
+- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§8–9, 11–12; exact contracts §§14–20.
 - [Excision](../briefs/content-excision.md), quiescence, prepared/active successor, retirement, and forward recovery.
 - [CRDT semantics](../briefs/crdt-semantics.md), epoch fencing and unchanged union.
 - [CAS contract](../briefs/cas-api.md), inventory and custody metadata.

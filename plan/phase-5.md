@@ -26,14 +26,20 @@ Add atomic frozen folder admission, explicit immutable historic views, and optio
 - Snapshot deletion is reference deletion; retained payloads/dependencies remain accurately discoverable for excision. A historical path is never an implicit current-version pointer or access grant.
 - CAS-only stores work without namespace state; missing namespace is feature absence. Reconstruction preserves uncertainty until explicit selection and changes no source CAS/corpus. Version/name-policy conversion is an explicit operation, not a silent library update.
 
+- Canonical capture and explicitly redacted historic subset manifests have distinct origin values; repeated redaction preserves retained reachability and original capture revision without representing the result as a full capture. Admission refuses a resulting tree that exceeds the pinned live-tree/manifest bounds.
+
 ## Validation and handoff
 
 Iteration: `./bin/test project/tests/test_namespace_snapshots.py project/tests/test_namespace_onboarding.py project/tests/test_namespace_transactions.py`. Apply the shared two-gate close protocol in [namespace-implementation.md](namespace-implementation.md).
 
 User Demo: N/A — library admission/history lands here; the command/export workflow is demonstrated in Phase 7.
 
+## Pinned Phase 1 contracts
+
+Use namespace §§14–16 and 20 for exact raw UTF-8/scalar-key canonical encoding, integer/Unicode/duplicate-key refusal, manifest bounds, frozen membership and complete snapshot dependency tracking. Snapshot reference deletion preserves immutable CAS payloads and does not authorize excision or GC.
+
 ## Brief refs
 
-- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§6–7, 9–10, and 12.
+- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§6–7, 9–10, and 12; exact contracts §§14–20.
 - [CAS contract](../briefs/cas-api.md), folder ingest and historical sightings.
 - [CRDT semantics](../briefs/crdt-semantics.md), no automatic current-state selection.
