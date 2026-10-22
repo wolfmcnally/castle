@@ -95,3 +95,10 @@ Before a tag or upload, approve the exact version, capabilities and inspected ar
 Persisted schema identifiers are part of the data format, not cosmetic package labels. Any change requires an explicit compatibility and migration design. No release step here migrates live stores or grants permission to operate on real data.
 
 Record the accepted commit, artifact hashes, build/runtime versions and macOS/Linux results. Publish only the inspected wheel and source archive. This procedure does not itself create a tag, upload a package, change a remote or rewrite history.
+
+
+## Unreleased namespace candidate qualification
+
+As of 2026-10-22, namespace additions are not a published extension of version 0.1.1. Keep the version unchanged until the operator chooses the release version and capability scope. The repository's `.github/scripts/package-qualify.py` is the shared local/CI qualification driver: provide the resolved installed uv via --uv and an absent external directory via --output. It builds and independently allowlists the wheel/sdist, checks metadata/license/backend, records exact hashes, safely unpacks the validated sdist and builds its wheel with the pinned backend. Each wheel is installed without runtime dependency resolution into its own external environment, then the existing installed smoke exercises CAS-only commands, namespace create/replace/retry, stable IDs, empty directories and snapshot export. The source archive itself is not claimed to be installed bytes; the rebuilt wheel's hash/generator records that chain.
+
+Record the native and Linux candidate/artifact/runtime/filesystem results and all Darwin-only cases unrun on Linux. Consult NAMESPACE_ENVIRONMENT.md for the complete host/protected qualification matrix. Local synthetic tests, process kills and injected sync failures do not certify hardware power loss, physical erasure, native VFS coverage, encrypted custody or external backups. Manual namespace error/naming/retry-window judgment and a qualified consumer release remain open owner criteria. No command here tags, publishes, uploads or operates on live data.

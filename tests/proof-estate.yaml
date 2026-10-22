@@ -67,8 +67,8 @@ families:
 - id: castle-cli
   kind: pytest
   selectors: ["project/tests/test_cli.py"]
-  source_paths: ["project/tests/test_cli.py"]
-  covers: ["project/tests/test_cli.py", "project/castle/cli.py"]
+  source_paths: ["project/tests/test_cli.py", "project/tests/test_namespace_consumers.py"]
+  covers: ["project/tests/test_cli.py", "project/castle/cli.py", "project/castle/namespace_cli.py", "project/tests/test_namespace_consumers.py"]
   contract: "Castle's cli contract retains direct executable behavior."
   risk_class: product-contract
   oracle: "The retained executable proof fails when its named contract is violated."
@@ -83,8 +83,8 @@ families:
 - id: network-hermeticity
   kind: pytest
   selectors: ["project/tests/test_hermeticity.py"]
-  source_paths: ["project/tests/test_hermeticity.py"]
-  covers: ["project/tests/test_hermeticity.py"]
+  source_paths: ["project/tests/test_hermeticity.py", "project/tests/test_namespace_consumers.py"]
+  covers: ["project/tests/test_hermeticity.py", "project/tests/test_namespace_consumers.py", "project/castle/namespace_cli.py", "project/castle/namespace_environment.py"]
   contract: "The network hermeticity contract retains direct executable behavior."
   risk_class: methodology-contract
   oracle: "The retained executable proof fails when its named contract is violated."
@@ -928,8 +928,8 @@ families:
 - id: castle-namespace
   kind: pytest
   selectors: ["project/tests/test_namespace.py"]
-  source_paths: ["project/tests/test_namespace.py", "project/tests/test_namespace_snapshots.py", "project/tests/test_namespace_onboarding.py", "project/tests/test_namespace_excision.py"]
-  covers: ["project/castle/namespace.py", "project/castle/namespace_store.py", "project/castle/namespace_transactions.py", "project/castle/namespace_content.py", "project/castle/namespace_snapshots.py", "project/castle/namespace_excision.py", "project/castle/namespace_replacement.py", "project/castle/namespace_onboarding.py", "project/examples/namespace_demo.py", "project/tests/test_namespace.py", "project/tests/test_namespace_snapshots.py", "project/tests/test_namespace_onboarding.py", "project/tests/test_namespace_excision.py"]
+  source_paths: ["project/tests/test_namespace.py", "project/tests/test_namespace_snapshots.py", "project/tests/test_namespace_onboarding.py", "project/tests/test_namespace_excision.py", "project/tests/test_namespace_consumers.py"]
+  covers: ["project/castle/namespace.py", "project/castle/namespace_store.py", "project/castle/namespace_transactions.py", "project/castle/namespace_content.py", "project/castle/namespace_snapshots.py", "project/castle/namespace_excision.py", "project/castle/namespace_replacement.py", "project/castle/namespace_onboarding.py", "project/castle/namespace_environment.py", "project/examples/namespace_demo.py", "project/tests/test_namespace.py", "project/tests/test_namespace_snapshots.py", "project/tests/test_namespace_onboarding.py", "project/tests/test_namespace_excision.py"]
   contract: "Concurrent ACID namespace operations, multi-payload folder admission, explicit snapshots, seed provenance, coordinated epoch excision/fresh authority replacement and durable restart/refusal."
   risk_class: product-contract
   oracle: "Independent forests/canonical bytes/identity sets, exact CAS and retained snapshot dependency images, all-sighting seed evidence, admission/export races, real hot-journal/publication/cutover process-death and sync/uncertain-commit faults, independently chosen removed-only sentinel scans and preserved unknown-residue refusals."

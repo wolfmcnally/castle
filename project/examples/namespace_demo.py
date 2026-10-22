@@ -9,80 +9,23 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import fcntl
-import os
+import json
+import shlex
+import sys
 import tempfile
 import unicodedata
 import uuid
-from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import nullcontext
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from castle import cas, store_state
 from castle import namespace as n
+from castle.namespace_environment import LocalSession
 
 
 def identity() -> str:
     return str(uuid.uuid4())
-
-
-class LocalSession:
-    """Explicit caller custody for these disposable local fixtures only."""
-
-    def __init__(self, namespace_root: Path, cas_root: Path, domain_lock: Path) -> None:
-        self.namespace_root = namespace_root.resolve()
-        self.cas_root = cas_root.resolve()
-        self.domain_lock = domain_lock.resolve()
-        self.active = True
-        self.descriptors: list[int] = []
-        os.register_at_fork(after_in_child=self._child)
-
-    def _child(self) -> None:
-        for descriptor in self.descriptors:
-            os.close(descriptor)
-        self.descriptors.clear()
-        self.active = False
-
-    def check_authorized(self, operation_kind: str) -> None:
-        if not self.active:
-            raise n.NamespaceError("namespace-session-expired")
-
-    def describe_capabilities(self) -> n.CapabilityDescriptor:
-        return n.CapabilityDescriptor(
-            None,
-            "disposable-local-domain",
-            self.namespace_root,
-            self.cas_root,
-            (
-                "locking",
-                "path-safety",
-                "immutable-staging",
-                "durable-publication",
-                "sqlite-extra",
-                "restart-recovery",
-                "revocation",
-                "authorized-export",
-            ),
-        )
-
-    @contextmanager
-    def acquire_domain_ownership(self) -> Iterator[None]:
-        descriptor = os.open(
-            self.domain_lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600
-        )
-        try:
-            try:
-                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                raise n.NamespaceError("namespace-coordinator-busy") from None
-            self.descriptors.append(descriptor)
-            os.fsync(descriptor)
-            store_state._fsync_directory(self.domain_lock.parent)
-            yield
-        finally:
-            if descriptor in self.descriptors:
-                self.descriptors.remove(descriptor)
-                os.close(descriptor)
 
 
 def initialize(namespace_root: Path, cas_root: Path, session: LocalSession) -> n.NamespaceInfo:
@@ -144,7 +87,7 @@ def excision_workflow(root: Path) -> None:
     source = root / "retained-input.txt"
     source.write_bytes(b"Caller-owned original input deliberately remains outside CAS cleanup.\n")
     retained = cas.ingest_file(predecessor, source, "disposable-cutover-seed")
-    session = LocalSession(namespace_root, predecessor, domain_lock)
+    session = LocalSession(namespace_root, predecessor, domain_lock, create_domain_lock=True)
     info = initialize(namespace_root, predecessor, session)
     with n.open_namespace(namespace_root, predecessor, session) as handle:
         folder, selected = identity(), identity()
@@ -242,20 +185,35 @@ def excision_workflow(root: Path) -> None:
     )
     assert recovered.state == "ready" and recovered.revision == 4
     print(
-        "Disposable excision: selected content removed, retained folder and redacted snapshot reopened."
+        "Disposable excision: selected content removed, retained folder and "
+        "redacted snapshot reopened."
     )
     print(
-        "Selection-free repeat recovery confirms completion; original caller input remains outside cleanup."
+        "Selection-free repeat recovery confirms completion; original caller "
+        "input remains outside cleanup."
     )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--operation-id", help="UUIDv4 token for the duplicate and its retry")
+    parser.add_argument(
+        "--workspace",
+        type=Path,
+        help="absent synthetic directory to preserve for interactive commands",
+    )
     options = parser.parse_args()
+    if options.workspace is not None:
+        options.workspace.mkdir(mode=0o700)
+        options.workspace = options.workspace.resolve()
     token = options.operation_id or identity()
     n._uuid(token)
-    with tempfile.TemporaryDirectory(prefix="castle-namespace-demo-") as directory:
+    context = (
+        tempfile.TemporaryDirectory(prefix="castle-namespace-demo-")
+        if options.workspace is None
+        else nullcontext(str(options.workspace))
+    )
+    with context as directory:
         root = Path(directory).resolve()
         cas_root, namespace_root = root / "cas", root / "namespace"
         source = root / "stored.txt"
@@ -266,7 +224,9 @@ def main() -> None:
             "cas_id": "sha256:" + hashlib.sha256(created_bytes).hexdigest(),
             "size": len(created_bytes),
         }
-        session = LocalSession(namespace_root, cas_root, root / "domain.lock")
+        session = LocalSession(
+            namespace_root, cas_root, root / "domain.lock", create_domain_lock=True
+        )
         info = initialize(namespace_root, cas_root, session)
         folder, empty, file_id, target = identity(), identity(), identity(), identity()
         with n.open_namespace(namespace_root, cas_root, session) as handle:
@@ -524,12 +484,158 @@ def main() -> None:
             print("Snapshot captured revision:", record.captured_revision)
             print("Snapshot catalog removed; immutable bytes remain retained.")
             print("Committed revision:", handle.info().revision)
+        if options.workspace is not None:
+            with n.open_namespace(namespace_root, cas_root, session) as handle:
+                current = handle.info()
+                interactive_bytes = b"New interactive replacement, not previously published.\n"
+                interactive_content = {
+                    "cas_id": "sha256:" + hashlib.sha256(interactive_bytes).hexdigest(),
+                    "size": len(interactive_bytes),
+                }
+                snapshot_id = identity()
+                inputs = {
+                    "rename": replace(
+                        mutation(
+                            handle,
+                            "relocate",
+                            {"entry_id": folder, "parent_id": target, "name": "Interactive"},
+                        ),
+                        expected_revision=current.revision,
+                    ),
+                    "move": replace(
+                        mutation(
+                            handle,
+                            "relocate",
+                            {
+                                "entry_id": folder,
+                                "parent_id": current.root_id,
+                                "name": "Interactive",
+                            },
+                        ),
+                        expected_revision=current.revision + 1,
+                    ),
+                    "replace": replace(
+                        mutation(
+                            handle,
+                            "replace-content",
+                            {"entry_id": file_id, "content": interactive_content},
+                        ),
+                        expected_revision=current.revision + 2,
+                    ),
+                    "snapshot": replace(
+                        mutation(handle, "snapshot", {"snapshot_id": snapshot_id}),
+                        expected_revision=current.revision + 3,
+                    ),
+                    "inspect": n.ReadRequest(
+                        current.namespace_id,
+                        current.cas,
+                        None,
+                        "inspect-snapshot",
+                        {"snapshot_id": snapshot_id},
+                    ),
+                    "export": n.ReadRequest(
+                        current.namespace_id,
+                        current.cas,
+                        None,
+                        "export-snapshot",
+                        {"snapshot_id": snapshot_id},
+                    ),
+                    "collision": replace(
+                        mutation(
+                            handle,
+                            "create-directory",
+                            {
+                                "entry_id": identity(),
+                                "parent_id": current.root_id,
+                                "name": "destination",
+                                "metadata": {},
+                            },
+                        ),
+                        expected_revision=current.revision + 4,
+                    ),
+                    "stale": replace(
+                        mutation(
+                            handle,
+                            "create-directory",
+                            {
+                                "entry_id": identity(),
+                                "parent_id": current.root_id,
+                                "name": "Stale",
+                                "metadata": {},
+                            },
+                        ),
+                        expected_revision=current.revision + 3,
+                    ),
+                }
+                for name, request in inputs.items():
+                    (root / (name + ".json")).write_text(
+                        json.dumps(asdict(request), indent=2) + "\n"
+                    )
+                (root / "new-bytes.bin").write_bytes(interactive_bytes)
+                base = [
+                    sys.executable,
+                    "-m",
+                    "castle.cli",
+                    "namespace",
+                    "--root",
+                    str(cas_root),
+                    "--namespace-root",
+                    str(namespace_root),
+                    "--domain-lock",
+                    str(root / "domain.lock"),
+                ]
+                instructions = [
+                    (
+                        "Synthetic workspace retained. Run the following commands in order. "
+                        "Mutation files predict revisions for rename, move, new-byte "
+                        "replacement and snapshot. The final collision and stale requests "
+                        "deliberately refuse without advancing revision. If you change the "
+                        "sequence, inspect info and edit expected_revision for each NEW "
+                        "intent; preserve the exact saved token/revision for retries."
+                    ),
+                    shlex.join([*base, "info"]),
+                ]
+                for verb, name in [
+                    ("rename", "rename"),
+                    ("move", "move"),
+                    ("replace-content", "replace"),
+                    ("snapshot", "snapshot"),
+                    ("inspect-snapshot", "inspect"),
+                    ("export-snapshot", "export"),
+                    ("create-directory", "collision"),
+                    ("create-directory", "stale"),
+                ]:
+                    command = [*base, verb, "--request-file", str(root / (name + ".json"))]
+                    if name == "replace":
+                        command += [
+                            "--content",
+                            interactive_content["cas_id"] + "=" + str(root / "new-bytes.bin"),
+                        ]
+                    if name == "export":
+                        command += ["--out", str(root / "export")]
+                    instructions.append(shlex.join(command))
+                instructions.extend(
+                    [
+                        shlex.join([*base, "status", inputs["replace"].operation_id]),
+                        shlex.join(
+                            [*base, "replace-content", "--request-file", str(root / "replace.json")]
+                        ),
+                        (
+                            "Observe stable entry IDs, actual replacement bytes, empty directories "
+                            "under export/tree/, and the separate control export/snapshot.json. "
+                            "The final retry omits the input source and returns the original "
+                            "replacement result. Try another sibling name with a fresh token and "
+                            "current revision. Manual naming/error/retry-window judgment remains "
+                            "the operator's."
+                        ),
+                    ]
+                )
+                (root / "COMMANDS.txt").write_text("\n\n".join(instructions) + "\n")
+                print("Interactive workspace commands:", root / "COMMANDS.txt")
         excision_workflow(root / "cutover-example")
         print(
-            (
-                "Only disposable unprotected roots were used; physical erasure, protected "
-                "deployment and hardware power-loss qualification remain unproved."
-            )
+            "Only disposable unprotected roots were used; physical erasure, protected "
+            "deployment and hardware power-loss qualification remain unproved."
         )
 
 

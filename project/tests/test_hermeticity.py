@@ -7,7 +7,9 @@ quietly regaining network access. This test proves the tripwire fires.
 
 from __future__ import annotations
 
+import runpy
 import socket
+from pathlib import Path
 
 import pytest
 
@@ -17,3 +19,6 @@ def test_real_network_egress_fails_loudly(guard_network_egress: str) -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         with pytest.raises(pytest.fail.Exception, match="real network egress"):
             sock.connect(("192.0.2.1", 80))
+    runpy.run_path(str(Path(__file__).with_name("test_namespace_consumers.py")))[
+        "isolation_protocol"
+    ]()

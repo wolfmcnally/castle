@@ -117,6 +117,9 @@ def build_parser() -> argparse.ArgumentParser:
     sync.add_argument("--bucket", required=True)
     sync.add_argument("--prefix", default="")
     sync.add_argument("--profile", required=True)
+    from castle import namespace_cli
+
+    namespace_cli.add_parser(commands)
     return parser
 
 
@@ -139,6 +142,10 @@ def _run(arguments: argparse.Namespace) -> int:
         raise journal.CastleError(
             "sync-s3 is not implemented; encrypted S3 replication is reserved for a later phase"
         )
+    if arguments.command == "namespace":
+        from castle import namespace_cli
+
+        return namespace_cli.run(arguments)
     root = arguments.root
     if arguments.command in _ROOT_MUST_EXIST:
         _require_existing_root(root)

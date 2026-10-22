@@ -34,10 +34,10 @@ from castle import (
 from castle import (
     namespace_transactions as tx,
 )
+from castle.namespace_environment import LocalSession
 
 _EXAMPLE = Path(__file__).parents[1] / "examples" / "namespace_demo.py"
 _CALLER = runpy.run_path(str(_EXAMPLE))
-LocalSession = _CALLER["LocalSession"]
 
 
 def _id() -> str:
@@ -52,7 +52,9 @@ class Case:
         self.source = directory / "source"
         self.source.write_bytes(b"independently expected immutable bytes\n")
         self.stored = cas.ingest_file(self.cas_root, self.source, "namespace-test")
-        self.session = LocalSession(self.root, self.cas_root, directory / "domain.lock")
+        self.session = LocalSession(
+            self.root, self.cas_root, directory / "domain.lock", create_domain_lock=True
+        )
         self.initial = n.InitializeRequest(
             _id(),
             root_id or _id(),
@@ -125,6 +127,9 @@ def _tree(handle: n.NamespaceHandle) -> dict[str, dict]:
 def test_namespace_transactions_and_admission(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    runpy.run_path(str(Path(__file__).with_name("test_namespace_consumers.py")))[
+        "environment_protocol"
+    ](Case(tmp_path / "consumer-environment"), monkeypatch)
     case = Case(tmp_path / "semantic")
     before_cas = _cas_image(case.cas_root)
     assert n.canonical_bytes({"z": 2, "a": 1}) == b'{"a":1,"z":2}\n'

@@ -23,12 +23,7 @@ jobs:
         run: ./bin/setup
       - name: Full package gate
         run: ./bin/check
-      - name: Build release artifacts
-        run: uv build --project project --out-dir "${RUNNER_TEMP}/castle-dist"
-      - name: Clean wheel installation and synthetic smoke
+      - name: Exact wheel and validated sdist qualification
         shell: bash
         run: |
-          uv venv --managed-python --python 3.12 "${RUNNER_TEMP}/castle-wheel-venv"
-          uv pip install --python "${RUNNER_TEMP}/castle-wheel-venv/bin/python" --no-deps "${RUNNER_TEMP}/castle-dist/castle-0.1.1-py3-none-any.whl"
-          cd "$RUNNER_TEMP"
-          "${RUNNER_TEMP}/castle-wheel-venv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/package-smoke.py"
+          ./bin/python .github/scripts/package-qualify.py --uv "$(command -v uv)" --output "${RUNNER_TEMP}/castle-artifact-qualification"

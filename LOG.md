@@ -1119,3 +1119,120 @@ Delivery: restricted — “Local commits only for now.” No push/publication/l
 
 Lessons:
 - `indefinable-caracara` filed; no graduation. Existing timestamp and append-only rules retained; explicit actual UTC headers preserve chronology without historical edits.
+
+## 2026-10-22 13:36 — START
+Phase7 — Explicit consumer surface and qualification
+
+Execution trace: 3966be02024145eca85b772ea3105c6e
+Time basis: UTC, preserving the current log chronology.
+Baseline:216a3a0350d34645d0178d8825ef49f2eb9c9057 — clean qualified Phase6 local delivery.
+
+Planned work:
+- Extend existing `project/castle/cli.py` with the Phase 1 namespace command contract over the same library: explicit namespace/CAS roots, create/read/list/replace/rename/move/delete, frozen import, snapshot inspection/export, and explicit recovery presentation. No implicit authority creation, root selection, remote service, or global decrypted view. Destructive purge remains the coordinated library operation unless its public exposure was explicitly settled in Phase 1.
+- Add proposed `project/tests/test_namespace_consumers.py`, extend existing `project/tests/test_cli.py` and `project/tests/test_hermeticity.py`, and extend the delivered disposable existing-content workflow in `project/examples/namespace_demo.py`. Demonstrate intake freeze, policy-first addressing, retrieval revision lag/citation identity, manifest exclusion from generic indexing, CAS-only use, and authorized export destination checks without importing a consuming repository.
+- Update existing `project/README.md`, top-level `README.md`, and owning package/API documentation with feature discovery, version refusal, current versus historical authority, lifecycle/recovery outcomes, backup requirements, consumer admission obligations, and key/access lifetime duties. Keep `project/` independent of governance paths.
+- Qualify real subprocess transactions/locking/recovery on local macOS and Linux, and fresh wheel/sdist install workflows using the repository's existing artifact/CI gates. Do not claim Darwin-only CAS clone is supported on Linux. No package publication, live migration, deployment, or dependency on consumer repository changes.
+- Provide a conformance checklist/harness specification for the Phase 1 protected adapter contract: names/pages/sidecars/temp/logs/indexes/backups, locking/durability, restart, key/session revoke, and unauthorized reads. Actual encrypted adapter selection/operation is out of scope; its absent/unrun evidence is explicit and blocks an encrypted deployment claim, not local synthetic library qualification.
+
+Authorization: attributable operator approval on2026-10-22 permits sequential Phases5–7 through the same retained sole worker, synthetic stores only with ordinary per-phase review/gates. Phase6 now has both full gates and exact local delivery/clean proof. Current phase preflight passed Sol/high primary and opposite-harness latest Opus/high real-read targets with existing provider/credentials. Exact own task lease was live at13:31Z; existing standing Linux lane was observed running without stale image, and no prior Phase7 advisory ledger exists. No new writer, grants, live data, protected deployment, external cleanup or release is authorized. Delivery restriction: “Local commits only for now.”
+
+## 2026-10-22 14:54 — END
+Phase 7 — Namespace commands and consumer qualification
+
+Castle now exposes the qualified namespace through explicit commands and a trusted local environment: browse, create/replace actual file bytes, rename/move/duplicate/delete, admit frozen folders, inspect/export snapshots and recover with the original request/root authority. The printed synthetic demo is executable in order, and saved requests survive missing sources and lost responses. Available macOS/Linux and exact-package qualification is complete for this candidate; local delivery still awaits the separate post-bookkeeping gate. No new operator implementation decision is needed. Release/adoption and protected or real-data custody remain separate.
+
+Execution trace: 3966be02024145eca85b772ea3105c6e
+Time basis: UTC. Clean baseline:216a3a0350d34645d0178d8825ef49f2eb9c9057.
+
+Files changed:
+- `project/castle/namespace_cli.py`, `namespace_environment.py` and existing CLI — closed typed UTF8 transport, original revision/token, lazy safe immutable sources, safe five-field errors, unknown response74/130, explicit shared admission and inode/link/collision-safe snapshot destination. Main namespace SQL/API/schema/publisher/CAS/recovery laws stay unchanged.
+- Existing CLI/namespace/hermeticity families plus helper-only `test_namespace_consumers.py` — literal nested command/options anti-widening, exact library agreement, lifecycle/refusal, real response failures, actual authorization-before-I/O, populated file projection and historical citations, foreign-domain refusal, partial export and APFS aliases. Proof estate stays163 families/218 leaves.
+- Shared example and README/environment/release docs — one weak fork owner, executable retained workspace with actual new bytes and complete snapshot templates, direct CAS fencing duties, limits, backups and separate protected/device/manual/release criteria.
+- Exact artifact qualifier, installed smoke and existing CI — allowlists, license/metadata/backend, safe source unpack/rebuild, archive/package hashes and fresh external installed imports. No version bump, upload or source-import fallback.
+- Ledger/release pin/user-action/candidate lesson/report writes — pending after accepted implementation; historical release arrow and completed phase prose stay intact.
+
+Build status:
+- Final affected CLI/namespace/hermeticity14 passed111.00s with actual case-insensitive APFS alias branch. All11 printed demo commands execute with expected new bytes/empty folders/export/conflict outcomes. Deterministic closed stdout/stderr, ASCII Unicode response and response SIGINT query durable status; original committed+exit120 probe remains preserved.
+- Final focused lint,95-file format, policy/frozen estate and plan-delivery pass. Full source identity matches the final Linux gate receipt. Candidate-bound public revision12 plus separate excision/repeat-recovery workflow and full native implementation gate pass with complete zero-warning diagnostics. Separate bare handoff gate remains pending.
+- Final Linux complete gate:190 passed, six expected Darwin-only parameter leaves not run across five native test functions,166.61s; independent unsupported-platform refusals asserted. Linux aarch64/kernel7.0.14-linuxkit/Python3.12.12/SQLite3.50.4, actual pytest temp overlay versus checkout fakeowner. Native arm64/Python3.12.12/SQLite3.50.4 uses observed APFS checkout/test-temp mount. Case-insensitive alias branch is unrun on Linux's case-sensitive test filesystem.
+- Exact final macOS/Linux wheel/sdist/rebuilt-wheel hashes match; four fresh external installed environments pass actual namespace module containment and synthetic smoke. Backend hatchling1.32.0, uv0.9.26. Hashes: {"castle-0.1.1-py3-none-any.whl": "c60938908daf565113d316b451023464ff4291fc194d97a431d416b973a69b68", "castle-0.1.1.tar.gz": "efa4d325f31af922117ce9bee553e309548af9b8dd91511dfb761b481c489643", "sdist-rebuilt-wheel": "c60938908daf565113d316b451023464ff4291fc194d97a431d416b973a69b68"}.
+
+Review lane: full primary advisory. Evidence lane: full. Follow-up route: initial approved consumer phase, bounded primary corrections after first advice; no duplicate writer/reviewer, new phase or reset.
+
+Role model/venue — orchestrated by Codex:
+- Same retained primary planner/coder requested Sol6.1/high inline; observed native model/effort/harness version unreported. Real-read preflight uses the existing provider/credentials.
+- Plan reviewer and code critic requested latest Opus/high opposite-harness Claude. Both actual init streams report claude-opus-5-5 and Claude Code2.1.308; observed effort unreported. One successful PLAN report with14 findings and one CODE report with10; all24 adopted with current primary dispositions and fresh falsifiers. No further pass or budget reset.
+- First advice corrected request/source/JSON/identity/export/artifact/demo boundaries. Code advice corrected weak acceptance proxies, missing CLI negative/equality coverage, case-insensitive authority aliases, actual final buffered response failure, environment path error semantics, runnable demo and installed import provenance. Original reports, reviewed source, failed probes/diagnostics/archives remain intact.
+- Known sandbox uv framework panic occurred before report ingestion; exact established native per-command ingestion succeeded, with no provider/grant/guard change. Earlier empty CAS missing-index admission was diagnosed and fixed through public rebuild-index before namespace init, not SQL seeding or a weakened refusal. Original artifact sidecar/runtime-pin inventory and late import-order failures remain preserved.
+
+Candidate-bound evidence:
+- Accepted product: 4124017fd31995e096f0ccbab8965ea708711223c19651ea127668cdec9b434c
+- Unchanged implementation full tree: fab9d915e59c42166fa8d11ed6b29c59e89db4cfa3d80650595321b630d0c7f3
+- Two actual final gate executions with reviewed diagnostics; observations are not extra runs. Exact command manifest/venue receipt/report joins validate. No invented coder role, discarded finding or reset.
+
+### Execution timing
+
+Execution trace: 3966be02024145eca85b772ea3105c6e
+- Outcome: `success`
+- Makespan: 4671653458375 ns (4671.653458375 s)
+- Intelligence: 959830097417 ns (959.830097417 s)
+- Gates: 264975439042 ns (264.975439042 s)
+- Orchestration: 4671206090834 ns (4671.206090834 s)
+- Wait: 958952545166 ns (958.952545166 s)
+- Retry/rework: 0 ns (0.000000000 s)
+- Failed work: 0 ns (0.000000000 s)
+- Unattributed: 447367541 ns (0.447367541 s)
+- Category totals are interval unions and may overlap.
+
+#### Slowest material spans
+
+- `orchestration.implementation` — category `reconciliation`, attempt 1, outcome `success`: 3306843223417 ns (3306.843223417 s)
+- `orchestration.planning` — category `reconciliation`, attempt 1, outcome `success`: 1010218079042 ns (1010.218079042 s)
+- `role.code-review` — category `intelligence`, attempt 1, outcome `success`: 602308102500 ns (602.308102500 s)
+- `role.code-review` — category `wait`, attempt 1, outcome `success`: 601883702708 ns (601.883702708 s)
+- `role.plan-review` — category `intelligence`, attempt 1, outcome `success`: 357521994917 ns (357.521994917 s)
+
+Acceptance:
+- Objective: exact CLI/library mapping and closed original-intent transport, existing/new-byte and whole-tree operations, same-token/concurrent/recovery behavior, safe roots/mode/identity/lifecycle and unknown response handling; explicit no-follow exclusive export with empty/member-control distinction and partial failure; actual pre-I/O authorization/revocation and historical member citations despite current rename/replace/delete/search lag; foreign-domain parent refusal; source/package isolation, current complete native/Linux proof estate and exact installed-artifact chain. These are synthetic environment-bound candidate proofs.
+- Parked for the operator: manual CLI naming/errors/empty-folder/export/retry-window judgment and the User Demo; existing release version/scope/persisted-disclosure/destination and consumer adoption; protected adapter/key/backup/external-copy custody and live-store seed/purge. Native VFS fault coverage, device cache/hardware power loss and physical erasure remain unqualified. None is silently accepted by green tests.
+
+Delivery: restricted — “Local commits only for now.” No push/publication/release, live data, grants/credentials/provider changes, duplicate writers or consumer-repository edits. Handoff gate and exact clean local commit pending at this record.
+
+Ripple:
+- AUTO pending: Phase7 completion and initiative narrative, preserving the existing release arrow; factual release readiness pin and scoped user-action limits.
+- DECIDE:none for this implementation close. The existing maintainer release/adoption decisions remain outside approved implementation scope; no automatic release work starts.
+
+Lessons:
+- Pending local/test candidate `jumping-tench`: qualify failed buffered responses through real interpreter finalization and original durable-token status. One original observation, no graduation.
+- Existing verification/no-mirror/import/append-time rules cover the other corrected omissions; strengthened observable retained-family proofs rather than adding redundant rules. All original failures and historical counters remain.
+- Timeout recommendation: no group has30 successful samples;536 historical diagnostics preserved, exact per-target count unreported. No timeout/configuration/budget changes.
+
+User Demo: Disposable namespace command workflow. Run the public example and then explicit synthetic CLI requests to rename/move, replace bytes, capture/inspect/export a snapshot, refuse a case collision and stale revision, and retry a lost response. The operator judges naming/errors, empty-directory/export usability and retry-window behavior after qualified local delivery; no unattended interactive gate or real-data purge is requested.
+
+Test protocol:
+1. From the checkout run `./bin/python project/examples/namespace_demo.py --workspace .runtime/namespace-demo` with an absent workspace. The default invocation without that flag remains temporary. No live store or cleanup is requested.
+2. Open the resulting COMMANDS.txt and run its printed commands in order. Each names the exact interpreter and synthetic roots; no shell environment activation is needed. There is no service to monitor after a command exits.
+3. Observe stable IDs through rename/move/new-byte replacement, explicit empty folders and separate export/snapshot.json versus export/tree/ members. Snapshot inspection/export remain historical after later metadata changes.
+4. The final collision and stale-revision commands must refuse distinctly, while a saved replacement request replays without --content and its status remains committed. If changing the sequence, update expected_revision and use a new UUID for a new intent; never change an original retry request.
+5. Manual naming/error/export/retry-window judgment stays with the operator. Protected/device/live-store/external-copy checks and version/publication adoption are separate; no destructive demonstration is authorized.
+
+Remaining:
+- Apply/verify the accepted status transition, factual AUTO records and candidate lesson; append actual bookkeeping outcome and sanitized report, then the separate bare full handoff gate and exact local commit/clean proof.
+- Stop after this approved sequence. The existing release arrow does not authorize tags, uploads, adoption, live data or protected deployment.
+
+## 2026-10-22 14:55 — END (bookkeeping)
+Phase 7 — Applied namespace consumer qualification records
+
+Execution trace: 3966be02024145eca85b772ea3105c6e
+Time basis: UTC. Accepted status-only completion was applied and verified before factual AUTO narrative/release/user-action writes. All seven namespace phases are complete for the approved synthetic/local implementation sequence; the historical release arrow remains. The release candidate and remaining manual/protected/device/live-data/adoption limits are explicit. This is not publication or consumer adoption.
+
+The local/test candidate lesson `jumping-tench` is filed with one actual response-finalization observation. Lessons validate and none is graduation-ready. Existing verification/no-mirror and actual UTC/append-only rules remain; no policy, model, budget, safeguard or grant change. Original reports, source, failed proof, artifacts and diagnostics remain preserved. The accepted native implementation gate passed196 tests258.98s without warnings; final Linux190 tests/six expected native-only skips and four exact installed artifact smokes pass on matching package bytes. Separate full handoff gate and clean local delivery remain pending.
+
+Acceptance:
+- Objective: unchanged accepted implementation plus applied factual bookkeeping; final report/handoff gate pending.
+- Parked for the operator: manual demo/naming/errors/retry-window judgment, existing version/release/disclosure/destination/adoption decisions, protected key/backup/external custody and real-data action. Native VFS/device/hardware power loss and physical erasure remain unqualified.
+
+Delivery: restricted — “Local commits only for now.” No push/publication/live-data/consumer edits.
+
+Lessons:
+- `jumping-tench` filed; no graduation. Other findings strengthen actual observable retained proof families without new rules or budget reset.

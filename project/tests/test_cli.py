@@ -26,6 +26,7 @@ import hashlib
 import importlib
 import json
 import os
+import runpy
 import sqlite3
 import stat
 import subprocess
@@ -55,6 +56,7 @@ _COMMANDS: tuple[str, ...] = (
     "rebuild-index",
     "journal-migrate-v1",
     "sync-s3",
+    "namespace",
 )
 
 # The authoritative guarded population, written independently of the shipped
@@ -102,6 +104,7 @@ _MINIMAL_OPERANDS: dict[str, list[str]] = {
     "rebuild-index": [],
     "journal-migrate-v1": ["--expect-journal-sha256", "0" * 64],
     "sync-s3": ["--bucket", "b", "--profile", "p"],
+    "namespace": ["identity"],
 }
 
 # command -> (extra argv, the library entry point that command would call)
@@ -600,8 +603,68 @@ def _assert_verify_emission(out: str, exit_code: int) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
+def _assert_namespace_parser_surface(parser: argparse.ArgumentParser) -> None:
+    _, commands = _realized_subcommands(parser)
+    group = commands["namespace"]
+    assert _realized_option_strings(group) == frozenset(
+        {"-h", "--help", "--root", "--namespace-root", "--domain-lock"}
+    )
+    _, verbs = _realized_subcommands(group)
+    expected = {
+        "identity",
+        "init",
+        "info",
+        "status",
+        "recover",
+        "create-directory",
+        "create-file",
+        "replace-content",
+        "rename",
+        "move",
+        "duplicate",
+        "delete",
+        "delete-subtree",
+        "set-metadata",
+        "import-folder",
+        "snapshot",
+        "inspect-snapshot",
+        "export-snapshot",
+        "delete-snapshot",
+        "expire-results",
+        "read",
+        "list",
+        "resolve",
+    }
+    assert set(verbs) == expected
+    for name, verb in verbs.items():
+        options = {"-h", "--help"}
+        if name not in {"identity", "info", "status"}:
+            options.add("--request-file")
+        if name in {"create-file", "replace-content", "import-folder"}:
+            options.update({"--content", "--content-file"})
+        if name == "export-snapshot":
+            options.add("--out")
+        assert _realized_option_strings(verb) == frozenset(options)
+        assert [a.dest for a in verb._actions if not a.option_strings] == (
+            ["operation_id"] if name == "status" else []
+        )
+
+
 def test_shipped_command_set_is_exactly_the_realized_set() -> None:
     assert _COMMANDS
+    _assert_namespace_parser_surface(cli.build_parser())
+    widened = cli.build_parser()
+    _, top = _realized_subcommands(widened)
+    action, _ = _realized_subcommands(top["namespace"])
+    action.add_parser("excise")
+    with pytest.raises(AssertionError):
+        _assert_namespace_parser_surface(widened)
+    widened = cli.build_parser()
+    _, top = _realized_subcommands(widened)
+    _, verbs = _realized_subcommands(top["namespace"])
+    verbs["rename"].add_argument("--force", action="store_true")
+    with pytest.raises(AssertionError):
+        _assert_namespace_parser_surface(widened)
     _assert_exact_migration_parser_surface(cli.build_parser())
 
     digest = "a" * 64
@@ -817,6 +880,7 @@ def test_import_discipline() -> None:
             f"import castle.{first}\n"
             "import castle.journal, castle.store_state, castle.cas, castle.excision, castle.cli\n"
             "assert 'castle.journal_migrate_v1' not in sys.modules\n"
+            "assert 'castle.namespace' not in sys.modules\n"
         )
         result = subprocess.run(
             [sys.executable, "-c", script],
@@ -851,7 +915,14 @@ def test_import_discipline() -> None:
     assert roots
     assert "castle" in roots
     assert roots <= set(sys.stdlib_module_names) | {"castle"}
-    assert castle_names == {"__version__", "cas", "journal", "store_state", "journal_migrate_v1"}
+    assert castle_names == {
+        "__version__",
+        "cas",
+        "journal",
+        "store_state",
+        "journal_migrate_v1",
+        "namespace_cli",
+    }
 
     top_level_castle_names = {
         alias.name
@@ -906,6 +977,10 @@ def test_import_discipline() -> None:
 def test_ingest_then_get_round_trips_byte_identically(
     tmp_path: Path, capfdbinary: pytest.CaptureFixture[bytes]
 ) -> None:
+    runpy.run_path(str(Path(__file__).with_name("test_namespace_consumers.py")))[
+        "command_protocol"
+    ](tmp_path / "namespace-commands")
+    capfdbinary.readouterr()
     store = tmp_path / "store"
     source, contents = _source_dir(tmp_path)
     assert cli.main(["init", "--root", str(store)]) == 0
@@ -974,6 +1049,14 @@ def _lifecycle_commands(tmp_path: Path, source: Path, capsys: pytest.CaptureFixt
                     captured.err == "castle: error: sync-s3 is not implemented; "
                     "encrypted S3 replication is reserved for a later phase\n"
                 )
+            elif command == "namespace":
+                assert json.loads(captured.err) == {
+                    "code": "namespace-binding-mismatch",
+                    "namespace_id": None,
+                    "operation_id": None,
+                    "actual_revision": None,
+                    "effect": "none",
+                }
             else:
                 assert captured.err == f"castle: error: {code}\n", command
             assert captured.out == "", command
@@ -989,4 +1072,5 @@ def _lifecycle_commands(tmp_path: Path, source: Path, capsys: pytest.CaptureFixt
             "rebuild-index",
             "journal-migrate-v1",
             "sync-s3",
+            "namespace",
         }
