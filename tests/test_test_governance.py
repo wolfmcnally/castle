@@ -80,12 +80,17 @@ def test_incomplete_disposition_evidence_fails_closed(
 def test_shadow_deleted_proof_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     original = governance.load_ledger
     mode = ["delete"]
+    active_proofs = {proof["id"] for proof in governance.inventory(REPO_ROOT)["proofs"]}
 
     def shadowed(path: Path):
         rows = original(path)
         if path.name == "castle-reset.jsonl":
             if mode[0] == "delete":
-                retained = next(row for row in rows if row["disposition"] == "retain")
+                retained = next(
+                    row
+                    for row in rows
+                    if row["disposition"] == "retain" and row["proof_id"] in active_proofs
+                )
                 retained["disposition"] = "delete"
                 retained["replacement"] = None
             else:

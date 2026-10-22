@@ -149,20 +149,6 @@ def _child_env() -> dict[str, str]:
 _FIXED_DIGEST = "abcdef0123456789" * 4  # 64 lowercase hex digits
 
 
-def test_object_path_is_pure_function_of_identity(tmp_path: Path) -> None:
-    cas_id = f"sha256:{_FIXED_DIGEST}"
-    assert cas.object_relpath(cas_id) == Path("objects") / "sha256" / "ab" / "cd" / _FIXED_DIGEST
-    assert cas.object_relpath(cas_id).as_posix() == f"objects/sha256/ab/cd/{_FIXED_DIGEST}"
-
-    store_one = tmp_path / "one"
-    store_two = tmp_path / "elsewhere" / "two"
-    assert cas.object_path(store_one, cas_id) == store_one / cas.object_relpath(cas_id)
-    # The store root is prefixed but never changes the identity-derived tail.
-    assert cas.object_path(store_one, cas_id).relative_to(store_one) == cas.object_path(
-        store_two, cas_id
-    ).relative_to(store_two)
-
-
 # --------------------------------------------------------------------------
 # the file hash is streamed, not slurped, and is emitted prefixed
 # --------------------------------------------------------------------------
@@ -212,18 +198,6 @@ def test_media_detection_refuses_forged_proof(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 # sealing is verified, not assumed
 # --------------------------------------------------------------------------
-
-
-def test_seal_refuses_object_that_does_not_match_identity(tmp_path: Path) -> None:
-    store = tmp_path / "store"
-    journal.ensure_store(store)
-    cas_id = _digest(b"the identity these bytes should have")
-    wrong = cas.object_path(store, cas_id)
-    wrong.parent.mkdir(parents=True, exist_ok=True)
-    wrong.write_bytes(b"entirely different bytes")
-    wrong.chmod(0o444)
-    with pytest.raises(cas.CasError, match=f"existing object is corrupt: {cas_id}"):
-        cas.seal_objects(store, [cas_id])
 
 
 # --------------------------------------------------------------------------
@@ -335,6 +309,18 @@ def test_index_rebuilds_from_journal_and_object_tree(tmp_path: Path) -> None:
 
 
 def test_verify_clean_store_exits_zero(tmp_path: Path) -> None:
+    cas_id = f"sha256:{_FIXED_DIGEST}"
+    assert cas.object_relpath(cas_id) == Path("objects") / "sha256" / "ab" / "cd" / _FIXED_DIGEST
+    assert cas.object_relpath(cas_id).as_posix() == f"objects/sha256/ab/cd/{_FIXED_DIGEST}"
+
+    store_one = tmp_path / "one"
+    store_two = tmp_path / "elsewhere" / "two"
+    assert cas.object_path(store_one, cas_id) == store_one / cas.object_relpath(cas_id)
+    # The store root is prefixed but never changes the identity-derived tail.
+    assert cas.object_path(store_one, cas_id).relative_to(store_one) == cas.object_path(
+        store_two, cas_id
+    ).relative_to(store_two)
+
     store = tmp_path / "store"
     _two_object_store(store)
     cas.rebuild_index(store)
@@ -1111,6 +1097,16 @@ raise AssertionError("receipt returned")
 def test_publication_is_atomic_write_if_absent_resealed_no_residue(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    store = tmp_path / "seal-refusal"
+    journal.ensure_store(store)
+    cas_id = _digest(b"the identity these bytes should have")
+    wrong = cas.object_path(store, cas_id)
+    wrong.parent.mkdir(parents=True, exist_ok=True)
+    wrong.write_bytes(b"entirely different bytes")
+    wrong.chmod(0o444)
+    with pytest.raises(cas.CasError, match=f"existing object is corrupt: {cas_id}"):
+        cas.seal_objects(store, [cas_id])
+
     store = tmp_path / "store"
     source = tmp_path / "source"
     _write_source(source, "doc.txt", b"atomic publication bytes\n")

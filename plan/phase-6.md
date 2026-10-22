@@ -13,9 +13,11 @@ Coordinate namespace dependency cleanup with Castle's irreversible successor-epo
 
 ## Deliverables and scope
 
+- Implement the deferred fresh namespace database generation/replacement protocol from namespace §18: exact selection-free marker, fresh-image validation, directory durability, sidecar disposal, cleanup-scanned/verified stages and interrupted forward recovery. Original Phase 3 requirements are retained here; ordinary Phase 2 SQLite recovery is not this confidential cleanup mechanism.
+
 - Add the proposed `project/castle/namespace_excision.py` coordinator and `project/tests/test_namespace_excision.py`. Integrate with existing `project/castle/excision.py` and `project/castle/store_state.py` through their contract-defined lifecycle boundaries; do not reimplement retirement or invent rollback after retirement.
 - Stop namespace and direct CAS admission, drain readers/handles, inventory source/shared-owner dependencies, deleted metadata, snapshots, requests/results, staging, journal sightings, remote records, derived indexes, and consumer obligations. Refuse conflicting live ownership or forbidden metadata attached to retained shared content unless explicit caller selection/custody boundaries resolve it.
-- Implement all five durable stages: sanitized snapshot recipes before retirement; completed Castle forward cutover; successor-bound manifest ingestion while blocked; atomic retained reference/binding/dependency publication; fresh namespace database and owned-residue cleanup with the Phase 3 marker protocol. Source CAS identities remain stable; catalog/epoch bindings advance.
+- Implement all five durable stages: sanitized snapshot recipes before retirement; completed Castle forward cutover; successor-bound manifest ingestion while blocked; atomic retained reference/binding/dependency publication; fresh namespace database and owned-residue cleanup with the replacement-marker protocol. Source CAS identities remain stable; catalog/epoch bindings advance.
 - Publish distinct reference-publication, cleanup, and completion outcomes. Preserve only permitted identity reservations and selection-free recovery evidence. Report external backup/replica/key/plaintext obligations separately from the enforced local boundary.
 - Fence prepared/retired/foreign epochs on ordinary opens and admission; old replicas cannot merge into the successor, but explicit re-ingestion is a separately authorized intake decision. Derived retrieval reconciliation is required before it reports current completion.
 

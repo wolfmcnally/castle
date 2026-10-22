@@ -7,17 +7,19 @@ informs: []
 
 # Phase 4 — Coordinated transactional namespace CRUD
 
+The operations-first Phase 2 delivers the existing-content authority and CRUD subset. This pending phase completes new-content create/replace and integrates Phase 3 publication recovery with that same coordinator; retain all earlier operation/regression guarantees without redelivering them as new work.
+
 ## Goal
 
 Deliver the complete library capability for ordered current-state document and directory CRUD with validated trees, durable content publication, and safe retry.
 
 ## Deliverables and scope
 
-- Add the proposed `project/castle/namespace.py` public library API and `project/castle/namespace_transactions.py` command/intent owner using the Phase 1 contract and Phase 3 authority. Keep `project/castle/__init__.py`'s lightweight import posture.
+- Extend the delivered `project/castle/namespace.py`, `project/castle/namespace_store.py` and `project/castle/namespace_transactions.py` owners using the Phase 1 contract, Phase 2 existing-content authority and Phase 3 bounded CAS recovery. Keep `project/castle/__init__.py`'s lightweight import posture.
 - Implement create file/directory, read/list/resolve, replace file content, whole-object metadata replacement, atomic rename-plus-move, ordinary file/empty-directory deletion, and explicit atomic subtree deletion. Preserve stable IDs, identity reservation, root invariants, and shared blob independence.
 - Centralize NFC/casefold comparison, pinned Unicode policy, component/metadata limits, live sibling uniqueness, parent validity, reachability/cycle checks, and path refusal. Reject complete commands atomically rather than silently overwriting or renaming.
-- Serialize commands under the coordinator; validate expected namespace revision, canonical request fingerprint, reserved idempotency UUID, durable outcome, seven-day retry retention, and expired-token refusal. Stage/prepare, publish CAS through Phase 2, then commit live references/results/dependencies atomically. Recover pending intents before new writes; committed outcomes win over leftover staging.
-- Add `project/tests/test_namespace.py` and `project/tests/test_namespace_transactions.py`; include real concurrent clients/subprocess kills and independent before/after trees. Use opaque CAS provenance labels for namespace-owned writes.
+- Serialize commands under the coordinator; validate expected namespace revision, canonical request fingerprint, reserved idempotency UUID, durable outcome, seven-day retry retention, and expired-token refusal. Stage/prepare, publish CAS through Phase 3, then commit live references/results/dependencies atomically. Recover pending intents before new writes; committed outcomes win over leftover staging.
+- Strengthen delivered `project/tests/test_namespace.py` and add `project/tests/test_namespace_transactions.py` where distinct publication proof needs it; include real concurrent clients/subprocess kills and independent before/after trees. Use opaque CAS provenance labels for namespace-owned writes.
 
 ## Acceptance
 
@@ -30,7 +32,7 @@ Deliver the complete library capability for ordered current-state document and d
 
 ## Validation and handoff
 
-Iteration: `./bin/test project/tests/test_namespace.py project/tests/test_namespace_transactions.py project/tests/test_namespace_store.py project/tests/test_cas_recovery.py`. Apply the shared two-gate close protocol in [namespace-implementation.md](namespace-implementation.md).
+Iteration: `./bin/test project/tests/test_namespace.py project/tests/test_namespace_transactions.py project/tests/test_cas_recovery.py`. Apply the shared two-gate close protocol in [namespace-implementation.md](namespace-implementation.md).
 
 User Demo: N/A — this phase delivers the library; interactive command workflows are qualified in Phase 7.
 

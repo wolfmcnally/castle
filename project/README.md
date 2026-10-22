@@ -268,3 +268,27 @@ This runs lint, format validation and every retained package test. See [CONTRIBU
 ## Release candidate
 
 Version 0.1.1 is a patch release under the [MIT license](LICENSE). GitHub Releases records publication status. The [changelog](CHANGELOG.md) states the release scope, and the [release procedure](RELEASE.md) covers local artifact creation and a disposable clean-install smoke check. Tagging and publication require the maintainer’s approval of the exact artifacts and supported capability scope.
+# Existing-content namespaces
+
+The Python namespace library provides an explicitly initialized, single-coordinator tree over already stored CAS content. It supports directory creation, existing-content file binding, read/list/resolve/status, file and directory rename/move, atomic subtree duplication and logical deletion. Copies share immutable content; deleting a namespace entry does not delete CAS bytes, retained snapshots or history. No mounted filesystem is provided.
+
+Run the disposable workflow with the repository's Python entry point:
+
+```sh
+./bin/python project/examples/namespace_demo.py
+```
+
+The workflow uses public APIs and temporary synthetic stores. Its caller fixture supplies the `AuthorizedSession` protocol and declares an unprotected local environment; that declaration is not authentication, encryption or proof of a protected deployment. Applications must supply trusted authorization/capability evidence and one lifetime ownership context for each protection domain. Concurrent calls through that owner serialize; competing coordinator processes refuse. Direct SQL access and independent CAS writers while the coordinator is active are unsupported. Fork children must close inherited domain-ownership references; the example and Castle's coordinator close their own inherited descriptors.
+
+Mutations include an expected revision and operation UUID. A successful mutation, including a no-op rename, advances one revision. Retry the identical token/request after a lost response; never infer permission to use a fresh token. Changed requests under the same token refuse. Domain rejections, including revision conflicts, are retained without changing the tree. Results remain available until explicit maintenance expires eligible outcomes after seven days; reservations never recycle. Expiration removes logical payloads, not forensic remnants.
+
+Names use NFC and casefold comparison, 255 UTF-8-byte components and the recorded Unicode-data version. Metadata accepts bounded integers, not floating-point or Decimal values; decimal quantities can be strings. Requests are bounded to 16 MiB, complete trees to 100000 entries and 64 MiB canonical capture bytes. Oversized recursive operations refuse atomically. This bounded implementation traverses the current tree and retained outcomes for validation; it is not a claim of constant-time operations at maximum capacity.
+
+Acknowledgment follows SQLite DELETE-journal/EXTRA commit and durable owned evidence, never merely visible rows. The runtime sets and reads back `fullfsync=ON`; actual power-loss guarantees still depend on the qualified filesystem, SQLite VFS and hardware. The tests distinguish process termination, a genuine spilled hot rollback journal, before/after commit, response loss and injected wrapper sync/SQLite error boundaries. Python fault injection does not intercept every native VFS call, and kills do not prove hardware power-loss durability.
+
+Opening validates exact CAS member/epoch and content authority and refuses unknown residue. An interrupted prepared intent, incomplete receipt/expiry cleanup or observed storage fault makes ordinary open refuse before evidence cleanup; `recover_namespace` with a newly authorized environment must establish fresh durable SQL/evidence before readiness. Recovery uses the durable SQL ownership recipe committed before operation-file allocation; only missing or exact-prefix interrupted writes in its closed slots can be repaired. Different bytes and unowned residue refuse. The slow recovery path may rewrite retained logical rows in a single transaction; it does not replace the database file, purge old pages or claim confidential cleanup. Persistent errors remain unavailable. Interrupted initialization before its completion receipt refuses as incomplete authority; it is not silently re-created. Disposition of an incomplete real namespace root is an explicit owner/storage-repair responsibility, not an automatic library deletion.
+
+New-content uploads/replacement, folder import, snapshots and epoch-moving excision are deferred requirements. They do not fall through to ordinary ingest or pretend to succeed. Namespace-aware excision will additionally require its dependency inventory, irreversible epoch fencing, fresh-database replacement and protected cleanup. Protected execution, cross-domain atomicity, real-store conversion, publication and broad platform qualification are not established by this local slice.
+
+
+The namespace handle is process-local. Fork children release inherited lock descriptors and cannot use the handle; the qualified CPython callback deliberately pins the inherited SQLite object so child finalization cannot close or roll back the parent’s connection. Children should exec or exit promptly. A known blocked live handle reports operation status `recovery-required` with next action `recover`, without reading uncertain rows or inventing a terminal outcome. Unknown/unopened authority returns only a fixed safe refusal.

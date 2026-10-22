@@ -1,45 +1,47 @@
 ---
 id: 2
-title: Bounded CAS interruption recovery
+title: Reliable existing-content namespace operations
 depends_on: [phase-1.md]
 informs: []
 ---
 
-# Phase 2 — Bounded CAS interruption recovery
+# Phase 2 — Reliable existing-content namespace operations
 
 ## Goal
 
-Implement and qualify the contract-defined recovery of interrupted namespace-owned CAS publication before the namespace can publish live references.
+Deliver usable, concurrent ACID file/directory namespace operations over already durably admitted CAS content, without waiting for publication or confidential-excision mechanisms those operations do not exercise.
+
+## Authorization and scope reconciliation
+
+The operator approved the operations-first sequence on 2026-10-22 UTC (2026-10-21 local). The approved slice adopts only the existing contract defaults it needs: typed UUID/name/metadata requests, pinned Unicode, coarse revisions, explicit duplicate maps, bounded trees/requests, seven-day result retention, one in-process coordinator and unprotected synthetic qualification. Historical Phase 1 evidence remains unchanged. Original pending phase definitions remain in Git history; later requirements are deferred, never dropped. No new-content CAS effects, snapshots, epoch excision, fresh-database replacement, encrypted deployment, cross-domain atomicity, real-store operations or publication are authorized.
 
 ## Deliverables and scope
 
-- Add the proposed `project/castle/cas_recovery.py` public recovery owner and its types; integrate the needed evidence/publication hooks into existing `project/castle/cas.py` and `project/castle/journal.py` without changing ordinary strict journal interpretation or inventing new event fields.
-- Persist operation-owned recovery evidence outside the CAS root before the corresponding unsafe publication boundary. Validate exact bytes, journal prefix/event identity, active store identity/epoch, ownership, and lock order before completing an interrupted operation. Handle object-published/journal-missing, incomplete append, complete append/index-stale, and post-completion response loss as distinct states.
-- Preserve target-local remote custody rows when rebuilding derived index state. Unknown residue, unrelated corruption, unreadable remotes, missing required evidence, or lifecycle mismatch stays blocked; ordinary rebuild-index is not broadened into guess-based repair.
-- Add `project/tests/test_cas_recovery.py` with real subprocess kills and independently expected journal/object/index results. Extend existing CAS/journal/merge regression proofs and record proof admission under the shared roadmap.
+- Add typed namespace initialization/open, request/result/error and session interfaces in `project/castle/namespace.py`, backed by `project/castle/namespace_store.py` and `project/castle/namespace_transactions.py` as implementation coherence requires. Maintain the lightweight package import posture.
+- Implement explicit durable SQL authority with namespace/root/member/epoch/generation/policy identity, foreign keys, DELETE rollback journaling and EXTRA durability; lifetime domain and namespace ownership, serialized admission and single-revision reads. Missing/unsafe/unsupported authority, changed binding, replacement markers and unowned residue refuse; no implicit reconstruction or lock theft.
+- Implement directory creation, file binding to independently verified existing durable CAS content without ingest or extra sightings, browsing/read/list/resolve/status, file/directory rename-plus-move, frozen-subtree duplication with fresh IDs, nonrecursive deletion and explicit atomic subtree deletion. Preserve IDs, empty directories, shared content and dependency/identity reservations.
+- Persist canonical prepared requests, fingerprints and durable success/rejection results; commit complete tree/dependency/result/revision changes atomically. Recover prepared intents and uncertain SQL outcomes before admitting requests; same-token retries replay one retained result, changed payload conflicts and retired tokens never execute. Unknown storage outcomes block rather than fabricate a rollback or success.
+- Provide a thin executable synthetic workflow using public APIs only, with explicit roots and existing CAS enrollment before coordinator ownership. Do not seed SQL or mutate CAS under an active coordinator through an independent caller.
+- Qualify concurrency, equal-revision and identical-token races, owner death, rollback/reopen/retry, whole-subtree atomicity, copying/deletion independence, response loss, fsync/uncertain-commit failures and CAS integrity/lifecycle refusals. Admit proofs under existing estate governance without resetting baselines or weakening old coverage.
 
 ## Acceptance
 
-- Kill at object publication, within journal append, before/after index commit, and after durable completion; the bounded operation completes once or refuses with storage recovery required. No accepted store has a dangling/misdescribed object or silently lost remote row.
-- Replaying the same evidence is safe; changing identity/epoch/request or using unrelated temporary files refuses without deleting user/unknown files.
-- Existing strict-format, immutable object, CAS-only command, same-epoch union, and excision/retirement behaviors still pass their relevant regression suites.
-- A consistent CAS can be handed to namespace publication only after complete validated storage recovery. No automatic repair claim extends to corruption without operation evidence.
-
-- Every short-write/fsync failure distinguishes a newly established durable publication from merely visible bytes; the deterministic 32-hex temporary shape retains delivered transient/unsafe classification.
+- Public calls demonstrate actual create/browse/rename/move/duplicate/delete behavior over independently expected trees and already stored file bytes. CAS object/journal/index/remotes bytes remain unchanged during namespace operations.
+- All accepted concurrent operations serialize. Reads observe whole before/after trees; equal revisions have one winner, identical tokens have one outcome, and retries after a lost response preserve the original effect and revision.
+- Stable IDs, rooted acyclicity, sibling uniqueness, parent kinds, metadata/name/size limits and complete duplicate identity maps are enforced before any partial effect. Logical deletion never removes CAS bytes or claims confidential cleanup.
+- Real subprocess termination before/after prepared intent, within SQL mutation/commit and before response yields an unchanged or complete recovered tree. Live ownership is never stolen; a dead owner's lock becomes available. Uncertain I/O blocks service; qualified SQLite recovery resolves only proven outcomes.
+- A matching object hash alone never authorizes a reference: verify sealed content plus journal/index agreement and active exact member/epoch. Torn journal, unjournaled objects, unknown residue, changed epoch and unsupported publication/excision/protection paths fail closed.
+- Process-kill evidence is reported separately from filesystem/VFS/hardware power-loss guarantees. No encryption, forensic erasure, arbitrary corruption repair or distributed transaction claim follows.
 
 ## Validation and handoff
 
-Iteration: `./bin/test project/tests/test_cas_recovery.py project/tests/test_cas.py project/tests/test_journal.py project/tests/test_merge.py`. Apply the shared two-gate close protocol in [namespace-implementation.md](namespace-implementation.md); synthetic subprocess evidence is required, not mocked exceptions alone.
+Iteration uses `./bin/test project/tests/test_namespace.py` and affected retained CAS/journal suites; run format, lint, policy and proof-estate validation before critique. Shared close requires the complete implementation-candidate gate ending in `./bin/check all`, then the separate bare full handoff gate after bookkeeping. Local commits only; no push.
 
-User Demo: N/A — this is a library recovery prerequisite; consumer-facing recovery presentation lands in Phase 7.
-
-## Pinned Phase 1 contracts
-
-Implement the exact bounded publication evidence, deterministic owned temporary name, fsync acknowledgment/recovery boundaries and refusal cases in namespace §§17 and 20; preserve later valid journal events and the complete target-local remotes multiset. The namespace encoding does not replace delivered journal encoding.
+User Demo: Disposable namespace workflow through `./bin/python project/examples/namespace_demo.py` after implementation. Browse an empty directory and existing-content file; rename and move their directory, duplicate its subtree and logically delete one copy. Check stable original IDs, new duplicate IDs, preserved empty directories and unchanged shared content. Retry a supplied operation token and inspect its status. Interactive usability remains operator acceptance, not an automated checkoff.
 
 ## Brief refs
 
-- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §6 and §12; exact contracts §§14–20.
-- [CAS contract](../briefs/cas-api.md), write ordering, strict journal, verification, and remotes.
-- [CRDT semantics](../briefs/crdt-semantics.md).
-- [Excision](../briefs/content-excision.md), lifecycle fencing.
+- [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§2–6, 14–16, 19–21, especially the operations-first delivery boundary.
+- [CAS contract](../briefs/cas-api.md), strict inventory, read verification and lifecycle.
+- [CRDT semantics](../briefs/crdt-semantics.md), unchanged CAS and namespace authority boundary.
+- [SQLite synchronous pin](../docs/sqlite-synchronous.txt), EXTRA directory durability.

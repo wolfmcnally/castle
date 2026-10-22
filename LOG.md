@@ -393,3 +393,216 @@ The existing manual contract action remains open before downstream runtime adopt
 
 Lessons:
 - No additional lesson filed or graduated. The earlier terminal-witness candidate and exact fixture/definition checks remain the recorded learning; no history or failed evidence was removed.
+
+## 2026-10-21 20:25 — START
+
+Phase 2 — Operations-first approved preparation
+
+The operator approved operations-first delivery on 2026-10-22 UTC (2026-10-21 local). The retained sole writer verified a clean Phase 1 baseline, reacquired its exact lease and passed fresh Sol/Opus-high usage and real-read preflight. This preparation reconciles the pending phase order and adoption dependency; it does not claim runtime implementation or acceptance. Delivery restriction: “Local commits only for now.”
+
+## 2026-10-21 20:25 — PARK
+
+Phase 2 — Approved operations-first preparation complete
+
+Pending phase order and the overbroad adoption dependency are reconciled under the explicit user approval. Original source files are preserved in the run artifacts and Git history; no accepted Phase 1 evidence or review counter changed. No product implementation or review has occurred. A fresh full-evidence Phase 2 run will capture these final authorities before implementation. This preparation park is not completion or an operator-input wait.
+
+Lessons:
+- Existing goal-first dependency analysis applies: publication recovery is needed for new CAS effects and confidential database replacement for excision, not ordinary namespace metadata transactions. The approved correction changes the pending order without weakening either reliability requirement.
+
+Delivery restriction: “Local commits only for now.”
+
+## 2026-10-21 20:29 — START (resumed)
+
+Phase 2 — Reliable existing-content namespace operations
+
+Fresh final-authority implementation begins after the approved pending-plan preparation. Current Sol owns planning/coding inline; Opus/high provides bounded independent plan and code advice. Review lane: full. Evidence lane: full. Actual operations and reliability qualification remain unimplemented; later publication/snapshot/excision requirements remain deferred. Delivery restriction: “Local commits only for now.”
+
+## 2026-10-21 21:44 — PARK
+Phase 2 — Reliable existing-content namespace operations
+
+The first full gate failed: lint/format passed and195 tests passed, but the governance shadow-deletion fixture chose a historical retained proof already retired by the assertion-preserving namespace funding consolidation. Its intended negative branch was never reached. The runtime/focused49-test and expanded namespace checks remain passed; this is not phase acceptance.
+
+Execution trace: 46035b7148bc495eb713bcb3ffcd86c7
+Candidate lineage: the failed full gate preserved product57b60c40305fbdb32e6d746f7f65c4722b34f3e26811c5951a500f97cd80042b and its full-tree identity unchanged. All gate/receipt/diagnostics and original independent advice remain preserved. The watched full command and all tracked children reached terminal exit1; no role process is active. The sole-worker task lease intentionally remains held across the corrective trace.
+
+Direct correction: select a retained proof that is present in the independently collected live inventory, keeping both exact refusal assertions, baseline/budgets, all ledger rows and product runtime unchanged. This novel causal generator consumes one configured self-resume allowance; two remain. Resume in a fresh corrective trace carrying the same13 plan/11 code observations and frozen phase-wide review counts. No new review/writer or provider change.
+
+Lessons:
+- Existing independent fixture-inventory verification already covers the omission: a historical label is not current execution state. Correct the fixture's precondition, not its refusal oracle. No duplicate rule or policy weakening is introduced. A separate local ownership-before-allocation candidate is prepared for close.
+
+Delivery: restricted — “Local commits only for now.” Focused governance qualification and a renewed complete workflow/full sequence precede close and the separate handoff gate. No push, live-store operation or broader scope.
+
+## 2026-10-21 21:45 — START (resumed)
+
+Phase 2 — Reliable existing-content namespace operations
+
+Execution trace: af7b36480d6b435e81ff566eb84020fd
+
+Direct governance-fixture correction follows the preserved failed full gate. Select a still-executable retained proof for the existing shadow-deletion negative control; keep both exact refusal assertions and all product/runtime/ledger/budget behavior unchanged. Original13 plan/11 code observations and phase-wide pass allowances carry forward without another review. Focused qualification precedes the renewed complete acceptance sequence. Local commits only; manual usability and deferred publication/snapshot/excision requirements remain open.
+
+## 2026-10-21 21:51 — END
+Phase 2 — Reliable existing-content namespace operations
+
+Actual namespace operations are implemented and ready for local delivery: browse/read/list/resolve/status, directory creation, binding already durable content, file/directory rename and move, frozen recursive duplication and logical deletion. Concurrent calls serialize through one domain owner; complete tree, dependencies, revision and durable outcome commit together. A public-API-only disposable workflow demonstrates IDs, empty directories, shared content and retry. No operator action is needed to deliver the gate-proved slice; manual usability and future capability choices stay open.
+
+Execution trace: af7b36480d6b435e81ff566eb84020fd
+Baseline: a0e9bca931b96773fb5e370fed53f8c8a23137b7 — completed Phase 1 history and delivered CAS runtime preserved.
+
+Files changed:
+- `project/castle/namespace.py`, `project/castle/namespace_store.py`, `project/castle/namespace_transactions.py` — typed API, durable SQL identity, caller-owned lifetime domain/namespace coordination, serialized reads/mutations, durable intents/results, explicit recovery and safe refusals.
+- `project/examples/namespace_demo.py`, `project/tests/test_namespace.py` — actual public workflow and two independent semantic/restart families covering concurrency, whole trees, file operations, IDs, token races, owner death, real hot journal, interrupted evidence/cleanup, storage uncertainty, fork finalization and protection/CAS admission.
+- `project/tests/test_cas.py`, `tests/proof-estate.yaml`, `reports/test-governance/castle-reset.jsonl` — assertion-preserving consolidation funds exactly two namespace families; all original path/seal oracles remain. `tests/test_test_governance.py` selects a currently executable historical-retain fixture while preserving its exact two refusal assertions.
+- `README.md`, `project/README.md`, `briefs/coordinated-namespace-crud.md`, `plan/namespace-implementation.md`, `plan/phase-2.md` through owning pending references, and `user-actions/namespace-contract.md` — approved operations-first sequence, adopted slice defaults only, explicit reliability/platform/custody limitations and retained later requirements.
+- `LOG.md`, `EXECUTION_LOG.jsonl` — append-only actual execution; completion ledger, three prepared AUTO reference corrections, one candidate lesson and sanitized report remain pending below.
+
+Build status:
+- Affected namespace/CAS/journal:49 passed after core recovery fixes. Final expanded namespace:2 passed15.07s, with no warnings. Public synthetic workflow completed at revision8. Lint/policy/concreteness/delivery/proof-estate checks passed.
+- First full gate:195 passed, one existing governance negative fixture failed because first historical retain was already consolidated. Failed gate/receipt and error trace remain immutable. Direct correction preserves both exact refusal assertions; all11 focused governance proofs pass. One self-resume unit consumed; two remain. A formatter invocation used root defaults; actual gate configuration restored formatting, with the unrelated hunk removed and complete diagnostics retained.
+- Current candidate-bound implementation sequence: public workflow and `./bin/check all` passed with identical pre/post product and full-tree identities; all196 retained tests passed. Complete diagnostics reviewed with zero warnings. The distinct bare handoff gate remains pending after every close write.
+
+Review lane: full, primary advisory. Evidence lane: full. Follow-up route: initial full implementation, then direct correction of the independent governance-fixture precondition.
+
+Role model/venue — orchestrated by Codex:
+- Planner/coder: Sol 6.1/high inline; provider-observed primary model/effort and harness version unreported. No delegated writer.
+- Reviewer: one Opus/high Claude plan pass,13 source-backed observations. Critic: one substantive Opus/high Claude pass,11 observations, followed by one artifact-only same-session re-emission removing exactly one invalid absolute affected_path. Summary/findings/string values and source candidate were verified unchanged; both code allowances remain consumed. No third pass, provider substitution or budget reset.
+- Observed independent model:claude-opus-5-5; independent harness_version and provider-observed effort unreported. No requested setting is copied into an observed field. Existing configuration-bound real-read preflight passed; no credentials/provider/billing/grants changed.
+- All24 report findings have explicit primary dispositions, read from actual carried reports and current decision. Fresh final delta/testing, rather than another review, qualifies bounded fixes. Original dispatch/candidate provenance and failed evidence remain preserved; this corrective trace carries advice rather than inventing role execution.
+
+Candidate-bound evidence:
+- Accepted product: 79d123bcd790356af685cbddb76ef04f53f52718e0fd61d9fcaaeb4bc6e6ed58
+- Unchanged implementation full tree: 7d61aa58652acc887a1d33a3e6d3e1cace08f3088428c96514c9295442b03ebe
+- Active command manifest:83c6e3fc231be591353db7f5e8dacd3c40ac239e8982cf86846d2b3e00e44a05
+- Acceptance validation and finalized timing summary passed. Two current managed final gates were counted from actual gate rows; diagnostic reviews are not additional runs. Proof estate remains163 families/218 leaves with frozen baselines, zero unspent retirements and no new effectiveness assay claimed.
+
+### Execution timing
+
+Execution trace: af7b36480d6b435e81ff566eb84020fd
+- Outcome: `success`
+- Makespan: 367799643125 ns (367.799643125 s)
+- Intelligence: 0 ns (0.000000000 s)
+- Gates: 178493605291 ns (178.493605291 s)
+- Orchestration: 367413466291 ns (367.413466291 s)
+- Wait: 0 ns (0.000000000 s)
+- Retry/rework: 0 ns (0.000000000 s)
+- Failed work: 0 ns (0.000000000 s)
+- Unattributed: 386176834 ns (0.386176834 s)
+- Category totals are interval unions and may overlap.
+
+#### Slowest material spans
+
+- `orchestration.acceptance` — category `reconciliation`, attempt 1, outcome `success`: 273373740208 ns (273.373740208 s)
+- `gate.full` — category `gate`, attempt 1, outcome `success`: 177943578416 ns (177.943578416 s)
+- `orchestration.implementation` — category `reconciliation`, attempt 1, outcome `success`: 92037021375 ns (92.037021375 s)
+- `orchestration.setup` — category `reconciliation`, attempt 1, outcome `success`: 1925503458 ns (1.925503458 s)
+- `gate.workflow` — category `gate`, attempt 1, outcome `success`: 550026875 ns (0.550026875 s)
+
+
+The timing fragment covers this accepted corrective trace only. Original planning/advice/runtime construction and failed full validation remain in their preserved trace; the offline phase report aggregates history without relabeling failed work. No open operator-input park was found; missing measurement is not invented. Timeout recommendations were captured read-only: no role/venue has the required30 successful samples. The reader reported536 malformed/incomplete historical telemetry rows; every diagnostic was inspected as a rejected historical row, not current-run failure. No row was deleted and no configuration change follows.
+
+Acceptance:
+- Objective: actual existing-content CRUD through public APIs, stable/fresh IDs and shared bytes, empty directories, complete subtree atomicity, serialized equal-revision/token races, single-revision reads, durable success/rejection/retirement, no CAS effects, exact member/epoch/integrity checks and supported crash/recovery/refusal behavior, plus current full repository checks bound to the candidate.
+- Recovery consequence: ordinary open refuses incomplete intent/receipt/expiry or observed storage-fault state before cleanup. Explicit authorized `recover_namespace` validates SQL-owned slots, repairs only missing/exact-prefix writes and establishes fresh durable SQL/evidence before readiness. Visible rows alone never retroactively prove an earlier failed boundary. Unknown residue/different bytes remain unavailable. Incomplete initialization requires explicit owner/storage disposition, never automatic recreation.
+- Parked for the operator: interactive library/demo usability, eventual broader CLI design, future snapshot/excision choices and actual protected-environment/custody qualification. Local process kills and injected wrapper/SQLite errors do not prove hardware power-loss behavior, every native VFS boundary, encrypted deployment, forensic erasure or Linux/artifact qualification. Those claims are not made.
+
+Delivery: restricted — “Local commits only; no push/publication, live-store operations, encryption deployment, credential/grant changes, new writers or expanded permissions.” Local commit follows the separate final handoff gate; no push or publication.
+
+Ripple:
+- AUTO, pending: apply the exact accepted Phase2 completion ledger, preserving Phase1 completion and the release arrow; update the initiative narrative truthfully afterward.
+- AUTO, pending: `plan/phase-3.md` names new-content publication as its recovery prerequisite; `plan/phase-4.md` extends delivered owner/proof files and uses Phase3 publication recovery; `plan/phase-7.md` extends the already delivered demo. No phase goal/dependency or deferred requirement is dropped.
+- DECIDE:none for this close. Further phase implementation still requires separate authority; no new work is selected by completing this slice.
+
+Lessons:
+- Pending candidate `horned-mole` (local engineering, one occurrence): commit independent allocation ownership before creating recovery files. Real missing-directory/file windows now strengthen the existing restart proof family; no new proof budget or rule graduation.
+- Existing independent fixture inventory, source-schema and exact runtime/config rules cover the discovered negative-control and orchestration-input/formatter mistakes. Rejected originals, failed checks and bounded corrections remain preserved; no duplicate policy is filed or weakened.
+
+User Demo: Disposable namespace workflow through `./bin/python project/examples/namespace_demo.py` after implementation. Browse an empty directory and existing-content file; rename and move their directory, duplicate its subtree and logically delete one copy. Check stable original IDs, new duplicate IDs, preserved empty directories and unchanged shared content. Retry a supplied operation token and inspect its status. Interactive usability remains operator acceptance, not an automated checkoff.
+
+### Test protocol
+
+Run the disposable workflow from the checkout:
+
+```sh
+./bin/python project/examples/namespace_demo.py
+```
+
+Expected: original IDs remain through rename and a genuine parent move; duplicated entries have fresh IDs and the same content identity; both empty directories list empty; retry equality is true, status is committed and final revision is8. Deleting the copy leaves original members/content intact. The printed token can also be supplied with `--operation-id` for a repeat of this disposable demonstration. Judge naming/output and usability; no real-store preparation is required.
+
+Remaining:
+- Apply and verify the accepted completion ledger, then the prepared AUTO references, candidate lesson, actual bookkeeping log and sanitized offline report. The bare full handoff gate and local commit remain pending at this append-only record; their outcomes are reported afterward without another tracked write.
+- Required deferred capabilities remain new-content publication/recovery, snapshots, epoch-moving excision, fresh DB replacement/protected cleanup and cross-domain external orchestration. Logical deletion does not excise content or imply GC. Single-owner unprotected synthetic qualification does not authorize deployment or distributed atomicity.
+
+## 2026-10-21 21:52 — END (bookkeeping)
+
+Phase 2 — Reliable existing-content namespace operations
+
+The exact accepted completion ledger was applied and verified before downstream writes. Phase1 completion and the existing release arrow remain unchanged. The three prepared AUTO references now name the delivered namespace owners/demo and Phase3 new-content publication recovery. Later phase goals/dependencies and required snapshots/excision/database-replacement/protected-cleanup remain pending, not dropped or newly authorized.
+
+Execution trace: af7b36480d6b435e81ff566eb84020fd
+
+The local engineering candidate `horned-mole` was filed and validated; no graduation-ready lesson was reported and no rule was graduated. The initiative narrative now reflects delivered existing-content operations. Manual usability and future protected/snapshot/excision choices remain open in their owning action. All failed evidence/history is retained. Sanitized offline report generation follows; the distinct bare full handoff gate and local-only commit remain pending at this append-only record.
+
+Lessons:
+- Actual candidate filing and fixture/config corrections are recorded above. No additional lesson or policy change is introduced.
+
+## 2026-10-21 21:58 — START (correction)
+
+Phase 2 — Reliable existing-content namespace operations
+
+Execution trace: 982a90382070405dad6afab5361dc54c
+
+Final delivery inspection found a bounded public error-field defect: a refusal before token reservation could carry an operation ID, and BEGIN-lock failure was marked write-uncertain before any unsafe write. The prior implementation and handoff gate outcomes remain preserved; no commit/delivery is claimed yet. Correct only reservation/write-boundary bookkeeping and strengthen the existing semantic family with pre-reservation fields and pre-BEGIN BUSY refusal. Keep Phase2 complete, existing successful history and carried13 plan/11 code observations/counters unchanged. This minor within-scope correction needs no additional advice or authority. The complete renewed implementation and separate handoff gates remain required before local-only delivery.
+
+## 2026-10-21 22:03 — END (correction)
+Phase 2 — Reliable existing-content namespace operations
+
+The final error-boundary correction is validated. A refusal before operation reservation now returns no operation ID and a known namespace ID; a failed BEGIN before an unsafe write reports namespace-io-failed with effect none. Reserved/uncertain/committed outcomes retain their safely known identifiers and conservative effects. This corrects the typed refusal contract without changing namespace operations, schema, ownership, deferred scope or prior accepted history. Phase2 remains complete; final handoff/local delivery still follows below.
+
+Execution trace: 982a90382070405dad6afab5361dc54c
+
+Files changed by this correction: `project/castle/namespace_transactions.py` moves reservation/write flags to the real boundary; `project/castle/namespace_store.py` supplies established namespace identity; `project/tests/test_namespace.py` strengthens the existing semantic family. No new proof family or executable leaf. The exact assertion was observed red before correction, then both namespace families passed15.50s. Lint/format passed. The current public workflow and full repository gate passed with196 tests, no warnings, and identical before/after product/full-tree identities. Earlier valid implementation/handoff passes and the separate failed governance run remain preserved; no earlier failed evidence becomes success.
+
+Review lane: full primary advisory. Evidence lane: full. Follow-up route: direct fix — bounded known public error-field/write-boundary correction under existing minor-correction authority. Original Opus/high13 plan and11 code observations carry with all24 current primary dispositions and source dispatch identities; no new advice, writer or review-counter reset. Primary remains Sol6.1/high inline, observed model/effort/harness unreported; independent observed model claude-opus-5-5, observed effort/harness unreported here. Requested effort is not treated as provider observation.
+
+Candidate-bound evidence: accepted product 4fced3dd5ad47beba8668e6b5ba451dac41d5827da4901e6c9bdd1449b847537; unchanged implementation full tree cdf6da9937c6f8702a5a5c39185297ee505ad54bd58b9c14367e13ebac0caa61. The same exact workflow/full command manifest is active. Acceptance and finalized timing validation passed. This trace carries advice rather than fabricating role durations.
+
+### Execution timing
+
+Execution trace: 982a90382070405dad6afab5361dc54c
+- Outcome: `success`
+- Makespan: 282061890166 ns (282.061890166 s)
+- Intelligence: 0 ns (0.000000000 s)
+- Gates: 158300011000 ns (158.300011000 s)
+- Orchestration: 281703937334 ns (281.703937334 s)
+- Wait: 0 ns (0.000000000 s)
+- Retry/rework: 0 ns (0.000000000 s)
+- Failed work: 0 ns (0.000000000 s)
+- Unattributed: 357952832 ns (0.357952832 s)
+- Category totals are interval unions and may overlap.
+
+#### Slowest material spans
+
+- `orchestration.acceptance` — category `reconciliation`, attempt 1, outcome `success`: 229499094542 ns (229.499094542 s)
+- `gate.full` — category `gate`, attempt 1, outcome `success`: 157751320458 ns (157.751320458 s)
+- `orchestration.implementation` — category `reconciliation`, attempt 1, outcome `success`: 50417452666 ns (50.417452666 s)
+- `orchestration.setup` — category `reconciliation`, attempt 1, outcome `success`: 1710128542 ns (1.710128542 s)
+- `gate.workflow` — category `gate`, attempt 1, outcome `success`: 548690542 ns (0.548690542 s)
+
+
+No open operator-input park was found. Timeout recommendations remain insufficient samples for every target; historical rejected-row diagnostics were inspected and preserved, with no telemetry deletion or configuration edit.
+
+Acceptance:
+- Objective: expected-red/green public refusal fields and pre-BEGIN BUSY control, both existing namespace families, actual public workflow and all196 retained tests/lint/format/policy checks bound to the final candidate.
+- Parked for the operator: the existing interactive usability and later protected/snapshot/excision choices. No live-store, encryption, Linux/artifact or hardware power-loss qualification is newly claimed. Recovery remains explicit for incomplete evidence; logical deletion remains distinct from CAS excision and GC.
+
+Delivery: restricted — “Local commits only; no push/publication, live-store operations, encryption deployment, credential/grant changes, new writers or expanded permissions.” No commit or push is claimed in this record. The separate bare full handoff gate follows the final tracked report refresh, then local commit only.
+
+Ripple: none — no exported name, schema, phase goal/dependency or future capability allocation changed. Phase2 completion and the release arrow stay unchanged. The existing ownership-before-allocation candidate remains provisional.
+
+Lessons:
+- Existing evidence-at-the-defining-boundary and contract-fixture rules cover this omission. The exact pre-reservation refusal and pre-BEGIN lock controls now strengthen the same semantic family; no duplicate candidate, rule graduation or budget change.
+
+User Demo: Disposable namespace workflow through `./bin/python project/examples/namespace_demo.py` after implementation. Browse an empty directory and existing-content file; rename and move their directory, duplicate its subtree and logically delete one copy. Check stable original IDs, new duplicate IDs, preserved empty directories and unchanged shared content. Retry a supplied operation token and inspect its status. Interactive usability remains operator acceptance, not an automated checkoff.
+
+Test protocol: run `./bin/python project/examples/namespace_demo.py`. Expect stable original IDs through rename/move, fresh duplicate IDs with shared content, preserved empty directories, retry equality true, committed status and final revision8. Judge the printed workflow; it uses only temporary synthetic roots.
+
+Remaining: refresh the sanitized report for this accepted correction, run the distinct bare full handoff gate, then commit the complete owned tree locally. New-content publication/recovery, snapshots and epoch excision/fresh DB replacement/protected cleanup remain required deferred work, with no later implementation authorized here.
