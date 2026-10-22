@@ -10,7 +10,7 @@ import hashlib
 import json
 import re
 import unicodedata
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
@@ -306,6 +306,50 @@ class EntryRecord:
 
 
 @dataclass(frozen=True)
+class SnapshotRecord:
+    snapshot_id: str
+    cas_id: str
+    size: int
+    captured_revision: int
+
+
+@dataclass(frozen=True)
+class SnapshotView:
+    snapshot: SnapshotRecord
+    manifest: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ExportReceipt:
+    snapshot_id: str
+    cas_id: str
+
+
+class SnapshotDestination(Protocol):
+    def publish(
+        self, view: SnapshotView, manifest_bytes: bytes, read_content: Callable[[str], bytes]
+    ) -> ExportReceipt: ...
+
+
+def _snapshot(value: object) -> SnapshotRecord:
+    if not isinstance(value, dict) or set(value) != {
+        "snapshot_id",
+        "cas_id",
+        "size",
+        "captured_revision",
+    }:
+        _refuse("namespace-storage-recovery-required")
+    _uuid(value["snapshot_id"])
+    if not isinstance(value["cas_id"], str) or _CAS.fullmatch(value["cas_id"]) is None:
+        _refuse("namespace-storage-recovery-required")
+    _integer(value["size"])
+    if value["size"] > MAX_MANIFEST_BYTES:
+        _refuse("namespace-limit-exceeded")
+    _integer(value["captured_revision"])
+    return SnapshotRecord(**value)
+
+
+@dataclass(frozen=True)
 class MutationResult:
     namespace_id: str
     operation_id: str
@@ -314,7 +358,7 @@ class MutationResult:
     revision_before: int
     revision_after: int
     affected_entry_ids: list[str]
-    snapshot: None
+    snapshot: SnapshotRecord | None
     cas_binding: StoreIdentity
     outcome: str = field(default="committed", init=False)
     schema: str = field(default="castle.namespace_result.v1", init=False)
@@ -325,7 +369,7 @@ class ReadResult:
     namespace_id: str
     revision: int
     cas_binding: StoreIdentity
-    value: NamespaceInfo | EntryRecord | list[EntryRecord]
+    value: NamespaceInfo | EntryRecord | list[EntryRecord] | SnapshotView | ExportReceipt
     schema: str = field(default="castle.namespace_read.v1", init=False)
 
 
@@ -363,8 +407,43 @@ def _result(value: dict[str, Any]) -> MutationResult:
         or value.pop("outcome", None) != "committed"
     ):
         _refuse("namespace-format-unsupported")
+    try:
+        _integer(value["revision_before"])
+        _integer(value["revision_after"])
+        if not isinstance(value["affected_entry_ids"], list):
+            _refuse()
+        for identity in value["affected_entry_ids"]:
+            _uuid(identity)
+    except (NamespaceError, KeyError, TypeError):
+        _refuse("namespace-storage-recovery-required")
     value["cas_binding"] = StoreIdentity(**value["cas_binding"])
+    if value["snapshot"] is not None:
+        value["snapshot"] = _snapshot(value["snapshot"])
     return MutationResult(**value)
+
+
+def _terminal_error(value: object) -> NamespaceError:
+    if not isinstance(value, dict) or set(value) != {
+        "code",
+        "namespace_id",
+        "operation_id",
+        "actual_revision",
+        "effect",
+    }:
+        _refuse("namespace-storage-recovery-required")
+    try:
+        if (
+            not isinstance(value["code"], str)
+            or value["code"] not in _CODES
+            or value["effect"] != "none"
+        ):
+            _refuse()
+        _uuid(value["namespace_id"])
+        _uuid(value["operation_id"])
+        _integer(value["actual_revision"])
+    except NamespaceError:
+        _refuse("namespace-storage-recovery-required")
+    return NamespaceError(**value)
 
 
 def create_namespace(
@@ -396,8 +475,10 @@ def execute_namespace(
     return handle.execute(request, content_sources)
 
 
-def read_namespace(handle: NamespaceHandle, request: ReadRequest) -> ReadResult:
-    return handle.read(request)
+def read_namespace(
+    handle: NamespaceHandle, request: ReadRequest, *, destination: SnapshotDestination | None = None
+) -> ReadResult:
+    return handle.read(request, destination=destination)
 
 
 def namespace_operation(handle: NamespaceHandle, operation_id: str) -> OperationStatus:

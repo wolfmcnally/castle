@@ -5,9 +5,9 @@ status: pending
 category: decision
 urgency: medium
 blocks:
-  - Adoption of deferred snapshot/redaction, excision-capacity and protected-deployment choices; does not block the approved existing-content operations slice
+  - Actual protected deployment, real-store seed/purge and external-copy custody; does not block the approved synthetic Phases 5–7 sequence
 filed: 2026-10-21
-needed_at: Before the consuming snapshot, excision or protected-deployment phase
+needed_at: Before actual protected deployment, real-store seed or purge, or an expansion of adopted product limits
 source: kickoff
 refs:
   - briefs/coordinated-namespace-crud.md
@@ -25,3 +25,9 @@ The coordinator choice is one lifetime owner per protection domain, concurrent i
 ## Scoped adoption disposition
 
 The operator approved operations-first implementation on 2026-10-22 UTC (2026-10-21 local). Included operation defaults are adopted only for that slice: integer metadata, fixed name/Unicode policy, explicit duplicate maps, coarse revisions, seven-day retry results, bounded admission, single in-process owner and synthetic unprotected execution. The prior blanket “Before Phase 2” dependency was broader than the actual recovery dependency and is superseded by this scoped authorization. Historical text and Phase 1 evidence remain in Git history. This item stays pending for genuinely deferred snapshot redaction semantics, excision selection capacities and actual protected-environment qualification; no blanket ratification or deployment approval is claimed.
+
+## Continued synthetic adoption and remaining owner inputs
+
+On 2026-10-22 UTC the operator approved goal-complete new-byte creation/replacement and then sequential snapshot/folder-admission, excision/recovery and consumer qualification using synthetic stores with ordinary reviews/gates and local commits only. The snapshot/folder slice adopts its deterministic encoding, explicit empty-directory membership, bounded complete inventory, capture versus explicitly redacted origin schema, typed authorized export callback and ambiguity-preserving seed defaults only as needed for that approved local sequence. Runtime ACID, publication, snapshots and optional seed behavior now have disposable concurrency/interruption/refusal proofs; actual excision ownership of redacted manifests remains the next phase. This item does not impose another gate on that already approved work.
+
+Remaining owner inputs are actual protected-environment selection/qualification, real-store seed or purge and external-copy custody, release/publication and any future change to the adopted product limits or name/runtime policy. Synthetic process-loss tests do not establish hardware power-loss behavior or encrypted deployment. No future choice or real-data operation is marked ratified by local completion.

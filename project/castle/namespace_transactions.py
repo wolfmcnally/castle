@@ -11,6 +11,7 @@ from typing import Any
 from castle import cas
 from castle import namespace as n
 from castle import namespace_content as content_io
+from castle import namespace_snapshots as snapshots
 from castle import namespace_store as store
 
 _ARGS = {
@@ -23,6 +24,9 @@ _ARGS = {
     "delete-entry": {"entry_id"},
     "delete-subtree": {"entry_id"},
     "expire-results": {"operation_ids"},
+    "import-folder": {"parent_id", "entries"},
+    "snapshot": {"snapshot_id"},
+    "delete-snapshot": {"snapshot_id"},
 }
 
 
@@ -48,7 +52,7 @@ def normalize(request: n.MutationRequest) -> dict[str, Any]:
         or set(args) != _ARGS[kind]
     ):
         n._refuse()
-    for key in ("entry_id", "parent_id"):
+    for key in ("entry_id", "parent_id", "snapshot_id"):
         if key in args:
             n._uuid(args[key])
     if "name" in args:
@@ -62,6 +66,38 @@ def normalize(request: n.MutationRequest) -> dict[str, Any]:
         if not isinstance(content["cas_id"], str) or n._CAS.fullmatch(content["cas_id"]) is None:
             n._refuse()
         n._integer(content["size"])
+    if kind == "import-folder":
+        incoming = args["entries"]
+        if not isinstance(incoming, list) or len(incoming) > n.MAX_ENTRIES:
+            n._refuse("namespace-limit-exceeded")
+        for item in incoming:
+            if not isinstance(item, dict) or set(item) != {
+                "entry_id",
+                "kind",
+                "parent_id",
+                "name",
+                "metadata",
+                "cas_id",
+                "size",
+            }:
+                n._refuse()
+            n._uuid(item["entry_id"])
+            n._uuid(item["parent_id"])
+            item["name"] = n._name(item["name"])
+            item["metadata"] = n._metadata(item["metadata"])
+            if item["kind"] == "directory":
+                if item["cas_id"] is not None or item["size"] is not None:
+                    n._refuse()
+            elif item["kind"] == "file":
+                if not isinstance(item["cas_id"], str) or n._CAS.fullmatch(item["cas_id"]) is None:
+                    n._refuse()
+                n._integer(item["size"])
+            else:
+                n._refuse()
+        if len({item["entry_id"] for item in incoming}) != len(incoming):
+            n._refuse()
+        args["entries"] = sorted(incoming, key=lambda item: item["entry_id"])
+        content_io.specs(value)
     if "identities" in args:
         identities = args["identities"]
         if not isinstance(identities, list) or not identities or len(identities) > n.MAX_ENTRIES:
@@ -96,9 +132,9 @@ def _row(handle: store.NamespaceHandle, operation_id: str) -> dict[str, Any] | N
 
 
 def _raise_saved(handle: store.NamespaceHandle, row: dict[str, Any]) -> None:
-    error = n._decode(row["terminal_error"])
+    error = n._terminal_error(n._decode(row["terminal_error"]))
     n._authorize(handle.session, "acknowledge")
-    raise n.NamespaceError(**error) from None
+    raise error from None
 
 
 def _replay(handle: store.NamespaceHandle, row: dict[str, Any]) -> n.MutationResult:
@@ -118,21 +154,31 @@ def prepare(
     request: dict[str, Any],
     *,
     evidence_present: bool = False,
-    publication=None,
+    publications=None,
+    snapshot: n.SnapshotRecord | None = None,
     rejection: str | None = None,
 ) -> None:
     info = handle.load_info()
     if info.revision == n.MAX_INTEGER:
         n._refuse("namespace-revision-exhausted")
     identity = request["operation_id"]
-    if handle.db.execute(
-        "SELECT 1 FROM entry_reservations WHERE entry_id=?", (identity,)
-    ).fetchone() or identity in {info.namespace_id, info.database_generation}:
+    if (
+        handle.db.execute(
+            "SELECT 1 FROM entry_reservations WHERE entry_id=?", (identity,)
+        ).fetchone()
+        or handle.db.execute(
+            "SELECT 1 FROM snapshot_reservations WHERE snapshot_id=?", (identity,)
+        ).fetchone()
+        or identity in {info.namespace_id, info.database_generation}
+    ):
         n._refuse()
     receipt: dict[str, Any] = {
         "receipt": handle._ownership(request, info),
         "expiry": {},
-        "publication": {"request": asdict(publication), "receipt": None} if publication else None,
+        "publication": [
+            {"request": asdict(item), "receipt": None} for item in (publications or [])
+        ],
+        "snapshot": asdict(snapshot) if snapshot else None,
         "precondition_error": rejection,
     }
     if request["kind"] == "expire-results":
@@ -146,6 +192,8 @@ def prepare(
                         (directory / "request.json").read_bytes()
                     ).hexdigest(),
                 }
+    content_io.check_capacity(receipt)
+    encoded_receipt = content_io.encode_recipe(receipt)
     handle.db.execute("BEGIN IMMEDIATE")
     handle.operation_id = identity
     handle.write_started = True
@@ -155,7 +203,7 @@ def prepare(
         (
             identity,
             n._fingerprint(request),
-            "staging" if publication is not None or rejection is not None else "prepared",
+            "staging" if publications or rejection is not None else "prepared",
             info.revision,
             None,
             None,
@@ -163,7 +211,7 @@ def prepare(
             n.canonical_bytes(request).decode(),
             None,
             None,
-            n.canonical_bytes(receipt).decode(),
+            encoded_receipt,
             None,
         ),
     )
@@ -195,17 +243,15 @@ def execute(
         if value["expected_revision"] != info.revision
         else None
     )
-    data = None
+    data = {}
+    snapshot = None
     if rejection is None:
-        # Retained outcomes and fresh binding/revision precede caller transport.
-        data = content_io.source(value, sources)
+        data = content_io.source(handle, value, sources)
         try:
-            _changes(
-                handle,
-                value,
-                info,
-                available=value["args"].get("content") if data is not None else None,
-            )
+            _changes(handle, value, info, available={key: len(raw) for key, raw in data.items()})
+            if value["kind"] == "snapshot":
+                snapshot, raw = snapshots.capture(handle, value["args"]["snapshot_id"])
+                data = {snapshot.cas_id: raw}
         except n.NamespaceError as error:
             if error.code in {
                 "namespace-storage-recovery-required",
@@ -213,13 +259,13 @@ def execute(
             }:
                 raise
             rejection = error.code
-    descriptor = value["args"].get("content")
-    publication = None
-    if rejection is None and descriptor is not None and descriptor["cas_id"] not in handle.objects:
-        publication = content_io.new_request(handle, value)
-    prepare(handle, value, publication=publication, rejection=rejection)
-    if publication is not None:
-        content_io.write_stage(handle, publication, data)
+    publications = content_io.new_requests(handle, value, data) if rejection is None else []
+    prepare(handle, value, publications=publications, snapshot=snapshot, rejection=rejection)
+    if snapshot is not None:
+        handle.pending_captures[(value["operation_id"], snapshot)] = data[snapshot.cas_id]
+    if publications:
+        for item in publications:
+            content_io.write_stage(handle, item, data[item.cas_id])
         content_io.promote(handle, value["operation_id"])
     return finish(handle, value["operation_id"])
 
@@ -254,12 +300,18 @@ def _changes(
     request: dict[str, Any],
     info: n.NamespaceInfo,
     *,
-    available: dict[str, Any] | None = None,
+    available: dict[str, int] | None = None,
 ) -> tuple[dict[str, n.EntryRecord], set[str]]:
     entries = handle.entries()
     kind, args = request["kind"], request["args"]
     revision = info.revision + 1
     affected: set[str] = set()
+    verified_content = set()
+
+    def verify_content(identity: str, size: int) -> None:
+        if (identity, size) not in verified_content:
+            _content(handle, identity, size)
+            verified_content.add((identity, size))
 
     def entry(identity: str) -> n.EntryRecord:
         if identity not in entries:
@@ -279,6 +331,9 @@ def _changes(
             or handle.db.execute(
                 "SELECT 1 FROM operations WHERE operation_id=?", (identity,)
             ).fetchone()
+            or handle.db.execute(
+                "SELECT 1 FROM snapshot_reservations WHERE snapshot_id=?", (identity,)
+            ).fetchone()
         ):
             n._refuse("namespace-request-invalid")
 
@@ -286,8 +341,8 @@ def _changes(
         fresh(args["entry_id"])
         parent(args["parent_id"])
         content = args.get("content")
-        if content is not None and content != available:
-            _content(handle, content["cas_id"], content["size"])
+        if content is not None and (available or {}).get(content["cas_id"]) != content["size"]:
+            verify_content(content["cas_id"], content["size"])
         added = n.EntryRecord(
             args["entry_id"],
             "file" if content is not None else "directory",
@@ -307,8 +362,8 @@ def _changes(
         if source.kind != "file":
             n._refuse("namespace-kind-mismatch")
         content = args["content"]
-        if content != available:
-            _content(handle, content["cas_id"], content["size"])
+        if (available or {}).get(content["cas_id"]) != content["size"]:
+            verify_content(content["cas_id"], content["size"])
         entries[source.entry_id] = replace(
             source, cas_id=content["cas_id"], size=content["size"], changed_revision=revision
         )
@@ -360,6 +415,28 @@ def _changes(
                     changed_revision=revision,
                 )
                 affected.add(new)
+    elif kind == "import-folder":
+        parent(args["parent_id"])
+        incoming = {item["entry_id"]: item for item in args["entries"]}
+        for item in incoming.values():
+            fresh(item["entry_id"])
+        for item in incoming.values():
+            target = item["parent_id"]
+            if target != args["parent_id"]:
+                if target not in incoming:
+                    n._refuse(
+                        "namespace-request-invalid"
+                        if target in entries
+                        else "namespace-entry-missing"
+                    )
+                if incoming[target]["kind"] != "directory":
+                    n._refuse("namespace-kind-mismatch")
+            if item["cas_id"] is not None and (available or {}).get(item["cas_id"]) != item["size"]:
+                verify_content(item["cas_id"], item["size"])
+            entries[item["entry_id"]] = n.EntryRecord(**item, changed_revision=revision)
+            affected.add(item["entry_id"])
+    elif kind in {"snapshot", "delete-snapshot"}:
+        snapshots.precondition(handle, request)
     elif kind != "expire-results":
         n._refuse()
     if len(affected) > n.MAX_ENTRIES:
@@ -397,7 +474,7 @@ def cleanup_expired(handle: store.NamespaceHandle, row: dict[str, Any]) -> None:
     request = n._decode(row["canonical_request"])
     if request["kind"] != "expire-results":
         return
-    recipe = n._decode(row["ownership_receipt"])["expiry"]
+    recipe = content_io.decode_recipe(row["ownership_receipt"])["expiry"]
     for identity, expected in recipe.items():
         target = _row(handle, identity)
         if target is None or target["state"] != "retired":
@@ -428,7 +505,7 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
         n._refuse("namespace-storage-recovery-required")
     if row["state"] not in {"staging", "prepared"}:
         return _replay(handle, row)
-    recipe, publication = content_io.recipe(handle, row)
+    recipe, publications = content_io.recipe(handle, row)
     request = n._decode(row["canonical_request"])
     reconstructed = n.MutationRequest(
         request["namespace_id"],
@@ -442,7 +519,7 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
         n._refuse("namespace-storage-recovery-required")
     info = handle.load_info()
     rejection = None
-    publication_receipt = None
+    publication_receipt = handle.publication_receipts.get(operation_id, [])
     try:
         if recipe["precondition_error"] is not None:
             n._refuse(recipe["precondition_error"])
@@ -454,10 +531,8 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
             n._refuse("namespace-binding-mismatch")
         if request["expected_revision"] != info.revision:
             n._refuse("namespace-revision-conflict")
-        _changes(
-            handle, request, info, available=request["args"].get("content") if publication else None
-        )
-        if publication is not None:
+        _changes(handle, request, info, available={item.cas_id: item.size for item in publications})
+        if publications:
             publication_receipt = handle.publication_receipts.get(operation_id)
             if publication_receipt is None:
                 publication_receipt = content_io.publish(handle, row)
@@ -470,7 +545,7 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
             "namespace-protection-unsupported",
         }:
             raise
-        if publication_receipt is not None:
+        if publication_receipt:
             # A published command cannot become a durable domain rejection.
             n._refuse("namespace-storage-recovery-required")
         rejection = n.NamespaceError(
@@ -481,6 +556,8 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
     handle.write_started = True
     handle.effect = "recovery-required"
     handle.db.execute("BEGIN IMMEDIATE")
+    if rejection is None:
+        content_io.save_receipt(handle, row, publication_receipt)
     if rejection is None:
         old_entries = handle.entries()
         # Vacate affected live names first; no observer sees intermediate rows.
@@ -497,6 +574,7 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
                 handle.write_entry(old_entries[identity], live=False)
         if request["kind"] == "expire-results":
             _expire(handle, request, completed)
+        snapshot_result = snapshots.commit(handle, request, recipe["snapshot"])
         result = n.MutationResult(
             info.namespace_id,
             operation_id,
@@ -505,7 +583,7 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
             info.revision,
             info.revision + 1,
             sorted(affected),
-            None,
+            snapshot_result,
             info.cas,
         )
         handle.db.execute(
@@ -526,8 +604,6 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
             }
         ).decode()
         handle.db.execute("UPDATE namespace SET service_state='ready'")
-    if rejection is None:
-        content_io.save_receipt(handle, row, publication_receipt)
     handle.db.execute(
         (
             "UPDATE operations SET "
@@ -548,8 +624,15 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
     handle.db.executemany(
         "INSERT INTO dependencies VALUES (?,?,?,?)", sorted(operation_dependencies(handle))
     )
+    handle.db.execute("DELETE FROM dependencies WHERE owner_kind='snapshot'")
+    handle.db.executemany(
+        "INSERT INTO dependencies VALUES (?,?,?,?)", sorted(snapshots.dependencies(handle))
+    )
     n._authorize(handle.session, request["kind"])
     store._commit(handle.db)
+    handle.publication_receipts.pop(operation_id, None)
+    for key in [key for key in handle.pending_captures if key[0] == operation_id]:
+        del handle.pending_captures[key]
     handle.effect = "none" if rejection else "namespace-committed"
     cleanup_expired(handle, _row(handle, operation_id))
     content_io.cleanup(handle, _row(handle, operation_id))
@@ -560,7 +643,12 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
     return result
 
 
-def read(handle: store.NamespaceHandle, request: n.ReadRequest) -> n.ReadResult:
+def read(
+    handle: store.NamespaceHandle,
+    request: n.ReadRequest,
+    *,
+    destination: n.SnapshotDestination | None = None,
+) -> n.ReadResult:
     n._authorize(handle.session, "read")
     if type(request) is not n.ReadRequest or type(request.expected_cas) is not n.StoreIdentity:
         n._refuse()
@@ -574,6 +662,8 @@ def read(handle: store.NamespaceHandle, request: n.ReadRequest) -> n.ReadResult:
         "get-entry": {"entry_id"},
         "list-directory": {"entry_id"},
         "resolve": {"components"},
+        "inspect-snapshot": {"snapshot_id"},
+        "export-snapshot": {"snapshot_id"},
     }
     if (
         not isinstance(kind, str)
@@ -582,6 +672,10 @@ def read(handle: store.NamespaceHandle, request: n.ReadRequest) -> n.ReadResult:
         or set(args) != expected[kind]
     ):
         n._refuse()
+    if (kind == "export-snapshot") != (destination is not None):
+        n._refuse()
+    if "snapshot_id" in args:
+        n._uuid(args["snapshot_id"])
     if "entry_id" in args:
         n._uuid(args["entry_id"])
     if kind == "resolve":
@@ -598,7 +692,12 @@ def read(handle: store.NamespaceHandle, request: n.ReadRequest) -> n.ReadResult:
                 "namespace-revision-conflict", info.namespace_id, actual_revision=info.revision
             )
         entries = handle.entries()
-        if kind == "info":
+        if kind in {"inspect-snapshot", "export-snapshot"}:
+            record = snapshots.catalog(handle, args["snapshot_id"])
+            result = n.SnapshotView(
+                record, snapshots.decode(handle, record, expected_origin={"kind": "capture"})
+            )
+        elif kind == "info":
             result = info
         elif kind == "resolve":
             result = entries[info.root_id]
@@ -625,7 +724,11 @@ def read(handle: store.NamespaceHandle, request: n.ReadRequest) -> n.ReadResult:
                     key=lambda e: (n._key(e.name), e.entry_id),
                 )
         n.canonical_bytes(
-            n._plain(result) if not isinstance(result, list) else [asdict(e) for e in result],
+            result.manifest
+            if isinstance(result, n.SnapshotView)
+            else n._plain(result)
+            if not isinstance(result, list)
+            else [asdict(e) for e in result],
             limit=n.MAX_MANIFEST_BYTES,
         )
         handle.db.execute("COMMIT")
@@ -683,10 +786,12 @@ def operation_dependencies(handle: store.NamespaceHandle) -> set[tuple[str, str,
     expected = set()
     for (identity,) in handle.db.execute("SELECT operation_id FROM operations").fetchall():
         row = _row(handle, identity)
-        if row["state"] == "retired":
+        if row["state"] not in {"committed", "rejected"}:
             continue
         request = n._decode(row["canonical_request"])
-        content_ids = set()
+        content_ids = set(content_io.specs(request))
+        value = content_io.decode_recipe(row["ownership_receipt"])
+        content_ids.update(item["request"]["cas_id"] for item in value["publication"])
         if row["state"] == "committed":
             result = n._result(n._decode(row["terminal_result"]))
             content_ids.update(
@@ -694,10 +799,11 @@ def operation_dependencies(handle: store.NamespaceHandle) -> set[tuple[str, str,
                 for key in result.affected_entry_ids
                 if key in entries and entries[key].cas_id is not None
             )
-        if request["kind"] in {"create-file", "replace-content"} and row["state"] in {
-            "committed",
-            "rejected",
-        }:
-            content_ids.add(request["args"]["content"]["cas_id"])
+            if result.snapshot:
+                content_ids.add(result.snapshot.cas_id)
+            if request["kind"] == "delete-snapshot":
+                content_ids.add(
+                    snapshots.catalog(handle, request["args"]["snapshot_id"], live=False).cas_id
+                )
         expected.update(("operation", identity, cas_id, "request-result") for cas_id in content_ids)
     return expected

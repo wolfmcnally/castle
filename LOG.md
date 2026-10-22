@@ -834,3 +834,123 @@ Lessons:
 - Read-only timeout diagnostics contain536 historical incomplete/malformed schema-3 samples; all diagnostic lines were matched to that exact condition. No target reaches30 valid samples and no configuration change follows.
 
 Sanitized offline report generation follows. The separate bare full handoff gate and verified local-only commit remain pending at this append-only record; no push, publication or live-store operation.
+
+## 2026-10-22 02:55 — START
+
+Phase 5 — Frozen folder admission and explicit snapshots
+
+Execution trace: b4d3475515e143119de6be33b992253d
+
+Planned work:
+- Add the proposed `project/castle/namespace_snapshots.py` and `project/castle/namespace_onboarding.py` owners; extend the public namespace API with the contract-defined frozen import and snapshot commands. Import explicit empty directories and complete accepted path-to-content membership atomically; reject source changes and destination/name collisions as a unit.
+- Serialize canonical snapshot manifests with version/policy/Unicode identity, complete tree, protected CAS binding, and captured revision. Capture revision R under the mutation lock; publish the immutable payload and snapshot association/result at R+1 using durable intents. Track dependencies separately from ordinary searchable source documents.
+- Provide snapshot inspection and authorized export selection, reference deletion, and retention discovery. Historic views exist only for explicitly retained snapshots. Snapshot-to-current-state restoration and automatic per-edit archives remain excluded.
+- Onboard into a new disjoint authority only after an explicit accepted seed. Inventory all sightings and independently supplied consumer selections; report ambiguous versions, roots, collisions, and unknown membership. Refuse timestamp/first-sighting winner selection, invented historical empty folders, unsupported versions, and implicit bootstrap during reads.
+- Add `project/tests/test_namespace_snapshots.py` and `project/tests/test_namespace_onboarding.py` with independent manifests, explicit folder inventories, ambiguous historical associations, and unsupported format fixtures.
+
+Authorization: operator separately approved sequential Phases5–7 on 2026-10-22 UTC after Phase4 qualification. Phase4 is delivered locally; current Phase5 uses the same retained sole writer, synthetic local stores only, full review/evidence lanes and Sol inline primary with opposite-harness Opus/high advice. Delivery restriction: “Local commits only for now.” No live data, new access/grants/credentials, public or remote publication, duplicate workers or release. Later excision/qualification remain separate sequential phases.
+
+## 2026-10-22 04:38 — END
+Phase 5 — Atomic folder admission, snapshots and explicit seed
+
+Castle now admits a complete frozen folder in one namespace transaction, including new file bytes and empty directories. It captures immutable snapshots, exports authorized member bytes and deletes snapshot references while retaining their content. Optional seed inspection preserves all ambiguous historical associations; only an explicit fresh revision-zero request creates current authority. The public disposable workflow passes through these behaviors. No operator decision is needed for the separately approved synthetic excision/recovery and consumer qualification sequence.
+
+Execution trace: b4d3475515e143119de6be33b992253d
+Baseline: e5a4aca4c8faf58de3dcfa6aafbd58be2ef91da2.
+
+Files changed:
+- `project/castle/namespace_snapshots.py`, `project/castle/namespace_onboarding.py` — deterministic typed snapshot/catalog/export and ambiguity-preserving explicit seed owners.
+- `project/castle/namespace.py`, `namespace_store.py`, `namespace_transactions.py`, `namespace_content.py` — frozen forest validation, multi-publication ownership/recovery, complete dependency/result joins and scoped callback admission.
+- `project/tests/test_namespace.py`, new snapshot/onboarding helper modules and `tests/proof-estate.yaml` — strengthen two existing collected semantic/restart families; no new proof family, leaf, budget, admission or reset.
+- Public example and both README files — actual folder bytes, empty directory, snapshot inspection/export/reference deletion and exact seed/qualification limits.
+- Ledger, log, finalized execution evidence, downstream Phase6/7 pins, scoped user-action disposition, provisional lesson and sanitized report — close bookkeeping still pending at this accepted implementation record.
+
+Build status:
+- Final affected selection3 passed52.74s; final semantic family1 passed11.19s; targeted unsupported-format and isolated semantic controls passed1.52s. Four original defect probes now reject malformed saved revisions and inherited readers, and allow the intended nested destination CAS lock. Lint,89-file format, focused policy/proof and delivery checks pass.
+- Candidate-bound public workflow completes at revision12 with actual new bytes, empty directories, atomic duplicate/replace/import, snapshot member export and reference deletion. No direct SQL workflow seed.
+- Complete candidate sequence ends in `./bin/check all`; exact gate rows and reviewed full diagnostics are retained, zero warnings. Product and full-tree identity remain unchanged, command-zero and acceptance evidence pass. Separate bare handoff gate/local commit remain pending after all tracked close writes.
+
+Review lane: full, primary advisory. Evidence lane: full. Follow-up route: initial implementation with bounded advice-driven corrections and fresh executable falsifiers.
+
+Role model/venue — orchestrated by Codex:
+- Planner/coder requested Sol6.1/high inline; observed model, effort and harness version unreported. Same sole writer.
+- Independent plan/code advice requested latest Opus/high under Claude; observed model claude-opus-5-5 and harness version2.1.308 from each actual initialization event; observed effort unreported. Real-read configuration-bound preflight passed.
+- One plan report15 findings and one actual current code report11 findings have26 explicit primary dispositions. Historical phase-wide code pass1 remains. Current code attempt1 was rejected before dispatch for missing second-pass cause; original registration/empty streams/log preserved. One documented supported immutable attempt2 consumed the remaining physical code pass2 and finished normally. No further code allowance remains; no reset or replacement reviewer occurred.
+- A local disposition helper initially assumed report ID code-1; the immutable report actually is code-2. The failed helper/log and already-appended plan paragraph were preserved; correction resumed only the remaining exact-ID bookkeeping and passed without duplicate plan growth, dispatch or allowance change.
+- Ordinary source fixes retain the qualified low-level publisher unchanged: fresh seed revision guard, member/process/thread/receipt-bound export with refusal latch, CAS lock released only during callback under continued domain/admission ownership, fixed stored schema/counters, isolated foreign-manifest proof controls, receipt-cache recovery guard and descriptor/lifecycle parity. Full publisher/prefix checks remain; bounded per-pass caches avoid repeated identical work without a scale qualification claim.
+
+Candidate-bound evidence:
+- Accepted product: 8f2b1094bbae3b16a6087206281230dd560a204a3457cebbb51308f1bdad4ad9
+- Unchanged implementation full tree: 8e7ba3d96127c6c1e1609e94dbbfbdc278150d0362e9b00fcb52a636aa4969b1
+- Two actual managed final gate executions; diagnostic observations are not additional runs. No revision packet or reopened advice.
+- Proof estate remains163 families/218 leaves with frozen budgets; no new effectiveness assay claimed.
+
+### Execution timing
+
+Execution trace: b4d3475515e143119de6be33b992253d
+- Outcome: `success`
+- Makespan: 6170997607292 ns (6170.997607292 s)
+- Intelligence: 959381572042 ns (959.381572042 s)
+- Gates: 198471642958 ns (198.471642958 s)
+- Orchestration: 6170534206083 ns (6170.534206083 s)
+- Wait: 958036501875 ns (958.036501875 s)
+- Retry/rework: 588404764917 ns (588.404764917 s)
+- Failed work: 447044917 ns (0.447044917 s)
+- Unattributed: 463401209 ns (0.463401209 s)
+- Category totals are interval unions and may overlap.
+
+#### Slowest material spans
+
+- `orchestration.implementation` — category `reconciliation`, attempt 1, outcome `success`: 5157043062667 ns (5157.043062667 s)
+- `orchestration.planning` — category `reconciliation`, attempt 1, outcome `success`: 700924959416 ns (700.924959416 s)
+- `role.code-review` — category `intelligence`, attempt 2, outcome `success`: 588404764917 ns (588.404764917 s)
+- `role.code-review` — category `wait`, attempt 2, outcome `success`: 587977751792 ns (587.977751792 s)
+- `role.plan-review` — category `intelligence`, attempt 1, outcome `success`: 370529762208 ns (370.529762208 s)
+
+
+Acceptance:
+- Objective: complete forest/empty-directory atomicity, immutable source capture, pre-reservation capacity and all-stage-before-publication ordering; last-started-first multi-publication repair; exact rows/UUID reservations/results/dependencies/revision; equal-revision and identical-request concurrency; snapshot captureR/catalogR+1 and exact canonical bytes; retained catalog deletion; strict capture/redacted schema and coherent foreign/corrupt refusal; authorized scoped export after SQL read ends; explicit ambiguity-preserving CAS-only inspection and revision-zero seed; real child-death, persistent stage/fsync and uncertain SQL faults/reopen. These are synthetic local executable claims, independently advised and bound to the final candidate.
+- Parked for the operator: no interactive Phase5 demo. Hardware power-loss, actual protected adapter deployment and external-copy custody are unqualified. Actual successor-bound redaction/excision and filesystem/CLI export qualification remain required approved later work.
+
+Material limits:
+- Seed inspection reports raw associations, not recommended winners. Its optional control-artifact proxy can reject a legitimate archived snapshot manifest; source observations remain available for explicit selection. No implicit migration/conversion or public retention inventory is introduced.
+- Export may leave caller-owned external partial output on failure; no atomic external publication is claimed by the callback. Reader refusals cannot be swallowed into success. The safe filesystem destination belongs to Phase7.
+- Private ownership uses an ordered publication array and nullable snapshot record with one internal future-receipt bound, not a new public payload limit. Snapshot records retain payload/member dependencies after reference deletion. Unreferenced CAS residue is no GC authorization.
+- Missing/torn first publication evidence still has no automatic repair: preserve unknown residue and fail closed. Plain fsync/directory sync and process-loss tests do not establish a Darwin device-cache flush or hardware power-loss guarantee. No distributed atomicity or encryption deployment is implied.
+
+Delivery: restricted — “Local commits only for now.” Synthetic stores only; no live cleanup, new access, public/remote publication, credentials changes or duplicate workers. Handoff gate and exact clean local commit remain pending at this record.
+
+Ripple:
+- AUTO pending: exact Phase5 completion ledger, preserving the historical release arrow; initiative narrative distinguishes delivered snapshot/folder behavior from still-pending6–7.
+- AUTO pending: Phase6 actual test-family selector, complete publication/snapshot/deleted-catalog disclosure closure and rebuilt generation caches; Phase7 exact typed callback/seed surface, current revision12 public workflow and remaining filesystem adapter.
+- AUTO pending: scoped adoption note removes a redundant gate on the approved synthetic sequence while retaining protected deployment, real custody and future product-limit decisions.
+- Accepted layout deviation: the planned optional transaction test file is absent. Existing two namespace families invoke the new helper modules directly; actual gates exercise their cases, and pending selectors use their owning family. Completed phase prose and captured authority remain unchanged.
+- DECIDE:none for this close. Phases6–7 were separately approved on2026-10-22; release/publication, actual protected deployment and live data remain outside scope.
+
+Lessons:
+- Pending candidate `girlish-flounder`, methodology/skill: inspect exact phase-wide advisory claims before first current dispatch; a fresh run is not a fresh allowance. One observation, no graduation or policy/tool change. Earlier four candidates remain intact.
+- Existing allocation-before-files, canonical environment and terminal Lessons rules cover other bounded process errors; runtime mistakes have executable prevention in existing proof families. All failed/rejected artifacts remain retained. Read-only timeout recommendations do not change budgets; 536 historical incomplete/malformed schema-3 sample diagnostics were inspected and retained, not accepted as valid samples; no target reaches30 valid samples.
+
+User Demo: N/A — library admission/history lands here; the command/export workflow is demonstrated in Phase 7.
+
+Test protocol:
+- Run `./bin/python project/examples/namespace_demo.py`. Expected: disposable complete folder/snapshot workflow, exported exact member bytes, preserved empty directory, logical reference deletion and final revision12.
+- Run `./bin/test project/tests/test_namespace.py project/tests/test_cas_recovery.py`. Expected: retained concurrency/interruption/refusal families pass on synthetic stores. These are not real-store purge or hardware tests.
+
+Remaining:
+- Apply/verify the accepted completion ledger and prepared AUTO bookkeeping, file/validate the provisional lesson, append actual outcomes and sanitized report; then run the separate bare full handoff gate and verify a clean local-only commit.
+- Continue approved Phase6 excision/recovery then Phase7 consumer qualification with their own historical budgets, reviews and gates. Missing platform access parks only the dependent claim. No release or external adoption is claimed.
+
+## 2026-10-22 04:38 — END (bookkeeping)
+
+Phase 5 — Atomic folder admission, snapshots and explicit seed
+
+The accepted exact completion ledger was applied and verified before AUTO edits. Phase6 now names the actual collected namespace proof family, ordered publication/snapshot disclosure inventory, retained catalog dependencies and generation-cache rebuild obligation. Phase7 pins the typed member-byte export callback, explicit seed boundary and revision12 public disposable workflow; filesystem export/CLI remain pending. The initiative and pending user-action note record scoped synthetic adoption without a redundant approval gate or claims about actual protected deployment, real-store custody or release. The historical release arrow and every completed phase authority remain unchanged.
+
+Execution trace: b4d3475515e143119de6be33b992253d
+
+Lessons:
+- Filed candidate `girlish-flounder`, methodology/skill, one occurrence: inspect exact phase-wide advisory allowance before the current first dispatch. No rule graduated, no review counters reset. All five candidates validate with none graduation-ready. Earlier failures/rejected drafts, immutable report IDs and original source remain retained.
+- Read-only timeout analysis retained536 existing incomplete/malformed schema-3 diagnostics; every line was inspected against that exact condition. No target has30 valid samples and no configuration changes follow.
+
+Sanitized offline report generation follows. The separate bare full handoff gate and verified local-only commit remain pending; no push, live-store operation, new access or release publication.

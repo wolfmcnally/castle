@@ -319,11 +319,102 @@ def main() -> None:
             print(
                 "Duplicate retry status:", n.namespace_operation(handle, request.operation_id).state
             )
+            imported_folder, imported_empty, imported_file = identity(), identity(), identity()
+            imported_bytes = b"New bytes in one atomic imported forest.\n"
+            imported_id = "sha256:" + hashlib.sha256(imported_bytes).hexdigest()
+            inventory = [
+                {
+                    "entry_id": imported_folder,
+                    "kind": "directory",
+                    "parent_id": info.root_id,
+                    "name": "Imported folder",
+                    "metadata": {},
+                    "cas_id": None,
+                    "size": None,
+                },
+                {
+                    "entry_id": imported_empty,
+                    "kind": "directory",
+                    "parent_id": imported_folder,
+                    "name": "Explicit empty",
+                    "metadata": {},
+                    "cas_id": None,
+                    "size": None,
+                },
+                {
+                    "entry_id": imported_file,
+                    "kind": "file",
+                    "parent_id": imported_folder,
+                    "name": "New file.txt",
+                    "metadata": {},
+                    "cas_id": imported_id,
+                    "size": len(imported_bytes),
+                },
+            ]
+            admitted = n.execute_namespace(
+                handle,
+                mutation(
+                    handle,
+                    "import-folder",
+                    {"parent_id": info.root_id, "entries": list(reversed(inventory))},
+                ),
+                {imported_id: imported_bytes},
+            )
+            assert set(admitted.affected_entry_ids) == {
+                imported_folder,
+                imported_empty,
+                imported_file,
+            }
+            show(handle, "Atomically admitted folder:", imported_folder)
+            snapshot_request = mutation(handle, "snapshot", {"snapshot_id": identity()})
+            captured = n.execute_namespace(handle, snapshot_request, {})
+            record = captured.snapshot
+            view = n.read_namespace(
+                handle,
+                n.ReadRequest(
+                    info.namespace_id,
+                    info.cas,
+                    None,
+                    "inspect-snapshot",
+                    {"snapshot_id": record.snapshot_id},
+                ),
+            ).value
+            assert view.snapshot.captured_revision == admitted.revision_after
+            assert captured.revision_after == admitted.revision_after + 1
+            assert {row["entry_id"] for row in view.manifest["entries"]} >= set(
+                admitted.affected_entry_ids
+            )
+
+            class Destination:
+                def publish(self, view, manifest_bytes, read_content):
+                    assert read_content(imported_id) == imported_bytes
+                    print("Authorized snapshot member bytes:", read_content(imported_id))
+                    return n.ExportReceipt(view.snapshot.snapshot_id, view.snapshot.cas_id)
+
+            exported = n.read_namespace(
+                handle,
+                n.ReadRequest(
+                    info.namespace_id,
+                    info.cas,
+                    None,
+                    "export-snapshot",
+                    {"snapshot_id": record.snapshot_id},
+                ),
+                destination=Destination(),
+            ).value
+            assert exported.cas_id == record.cas_id
+            assert n.execute_namespace(handle, snapshot_request, {}) == captured
+            n.execute_namespace(
+                handle, mutation(handle, "delete-snapshot", {"snapshot_id": record.snapshot_id}), {}
+            )
+            assert cas.object_path(cas_root, record.cas_id).is_file()
+            print("Snapshot captured revision:", record.captured_revision)
+            print("Snapshot catalog removed; immutable bytes remain retained.")
             print("Committed revision:", handle.info().revision)
         print(
             (
-                "Only disposable unprotected roots were used; folder import, snapshots "
-                "and excision are deferred."
+                "Only disposable unprotected roots were used; epoch excision and protected "
+                "deployment remain separate qualification."
             )
         )
 

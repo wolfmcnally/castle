@@ -99,6 +99,34 @@ def _regular(file: Path) -> None:
         n._refuse("namespace-root-unsafe")
 
 
+def _descriptor(
+    session: n.AuthorizedSession, namespace_root: Path, cas_root: Path
+) -> n.CapabilityDescriptor:
+    descriptor = session.describe_capabilities()
+    if type(descriptor) is not n.CapabilityDescriptor:
+        n._refuse("namespace-protection-unsupported")
+    properties = descriptor.properties
+    if (
+        not isinstance(descriptor.protection_domain_id, str)
+        or not descriptor.protection_domain_id
+        or descriptor.capability_id is not None
+        or not isinstance(properties, tuple)
+        or len(set(properties)) != len(properties)
+        or not n.REQUIRED_PROPERTIES <= set(properties)
+        or set(properties) != n.REQUIRED_PROPERTIES
+        or descriptor.namespace_root != namespace_root
+        or descriptor.cas_root != cas_root
+    ):
+        n._refuse("namespace-protection-unsupported")
+    if (
+        namespace_root == cas_root
+        or namespace_root in cas_root.parents
+        or cas_root in namespace_root.parents
+    ):
+        n._refuse("namespace-root-unsafe")
+    return descriptor
+
+
 def _policy(policy: object) -> None:
     if policy != {"policy_version": 1, "unicode_data_version": n.unicodedata.unidata_version}:
         n._refuse("namespace-format-unsupported")
@@ -154,17 +182,9 @@ def _tree(info: n.NamespaceInfo, entries: dict[str, n.EntryRecord]) -> None:
         pending.extend(children.get(current, []))
     if visited != set(entries):
         n._refuse("namespace-cycle")
-    manifest = {
-        "schema": "castle.namespace_snapshot.v1",
-        "namespace_id": info.namespace_id,
-        "policy": info.policy,
-        "captured_revision": info.revision,
-        "root_id": info.root_id,
-        "cas_binding": asdict(info.cas),
-        "origin": {"kind": "capture"},
-        "entries": [asdict(entries[key]) for key in sorted(entries)],
-    }
-    n.canonical_bytes(manifest, limit=n.MAX_MANIFEST_BYTES)
+    from castle.namespace_snapshots import manifest
+
+    n.canonical_bytes(manifest(info, entries), limit=n.MAX_MANIFEST_BYTES)
 
 
 class NamespaceHandle:
@@ -199,6 +219,9 @@ class NamespaceHandle:
         self.effect = "none"
         self.objects = {}
         self.publication_receipts = {}
+        self.snapshot_cache = {}
+        self.pending_captures = {}
+        self.exporting = False
         if initialize is not None and (
             type(initialize) is not n.InitializeRequest
             or initialize.protection != {"kind": "unprotected"}
@@ -211,29 +234,7 @@ class NamespaceHandle:
             self.cas_root = self.cas_root.resolve(strict=True)
             cas_stat = self.cas_root.stat()
             self.cas_root_inode = (cas_stat.st_dev, cas_stat.st_ino)
-            descriptor = session.describe_capabilities()
-            if type(descriptor) is not n.CapabilityDescriptor:
-                n._refuse("namespace-protection-unsupported")
-            properties = descriptor.properties
-            if (
-                not isinstance(descriptor.protection_domain_id, str)
-                or not descriptor.protection_domain_id
-                or descriptor.capability_id is not None
-                or not isinstance(properties, tuple)
-                or len(set(properties)) != len(properties)
-                or not n.REQUIRED_PROPERTIES <= set(properties)
-                or set(properties) != n.REQUIRED_PROPERTIES
-                or descriptor.namespace_root != self.root
-                or descriptor.cas_root != self.cas_root
-            ):
-                n._refuse("namespace-protection-unsupported")
-            self.descriptor = descriptor
-            if (
-                self.root == self.cas_root
-                or self.root in self.cas_root.parents
-                or self.cas_root in self.root.parents
-            ):
-                n._refuse("namespace-root-unsafe")
+            self.descriptor = _descriptor(session, self.root, self.cas_root)
             if initialize is not None:
                 if self.root.exists():
                     if not self.root.is_dir() or any(self.root.iterdir()):
@@ -596,11 +597,11 @@ class NamespaceHandle:
         unknown files, links or wrong authority remain a refusal.
         """
         request = n._decode(row["canonical_request"])
-        recipe = n._decode(row["ownership_receipt"])
+        recipe = content_io.decode_recipe(row["ownership_receipt"])
         expected = self._ownership(request, self.load_info())
         if (
             not isinstance(recipe, dict)
-            or set(recipe) != {"receipt", "expiry", "publication", "precondition_error"}
+            or set(recipe) != {"receipt", "expiry", "publication", "precondition_error", "snapshot"}
             or recipe["receipt"] != expected
         ):
             n._refuse("namespace-storage-recovery-required")
@@ -927,30 +928,55 @@ class NamespaceHandle:
                     or result.cas_binding != info.cas
                     or result.revision_after != result.revision_before + 1
                     or result.revision_after > info.revision
+                    or result.revision_before != row["prepared_revision"]
+                    or result.revision_after != row["terminal_revision"]
                     or result.affected_entry_ids != sorted(set(result.affected_entry_ids))
                 ):
                     n._refuse("namespace-storage-recovery-required")
+                if request["kind"] == "snapshot":
+                    from castle import namespace_snapshots as snapshots
+
+                    saved = n._snapshot(
+                        content_io.decode_recipe(row["ownership_receipt"])["snapshot"]
+                    )
+                    if (
+                        result.snapshot != saved
+                        or saved.snapshot_id != request["args"]["snapshot_id"]
+                        or saved.captured_revision != result.revision_before
+                        or snapshots.catalog(self, saved.snapshot_id, live=False) != saved
+                    ):
+                        n._refuse("namespace-storage-recovery-required")
+                elif result.snapshot is not None:
+                    n._refuse("namespace-storage-recovery-required")
             if row["state"] == "rejected":
-                error = n._decode(row["terminal_error"])
+                error = n._terminal_error(n._decode(row["terminal_error"]))
                 if (
-                    error.get("namespace_id") != info.namespace_id
-                    or error.get("operation_id") != identity
-                    or error.get("code") not in n._CODES
-                    or error.get("effect") != "none"
+                    error.namespace_id != info.namespace_id
+                    or error.operation_id != identity
+                    or error.actual_revision != row["prepared_revision"]
+                    or row["terminal_revision"] != row["prepared_revision"]
                 ):
                     n._refuse("namespace-storage-recovery-required")
+
         if set(
             self.db.execute("SELECT * FROM dependencies WHERE owner_kind='operation'")
         ) != transactions.operation_dependencies(self):
             n._refuse("namespace-storage-recovery-required")
         if self.db.execute(
-            "SELECT 1 FROM dependencies WHERE owner_kind NOT IN ('operation','entry') LIMIT 1"
+            "SELECT 1 FROM dependencies WHERE owner_kind "
+            "NOT IN ('operation','entry','snapshot') LIMIT 1"
         ).fetchone():
             n._refuse("namespace-storage-recovery-required")
 
         if self.db.execute("PRAGMA foreign_key_check").fetchall():
             n._refuse("namespace-storage-recovery-required")
-        for table in ("snapshots", "snapshot_reservations", "replacement_completion"):
+        from castle import namespace_snapshots as snapshots
+
+        if set(
+            self.db.execute("SELECT * FROM dependencies WHERE owner_kind='snapshot'")
+        ) != snapshots.dependencies(self, check_content=check_content):
+            n._refuse("namespace-storage-recovery-required")
+        for table in ("replacement_completion",):
             if self.db.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone():
                 n._refuse("namespace-format-unsupported")
 
@@ -973,6 +999,8 @@ class NamespaceHandle:
         if self.pid != os.getpid() or self.closed or self.failed:
             n._refuse("namespace-storage-recovery-required")
         with self.mutex:
+            if self.exporting:
+                n._refuse("namespace-coordinator-busy")
             if self.closed or self.failed:
                 n._refuse("namespace-storage-recovery-required")
             self.operation_id = None
@@ -1060,11 +1088,30 @@ class NamespaceHandle:
         with self.admitted():
             return transactions.execute(self, request, content_sources)
 
-    def read(self, request: n.ReadRequest) -> n.ReadResult:
+    def read(
+        self, request: n.ReadRequest, *, destination: n.SnapshotDestination | None = None
+    ) -> n.ReadResult:
         from castle import namespace_transactions as transactions
 
-        with self.admitted():
-            return transactions.read(self, request)
+        with self.mutex:
+            try:
+                with self.admitted():
+                    result = transactions.read(self, request, destination=destination)
+                if request.kind == "export-snapshot":
+                    from castle import namespace_snapshots as snapshots
+
+                    exported = snapshots.export(self, result.value, destination)
+                    result = n.ReadResult(
+                        result.namespace_id, result.revision, result.cas_binding, exported
+                    )
+                    n._authorize(self.session, "read-result")
+                return result
+            except n.NamespaceError as error:
+                if error.code == "namespace-storage-recovery-required":
+                    self.failed = True
+                if error.namespace_id is None:
+                    error.namespace_id = self.anchor.namespace_id
+                raise
 
     def operation(self, operation_id: str) -> n.OperationStatus:
         from castle import namespace_transactions as transactions
@@ -1086,6 +1133,8 @@ class NamespaceHandle:
 
     def close(self) -> None:
         with self.mutex:
+            if self.exporting:
+                n._refuse("namespace-coordinator-busy")
             if self.pid != os.getpid():
                 self.closed = True
                 return
@@ -1100,6 +1149,8 @@ class NamespaceHandle:
             if self.domain_context is not None:
                 self.domain_context.__exit__(None, None, None)
                 self.domain_context = None
+            self.publication_receipts.clear()
+            self.pending_captures.clear()
             self.closed = True
 
     def __enter__(self) -> NamespaceHandle:

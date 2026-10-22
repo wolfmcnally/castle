@@ -32,7 +32,7 @@ Coordinate namespace dependency cleanup with Castle's irreversible successor-epo
 
 ## Validation and handoff
 
-Iteration: `./bin/test project/tests/test_namespace_excision.py project/tests/test_namespace_store.py project/tests/test_namespace_snapshots.py project/tests/test_merge.py`. Apply the shared two-gate close protocol in [namespace-implementation.md](namespace-implementation.md). All destructive exercises use disposable synthetic stores; no real-store excision is authorized by this phase.
+Iteration: `./bin/test project/tests/test_namespace_excision.py project/tests/test_namespace.py project/tests/test_namespace_snapshots.py project/tests/test_merge.py`. Apply the shared two-gate close protocol in [namespace-implementation.md](namespace-implementation.md). All destructive exercises use disposable synthetic stores; no real-store excision is authorized by this phase.
 
 User Demo: N/A — destructive cutover is demonstrated by disposable behavioral proofs, not a request for the owner to purge real content interactively.
 
@@ -50,3 +50,7 @@ Use namespace §§14, 16–20 for exhaustive excision selectors, shared-owner re
 ## Retained publication evidence inventory pin
 
 Namespace operation ownership now retains publication request/receipt and precondition-error fields in its SQL recipe until explicit result expiry. Its closed outer operation receipt remains prepared through payload cleanup and becomes durable afterward; committed SQL plus the saved validated publication receipt permits stage-absent cleanup recovery. Excision must inventory every retained request, receipt, recipe, deleted entry and dependency disclosure, including publication CasIDs and journal commitments, before retirement. Ordinary staging disposal and logical deletion remain distinct from fresh-database replacement, confidential cleanup and CAS excision. Preserve the existing explicit root/member fencing and never infer purge from absent stage files.
+
+## Delivered folder and snapshot disclosure pin
+
+The closed private SQL ownership recipe now contains an ordered publication request/nullable-receipt array and nullable snapshot record, with one pre-reservation internal bound covering the eventual complete receipts. Snapshot dependencies include the exact manifest and member CasIDs; logical catalog deletion retains its UUID, payload, metadata and member dependencies. Excision closure must also include every imported descriptor, retained request/result/error, publication recipe, deleted entry and journal commitment. Use the actual semantic/restart families in `project/tests/test_namespace.py`; snapshot/onboarding modules are helpers invoked by those families, not independently collected proofs. Rebuild derived snapshot and pending-capture caches from the new generation after database replacement. Generic manifest validation admits an explicitly expected redacted origin; current ordinary catalog admission requires capture until this phase binds replacement manifests to actual excision ownership. Preserve last-started-first multi-publication recovery when publishing sanitized successor manifests.

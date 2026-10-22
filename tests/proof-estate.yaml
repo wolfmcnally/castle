@@ -928,11 +928,11 @@ families:
 - id: castle-namespace
   kind: pytest
   selectors: ["project/tests/test_namespace.py"]
-  source_paths: ["project/tests/test_namespace.py"]
-  covers: ["project/castle/namespace.py", "project/castle/namespace_store.py", "project/castle/namespace_transactions.py", "project/castle/namespace_content.py", "project/examples/namespace_demo.py", "project/tests/test_namespace.py"]
-  contract: "Concurrent ACID namespace operations, new-byte publication/replacement and durable restart/refusal."
+  source_paths: ["project/tests/test_namespace.py", "project/tests/test_namespace_snapshots.py", "project/tests/test_namespace_onboarding.py"]
+  covers: ["project/castle/namespace.py", "project/castle/namespace_store.py", "project/castle/namespace_transactions.py", "project/castle/namespace_content.py", "project/castle/namespace_snapshots.py", "project/castle/namespace_onboarding.py", "project/examples/namespace_demo.py", "project/tests/test_namespace.py", "project/tests/test_namespace_snapshots.py", "project/tests/test_namespace_onboarding.py"]
+  contract: "Concurrent ACID namespace operations, multi-payload folder admission, canonical explicit snapshots, seed provenance and durable restart/refusal."
   risk_class: product-contract
-  oracle: "Independent trees/bytes/identity sets, exact CAS and dependency images, new-content races, real hot-journal and process-death/storage-fault outcomes."
+  oracle: "Independent forests/canonical bytes/identity sets, exact CAS and retained snapshot dependency images, explicit all-sighting seed evidence, admission races, real hot-journal and multi-payload process-death/storage-fault outcomes."
   admission: "Two new families funded by coverage-preserving post-reset retirements in the append-only local ledger."
   nearest_overlap: "CAS and journal proofs do not own namespace SQL or operation-result authority."
   historical_evidence: []

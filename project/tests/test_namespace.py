@@ -45,7 +45,7 @@ def _id() -> str:
 
 
 class Case:
-    def __init__(self, directory: Path) -> None:
+    def __init__(self, directory: Path, *, root_id: str | None = None) -> None:
         directory.mkdir()
         self.directory = directory
         self.cas_root, self.root = directory / "cas", directory / "namespace"
@@ -55,7 +55,7 @@ class Case:
         self.session = LocalSession(self.root, self.cas_root, directory / "domain.lock")
         self.initial = n.InitializeRequest(
             _id(),
-            _id(),
+            root_id or _id(),
             store_state.read_store_identity(self.cas_root),
             {"policy_version": 1, "unicode_data_version": unicodedata.unidata_version},
             {"kind": "unprotected"},
@@ -348,7 +348,7 @@ def test_namespace_transactions_and_admission(
         with pytest.raises(n.NamespaceError, match="namespace-request-invalid"):
             n.execute_namespace(
                 handle,
-                replace(same, operation_id=_id(), kind="snapshot", args={"snapshot_id": _id()}),
+                replace(same, operation_id=_id(), kind="unknown-operation", args={}),
                 {},
             )
         assert n.namespace_operation(handle, _id()).state == "unknown"
@@ -532,6 +532,12 @@ def test_namespace_transactions_and_admission(
             guarded.open()
 
     _new_content_semantics(tmp_path, monkeypatch)
+    runpy.run_path(str(Path(__file__).with_name("test_namespace_snapshots.py")))["semantic_proof"](
+        tmp_path, monkeypatch, Case, _tree
+    )
+    runpy.run_path(str(Path(__file__).with_name("test_namespace_onboarding.py")))["semantic_proof"](
+        tmp_path, monkeypatch, Case, _tree
+    )
 
 
 def _child(case: Case, request: n.MutationRequest, boundary: str) -> subprocess.CompletedProcess:
@@ -1003,6 +1009,9 @@ n.create_namespace(Path({str(root)!r}),Path({str(owner.cas_root)!r}),session,req
     _new_content_refusals(tmp_path, monkeypatch)
     _new_content_advice_proofs(tmp_path, monkeypatch)
     _new_receipt_shape_refusal(tmp_path)
+    runpy.run_path(str(Path(__file__).with_name("test_namespace_snapshots.py")))["restart_proof"](
+        tmp_path, monkeypatch, Case, _tree, _content_child
+    )
 
 
 def _new_spec(payload: bytes) -> dict:
@@ -1216,7 +1225,7 @@ caller=runpy.run_path(example)
 session=caller['LocalSession'](root,cas_root,Path(lock))
 v=json.loads(raw)
 request=n.MutationRequest(v['namespace_id'],n.StoreIdentity(**v['expected_cas']),v['expected_revision'],v['operation_id'],v['kind'],v['args'])
-data=bytes.fromhex(payload)
+sources={key:bytes.fromhex(value) for key,value in json.loads(payload).items()}
 with n.open_namespace(root,cas_root,session) as handle:
  original=store._commit
  def commit(connection):
@@ -1227,31 +1236,42 @@ with n.open_namespace(root,cas_root,session) as handle:
   if (point=='reserved' and row==('staging',) or point=='prepared' and row==('prepared',)
       or point=='after-final' and row==('committed',)): os._exit(63)
  store._commit=commit
+ stages=[]
  stage=content.write_stage
- def write_stage(*args):
-  stage(*args)
+ def write_stage(*args,**kwargs):
+  stage(*args,**kwargs)
+  stages.append(args[1].cas_id)
   if point=='stage-complete': os._exit(63)
  content.write_stage=write_stage
  write=os.write
  def interrupted_write(fd,data):
-  if point in {'stage-partial','publication-torn'}:
+  if (point in {'stage-partial','publication-torn'}
+      or point=='stage-second-partial' and len(stages)==1):
    for file in (root/'operations'/request.operation_id).iterdir():
-    selected=(point=='stage-partial' and n._UUID.fullmatch(file.name) is not None
+    selected=(point in {'stage-partial','stage-second-partial'}
+              and n._UUID.fullmatch(file.name) is not None
               or point=='publication-torn' and file.name.startswith('publication.')
               and file.suffix=='.json')
     if selected and os.fstat(fd).st_ino==file.stat().st_ino:
      write(fd,data[:max(1,len(data)//2)])
      os._exit(63)
+  if point=='temp-second' and len(copying)==2:
+   temporary=pub._temporary(cas_root,copying[-1])
+   if temporary.exists() and os.fstat(fd).st_ino==temporary.stat().st_ino:
+    write(fd,data[:max(1,len(data)//2)])
+    os._exit(63)
   return write(fd,data)
  os.write=interrupted_write
+ copying=[]
  copy=pub._copy_object
  def copy_object(*args):
+  copying.append(args[2])
   copy(*args)
   if point=='cas-object': os._exit(63)
  pub._copy_object=copy_object
  pwrite=os.pwrite
  def append(fd,data,offset):
-  if point=='cas-append':
+  if point=='cas-append' or point=='append-second' and len(copying)==2:
    pwrite(fd,data[:len(data)//2],offset)
    os._exit(63)
   return pwrite(fd,data,offset)
@@ -1259,8 +1279,13 @@ with n.open_namespace(root,cas_root,session) as handle:
  index=pub._index_commit
  def index_commit(connection):
   index(connection)
-  if point=='cas-index': os._exit(63)
+  if point=='cas-index' or point=='index-second' and len(copying)==2: os._exit(63)
  pub._index_commit=index_commit
+ saved=pub._save
+ def save(*args,**kwargs):
+  saved(*args,**kwargs)
+  if point=='first-complete' and args[2]['state']=='complete': os._exit(63)
+ pub._save=save
  unlink=Path.unlink
  def deleted(file,*args,**kwargs):
   unlink(file,*args,**kwargs)
@@ -1274,7 +1299,7 @@ with n.open_namespace(root,cas_root,session) as handle:
   receipt(*args)
   if point=='receipt': os._exit(63)
  handle._receipt_state=received
- n.execute_namespace(handle,request,{request.args['content']['cas_id']:data})
+ n.execute_namespace(handle,request,sources)
  if point=='response': os._exit(63)
  raise RuntimeError('point not reached')
 """
@@ -1291,7 +1316,16 @@ def _content_child(case, request, data, point):
             str(case.directory / "domain.lock"),
             str(_EXAMPLE),
             json.dumps(asdict(request)),
-            data.hex(),
+            json.dumps(
+                {
+                    key: raw.hex()
+                    for key, raw in (
+                        data
+                        if isinstance(data, dict)
+                        else {request.args["content"]["cas_id"]: data}
+                    ).items()
+                }
+            ),
             point,
         ],
         env={**os.environ, "PYTHONPATH": str(Path(cas.__file__).parents[1])},
@@ -1563,7 +1597,7 @@ def _new_content_refusals(tmp_path, monkeypatch):
                     (request.operation_id,),
                 ).fetchone()[0]
             )
-        stage = operation / recipe["publication"]["request"]["staged_file_id"]
+        stage = operation / recipe["publication"][0]["request"]["staged_file_id"]
         witness = stage
         if fault == "unknown-payload":
             witness = operation / _id()
@@ -1816,7 +1850,7 @@ def _new_content_advice_proofs(tmp_path, monkeypatch):
                 connection.execute("UPDATE namespace SET revision=1")
         witness = None
         if fault == "orphan-completion-temp":
-            publication_id = recipe["publication"]["request"]["publication_id"]
+            publication_id = recipe["publication"][0]["request"]["publication_id"]
             witness = (
                 case.root
                 / "operations"
@@ -1841,7 +1875,7 @@ def _new_receipt_shape_refusal(tmp_path):
             "SELECT ownership_receipt FROM operations WHERE operation_id=?", (request.operation_id,)
         ).fetchone()[0]
         recipe = n._decode(raw)
-        recipe["publication"]["receipt"]["unknown_field"] = True
+        recipe["publication"][0]["receipt"]["unknown_field"] = True
         connection.execute(
             "UPDATE operations SET ownership_receipt=? WHERE operation_id=?",
             (n.canonical_bytes(recipe).decode(), request.operation_id),
