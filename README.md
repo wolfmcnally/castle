@@ -31,7 +31,7 @@ The portable core supports ingest, lookup, materialization, journal verification
 ## License and release
 
 MIT, copyright 2026 Wolf McNally. Version 0.1.1 repairs ingest preservation after uncertain journal writes without changing the public API or store format; GitHub Releases records publication status. [Provenance](PROVENANCE.md) distinguishes sourced implementation/proof evidence from new release validation. [Release procedure](project/RELEASE.md) covers inspected artifacts and isolated installation.
-# Existing-content namespace operations
+# Namespace operations
 
-The Python library now includes a durable, serialized namespace for browsing and file/directory rename, move, duplication and logical deletion over already stored content. The [package documentation](project/README.md#existing-content-namespaces) describes the caller-owned authorization/domain fence, retry protocol, bounds, failure behavior and disposable public-API workflow. New-content publication, snapshots, confidential epoch excision and its database replacement remain separate pending work. Local synthetic qualification supplies no encryption or global power-loss claim.
+The Python library now includes a durable, serialized namespace for browsing and file/directory rename, move, duplication and logical deletion over already stored content, plus crash-recoverable creation and replacement of new immutable bytes. The [package documentation](project/README.md#namespaces) describes the caller-owned authorization/domain fence, retry protocol, bounds, failure behavior and disposable public-API workflow. Snapshots, folder admission, confidential epoch excision and its database replacement remain separate pending work. Local synthetic qualification supplies no encryption or global power-loss claim.
 

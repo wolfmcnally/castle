@@ -12,6 +12,7 @@ import threading
 import time
 import unicodedata
 import uuid
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
@@ -21,6 +22,7 @@ import pytest
 
 from castle import (
     cas,
+    journal,
     store_state,
 )
 from castle import (
@@ -529,6 +531,8 @@ def test_namespace_transactions_and_admission(
         with pytest.raises(n.NamespaceError, match="namespace-protection-unsupported"):
             guarded.open()
 
+    _new_content_semantics(tmp_path, monkeypatch)
+
 
 def _child(case: Case, request: n.MutationRequest, boundary: str) -> subprocess.CompletedProcess:
     payload = json.dumps(asdict(request))
@@ -994,3 +998,857 @@ n.create_namespace(Path({str(root)!r}),Path({str(owner.cas_root)!r}),session,req
             n.NamespaceError, match="namespace-(storage-recovery-required|binding-mismatch)"
         ):
             case.open()
+
+    _new_content_restart(tmp_path, monkeypatch)
+    _new_content_refusals(tmp_path, monkeypatch)
+    _new_content_advice_proofs(tmp_path, monkeypatch)
+    _new_receipt_shape_refusal(tmp_path)
+
+
+def _new_spec(payload: bytes) -> dict:
+    import hashlib
+
+    return {"cas_id": "sha256:" + hashlib.sha256(payload).hexdigest(), "size": len(payload)}
+
+
+def _new_file(case, handle, payload, *, entry_id=None, name="New", metadata=None):
+    return case.request(
+        handle,
+        "create-file",
+        {
+            "entry_id": entry_id or _id(),
+            "parent_id": case.initial.root_id,
+            "name": name,
+            "metadata": metadata or {},
+            "content": _new_spec(payload),
+        },
+    )
+
+
+def _new_content_semantics(tmp_path, monkeypatch):
+    case = Case(tmp_path / "new-byte-semantics")
+    first_bytes, next_bytes = b"first immutable new bytes\n", b"replacement new bytes\n"
+    old, new = _new_spec(first_bytes), _new_spec(next_bytes)
+    with case.open() as handle:
+        create = _new_file(case, handle, first_bytes, metadata={"label": "preserved"})
+        first = n.execute_namespace(handle, create, {old["cas_id"]: first_bytes})
+        entry, copied = create.args["entry_id"], _id()
+        duplicate = case.request(
+            handle,
+            "duplicate",
+            {
+                "entry_id": entry,
+                "parent_id": case.initial.root_id,
+                "name": "Copy",
+                "identities": [{"source_id": entry, "new_id": copied}],
+            },
+        )
+        n.execute_namespace(handle, duplicate, {})
+        replacement = case.request(handle, "replace-content", {"entry_id": entry, "content": new})
+        result = n.execute_namespace(handle, replacement, {new["cas_id"]: next_bytes})
+        tree = _tree(handle)
+        assert tree[entry] == {
+            "entry_id": entry,
+            "kind": "file",
+            "parent_id": case.initial.root_id,
+            "name": "New",
+            "metadata": {"label": "preserved"},
+            "cas_id": new["cas_id"],
+            "size": len(next_bytes),
+            "changed_revision": 3,
+        }
+        assert tree[copied]["cas_id"] == old["cas_id"]
+        assert cas.object_path(case.cas_root, old["cas_id"]).read_bytes() == first_bytes
+        assert cas.object_path(case.cas_root, new["cas_id"]).read_bytes() == next_bytes
+        empty = _new_file(case, handle, b"", name="EmptyBytes")
+        empty_result = n.execute_namespace(handle, empty, {_new_spec(b"")["cas_id"]: b""})
+        assert cas.object_path(case.cas_root, _new_spec(b"")["cas_id"]).read_bytes() == b""
+        journal_before = (case.cas_root / "journal.jsonl").read_bytes()
+        # Replay resolves before source transport and stale revision.
+        assert n.execute_namespace(handle, create, {"unused": bytearray(b"ignored")}) == first
+        assert n.execute_namespace(handle, replacement, {}) == result
+        with pytest.raises(n.NamespaceError, match="namespace-operation-conflict"):
+            n.execute_namespace(
+                handle, replace(replacement, args={"entry_id": copied, "content": old}), {}
+            )
+        assert (case.cas_root / "journal.jsonl").read_bytes() == journal_before
+        deleted_copy = case.apply(handle, "delete-entry", {"entry_id": copied})
+        assert _tree(handle)[entry]["cas_id"] == new["cas_id"]
+        deleted_original = case.apply(handle, "delete-entry", {"entry_id": entry})
+        assert cas.object_path(case.cas_root, old["cas_id"]).read_bytes() == first_bytes
+        assert cas.object_path(case.cas_root, new["cas_id"]).read_bytes() == next_bytes
+        dependencies = set(
+            handle.db.execute(
+                "SELECT cas_id FROM dependencies WHERE owner_kind='operation' AND owner_id=?",
+                (create.operation_id,),
+            )
+        )
+        assert dependencies == {(old["cas_id"],), (new["cas_id"],)}
+        assert set(
+            handle.db.execute(
+                "SELECT owner_id,cas_id FROM dependencies WHERE owner_kind='operation'"
+            )
+        ) == {
+            (create.operation_id, old["cas_id"]),
+            (create.operation_id, new["cas_id"]),
+            (duplicate.operation_id, old["cas_id"]),
+            (replacement.operation_id, new["cas_id"]),
+            (empty_result.operation_id, _new_spec(b"")["cas_id"]),
+            (deleted_copy.operation_id, old["cas_id"]),
+            (deleted_original.operation_id, new["cas_id"]),
+        }
+        assert set(
+            handle.db.execute("SELECT owner_id,cas_id FROM dependencies WHERE owner_kind='entry'")
+        ) == {
+            (entry, new["cas_id"]),
+            (copied, old["cas_id"]),
+            (empty.args["entry_id"], _new_spec(b"")["cas_id"]),
+        }
+    with case.open() as handle:
+        assert set(_tree(handle)) == {case.initial.root_id, empty.args["entry_id"]}
+        assert n.execute_namespace(handle, replacement, {}) == result
+        assert n.namespace_operation(handle, replacement.operation_id).state == "committed"
+
+    case = Case(tmp_path / "source-refusals")
+    data = b"validated transport\n"
+    spec = _new_spec(data)
+    with case.open() as handle:
+        for index, (source, code) in enumerate(
+            [
+                ({spec["cas_id"]: bytearray(data)}, "namespace-input-unfrozen"),
+                ({spec["cas_id"]: memoryview(data)}, "namespace-input-unfrozen"),
+                ({spec["cas_id"]: case.source}, "namespace-input-unfrozen"),
+                ({spec["cas_id"]: b"changed"}, "namespace-content-mismatch"),
+                ({"not-a-content-id": data}, "namespace-request-invalid"),
+                ({spec["cas_id"]: data, "unused": data}, "namespace-request-invalid"),
+            ]
+        ):
+            request = _new_file(case, handle, data, name=f"transport-{index}")
+            before = _cas_image(case.cas_root)
+            with pytest.raises(n.NamespaceError, match="^" + code + "$") as error:
+                n.execute_namespace(handle, request, source)
+            assert error.value.effect == "none"
+            assert n.namespace_operation(handle, request.operation_id).state == "unknown"
+            assert _cas_image(case.cas_root) == before
+            n.execute_namespace(handle, request, {spec["cas_id"]: data})
+        assert len(journal.read_journal(case.cas_root)) == 2
+        # A declared existing source counts as used but still adds no CAS event.
+        assert len(handle.entries()) == 7
+
+    case = Case(tmp_path / "captured-source-mapping")
+    data = b"mapping captured exactly once"
+    spec = _new_spec(data)
+
+    class ChangingSource(Mapping):
+        reads = 0
+
+        def __iter__(self):
+            return iter([spec["cas_id"]])
+
+        def __len__(self):
+            return 1
+
+        def __getitem__(self, key):
+            self.reads += 1
+            assert key == spec["cas_id"]
+            return data if self.reads == 1 else b"changed mapping value"
+
+    with case.open() as handle:
+        request = _new_file(case, handle, data)
+        source = ChangingSource()
+        case.session.active = False
+        with pytest.raises(n.NamespaceError, match="namespace-session-expired"):
+            n.execute_namespace(handle, request, source)
+        assert source.reads == 0
+        case.session.active = True
+        n.execute_namespace(handle, request, source)
+        assert source.reads == 1
+        assert cas.object_path(case.cas_root, spec["cas_id"]).read_bytes() == data
+
+    for mode in ("equal-revision", "same-request", "changed-request"):
+        case = Case(tmp_path / ("content-race-" + mode))
+        with case.open() as handle:
+            payloads = [b"race A", b"race B"]
+            a = _new_file(case, handle, payloads[0], name="A")
+            b = _new_file(case, handle, payloads[1], name="B")
+            if mode == "same-request":
+                b, payloads[1] = a, payloads[0]
+            elif mode == "changed-request":
+                b = replace(b, operation_id=a.operation_id)
+            barrier = threading.Barrier(2)
+
+            def execute(pair):
+                request, data = pair
+                barrier.wait(timeout=10)
+                try:
+                    return n.execute_namespace(handle, request, {_new_spec(data)["cas_id"]: data})
+                except n.NamespaceError as error:
+                    return error.code
+
+            with ThreadPoolExecutor(2) as pool:
+                outcomes = list(pool.map(execute, zip([a, b], payloads, strict=True)))
+            if mode == "same-request":
+                assert outcomes[0] == outcomes[1] and isinstance(outcomes[0], n.MutationResult)
+            else:
+                assert sum(isinstance(x, n.MutationResult) for x in outcomes) == 1
+                assert (
+                    "namespace-revision-conflict"
+                    if mode == "equal-revision"
+                    else "namespace-operation-conflict"
+                ) in outcomes
+            assert handle.info().revision == 1 and len(_tree(handle)) == 2
+            events = journal.read_journal(case.cas_root)
+            assert len(events) == 2
+            assert cas.verify(case.cas_root).ok
+            if mode != "same-request":
+                loser = next(payloads[i] for i, x in enumerate(outcomes) if isinstance(x, str))
+                assert not cas.object_path(case.cas_root, _new_spec(loser)["cas_id"]).exists()
+
+
+_CONTENT_CHILD = r"""
+import json,os,runpy,sys
+from pathlib import Path
+from castle import namespace as n,namespace_store as store
+from castle import namespace_content as content,cas_recovery as pub
+root,cas_root,lock,example,raw,payload,point=sys.argv[1:]
+root,cas_root=Path(root),Path(cas_root)
+caller=runpy.run_path(example)
+session=caller['LocalSession'](root,cas_root,Path(lock))
+v=json.loads(raw)
+request=n.MutationRequest(v['namespace_id'],n.StoreIdentity(**v['expected_cas']),v['expected_revision'],v['operation_id'],v['kind'],v['args'])
+data=bytes.fromhex(payload)
+with n.open_namespace(root,cas_root,session) as handle:
+ original=store._commit
+ def commit(connection):
+  row=connection.execute(
+   'SELECT state FROM operations WHERE operation_id=?',(request.operation_id,)).fetchone()
+  if point=='before-final' and row==('committed',): os._exit(63)
+  original(connection)
+  if (point=='reserved' and row==('staging',) or point=='prepared' and row==('prepared',)
+      or point=='after-final' and row==('committed',)): os._exit(63)
+ store._commit=commit
+ stage=content.write_stage
+ def write_stage(*args):
+  stage(*args)
+  if point=='stage-complete': os._exit(63)
+ content.write_stage=write_stage
+ write=os.write
+ def interrupted_write(fd,data):
+  if point in {'stage-partial','publication-torn'}:
+   for file in (root/'operations'/request.operation_id).iterdir():
+    selected=(point=='stage-partial' and n._UUID.fullmatch(file.name) is not None
+              or point=='publication-torn' and file.name.startswith('publication.')
+              and file.suffix=='.json')
+    if selected and os.fstat(fd).st_ino==file.stat().st_ino:
+     write(fd,data[:max(1,len(data)//2)])
+     os._exit(63)
+  return write(fd,data)
+ os.write=interrupted_write
+ copy=pub._copy_object
+ def copy_object(*args):
+  copy(*args)
+  if point=='cas-object': os._exit(63)
+ pub._copy_object=copy_object
+ pwrite=os.pwrite
+ def append(fd,data,offset):
+  if point=='cas-append':
+   pwrite(fd,data[:len(data)//2],offset)
+   os._exit(63)
+  return pwrite(fd,data,offset)
+ os.pwrite=append
+ index=pub._index_commit
+ def index_commit(connection):
+  index(connection)
+  if point=='cas-index': os._exit(63)
+ pub._index_commit=index_commit
+ unlink=Path.unlink
+ def deleted(file,*args,**kwargs):
+  unlink(file,*args,**kwargs)
+  if file.parent.name==request.operation_id:
+   if (point=='cleanup-stage' and n._UUID.fullmatch(file.name) is not None
+       or point=='cleanup-record' and file.name.startswith('publication.')
+       and file.suffix=='.json'): os._exit(63)
+ Path.unlink=deleted
+ receipt=handle._receipt_state
+ def received(*args):
+  receipt(*args)
+  if point=='receipt': os._exit(63)
+ handle._receipt_state=received
+ n.execute_namespace(handle,request,{request.args['content']['cas_id']:data})
+ if point=='response': os._exit(63)
+ raise RuntimeError('point not reached')
+"""
+
+
+def _content_child(case, request, data, point):
+    child = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            _CONTENT_CHILD,
+            str(case.root),
+            str(case.cas_root),
+            str(case.directory / "domain.lock"),
+            str(_EXAMPLE),
+            json.dumps(asdict(request)),
+            data.hex(),
+            point,
+        ],
+        env={**os.environ, "PYTHONPATH": str(Path(cas.__file__).parents[1])},
+        capture_output=True,
+        text=True,
+        timeout=45,
+    )
+    assert child.returncode == 63, (point, child.stdout, child.stderr)
+
+
+def _new_content_restart(tmp_path, monkeypatch):
+    from castle import namespace_content as content
+
+    for kind in ("create-file", "replace-content"):
+        for point in (
+            "reserved",
+            "stage-partial",
+            "stage-complete",
+            "prepared",
+            "publication-torn",
+            "cas-object",
+            "cas-append",
+            "cas-index",
+            "before-final",
+            "after-final",
+            "cleanup-stage",
+            "cleanup-record",
+            "receipt",
+            "response",
+        ):
+            case = Case(tmp_path / (kind + "-" + point))
+            data = b"new restart payload independently expected\n"
+            spec = _new_spec(data)
+            with case.open() as handle:
+                entry_id = _id()
+                if kind == "replace-content":
+                    case.apply(
+                        handle,
+                        "create-file",
+                        {
+                            "entry_id": entry_id,
+                            "parent_id": case.initial.root_id,
+                            "name": "New",
+                            "metadata": {"stable": True},
+                            "content": {
+                                "cas_id": case.stored.cas_id,
+                                "size": case.source.stat().st_size,
+                            },
+                        },
+                    )
+                    request = case.request(handle, kind, {"entry_id": entry_id, "content": spec})
+                else:
+                    request = _new_file(
+                        case, handle, data, entry_id=entry_id, metadata={"stable": True}
+                    )
+                before = _tree(handle)
+                revision = handle.info().revision
+            _content_child(case, request, data, point)
+            operation = case.root / "operations" / request.operation_id
+            evidence_before = (
+                {p.name: p.read_bytes() for p in operation.iterdir()} if operation.exists() else {}
+            )
+            if point == "publication-torn":
+                for action in (
+                    case.open,
+                    lambda: n.recover_namespace(case.root, case.cas_root, case.session, None),
+                ):
+                    with pytest.raises(
+                        n.NamespaceError, match="namespace-storage-recovery-required"
+                    ):
+                        action()
+                assert (
+                    {p.name: p.read_bytes() for p in operation.iterdir()}
+                    if operation.exists()
+                    else {}
+                ) == evidence_before
+                assert not cas.object_path(case.cas_root, spec["cas_id"]).exists()
+                continue
+            if point not in {"receipt", "response"}:
+                with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+                    case.open()
+                assert (
+                    {p.name: p.read_bytes() for p in operation.iterdir()}
+                    if operation.exists()
+                    else {}
+                ) == evidence_before
+            if point == "before-final":
+                # CAS is consistent but unreferenced; no namespace effect yet.
+                assert cas.verify(case.cas_root).ok
+                assert cas.object_path(case.cas_root, spec["cas_id"]).read_bytes() == data
+                with sqlite3.connect(case.root / "namespace.sqlite") as db:
+                    assert db.execute("SELECT revision FROM namespace").fetchone() == (revision,)
+            recovered = n.recover_namespace(case.root, case.cas_root, case.session, None)
+            incomplete_input = point in {"reserved", "stage-partial"}
+            assert recovered.revision == revision + (0 if incomplete_input else 1)
+            with case.open() as handle:
+                if incomplete_input:
+                    assert _tree(handle) == before
+                    assert n.namespace_operation(handle, request.operation_id).state == "rejected"
+                    with pytest.raises(n.NamespaceError, match="namespace-input-unfrozen"):
+                        n.execute_namespace(handle, request, {spec["cas_id"]: data})
+                    assert not cas.object_path(case.cas_root, spec["cas_id"]).exists()
+                else:
+                    result = n.execute_namespace(handle, request, {})
+                    assert n.execute_namespace(handle, request, {}) == result
+                    actual = _tree(handle)
+                    assert set(actual) == set(before) | {entry_id}
+                    assert actual[entry_id] == {
+                        "entry_id": entry_id,
+                        "kind": "file",
+                        "parent_id": case.initial.root_id,
+                        "name": "New",
+                        "metadata": {"stable": True},
+                        "cas_id": spec["cas_id"],
+                        "size": len(data),
+                        "changed_revision": revision + 1,
+                    }
+                    assert cas.object_path(case.cas_root, spec["cas_id"]).read_bytes() == data
+                    assert n.namespace_operation(handle, request.operation_id).result == result
+                assert {p.name for p in operation.iterdir()} == {"request.json", "receipt.json"}
+            assert cas.verify(case.cas_root).ok
+            from castle import journal
+
+            assert len(journal.read_journal(case.cas_root)) == (1 if incomplete_input else 2)
+
+    for point in (
+        "stage-fsync",
+        "stage-directory",
+        "publication-sync",
+        "final-before",
+        "final-after",
+        "cleanup",
+        "complete-evidence",
+    ):
+        case = Case(tmp_path / ("content-fault-" + point))
+        data = b"new fault bytes\n"
+        spec = _new_spec(data)
+        with case.open() as handle:
+            request = _new_file(case, handle, data)
+            fired = []
+            fsync = os.fsync
+            sync_dir = store._sync_dir
+            commit = store._commit
+            unlink = Path.unlink
+            replace_file = os.replace
+
+            def fail_sync(fd):
+                info = os.fstat(fd)
+                directory = case.root / "operations" / request.operation_id
+                stages = (
+                    [p for p in directory.iterdir() if n._UUID.fullmatch(p.name)]
+                    if directory.exists()
+                    else []
+                )
+                selected = point == "stage-fsync" and any(
+                    info.st_ino == p.stat().st_ino for p in stages
+                )
+                selected |= (
+                    point == "publication-sync"
+                    and info.st_ino == (case.cas_root / "journal.jsonl").stat().st_ino
+                    and info.st_size
+                    > len((case.cas_root / "journal.jsonl").read_bytes().splitlines()[0]) + 1
+                )
+                if selected and not fired:
+                    fired.append(True)
+                    raise OSError("injected publication/stage sync")
+                return fsync(fd)
+
+            def fail_directory(directory):
+                if (
+                    point == "stage-directory"
+                    and directory.name == request.operation_id
+                    and any(n._UUID.fullmatch(p.name) for p in directory.iterdir())
+                    and not fired
+                ):
+                    fired.append(True)
+                    raise OSError("injected stage directory sync")
+                return sync_dir(directory)
+
+            def fail_commit(connection):
+                row = connection.execute(
+                    "SELECT state FROM operations WHERE operation_id=?", (request.operation_id,)
+                ).fetchone()
+                if point in {"final-before", "final-after"} and row == ("committed",) and not fired:
+                    fired.append(True)
+                    if point == "final-after":
+                        commit(connection)
+                    error = sqlite3.OperationalError("injected uncertain commit")
+                    error.sqlite_errorcode = sqlite3.SQLITE_IOERR_FSYNC
+                    raise error
+                commit(connection)
+
+            def fail_unlink(file, *args, **kwargs):
+                unlink(file, *args, **kwargs)
+                if (
+                    point == "cleanup"
+                    and file.parent.name == request.operation_id
+                    and n._UUID.fullmatch(file.name)
+                    and not fired
+                ):
+                    fired.append(True)
+                    raise OSError("injected cleanup sync uncertainty")
+
+            def fail_replace(source, destination):
+                if (
+                    point == "complete-evidence"
+                    and Path(destination).name.startswith("publication.")
+                    and not fired
+                ):
+                    if json.loads(Path(source).read_bytes())["state"] == "complete":
+                        fired.append(True)
+                        raise OSError("injected complete-evidence replace")
+                return replace_file(source, destination)
+
+            with monkeypatch.context() as patch:
+                patch.setattr(os, "fsync", fail_sync)
+                patch.setattr(store, "_sync_dir", fail_directory)
+                patch.setattr(store, "_commit", fail_commit)
+                patch.setattr(Path, "unlink", fail_unlink)
+                patch.setattr(os, "replace", fail_replace)
+                with pytest.raises(
+                    n.NamespaceError, match="namespace-storage-recovery-required"
+                ) as error:
+                    n.execute_namespace(handle, request, {spec["cas_id"]: data})
+                assert fired
+                assert error.value.effect == (
+                    "namespace-committed" if point == "cleanup" else "recovery-required"
+                )
+                assert (
+                    n.namespace_operation(handle, request.operation_id).state == "recovery-required"
+                )
+        observed = []
+        original_write = content.write_stage
+
+        def fresh_stage(*args):
+            observed.append(bytes(args[2]))
+            return original_write(*args)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(content, "write_stage", fresh_stage)
+            assert n.recover_namespace(case.root, case.cas_root, case.session, None).revision == 1
+        if point in {"stage-fsync", "stage-directory"}:
+            assert observed == [data]
+        with case.open() as handle:
+            assert n.execute_namespace(handle, request, {}).revision_after == 1
+            assert cas.object_path(case.cas_root, spec["cas_id"]).read_bytes() == data
+
+
+def _new_content_refusals(tmp_path, monkeypatch):
+    from castle import namespace_content as content
+
+    data = b"protected by owned staging\n"
+    spec = _new_spec(data)
+    for fault in ("unknown-payload", "missing-stage", "corrupt-stage", "persistent-stage-sync"):
+        case = Case(tmp_path / ("new-content-refuse-" + fault))
+        with case.open() as handle:
+            request = _new_file(case, handle, data)
+        _content_child(
+            case,
+            request,
+            data,
+            "stage-complete" if fault == "persistent-stage-sync" else "prepared",
+        )
+        operation = case.root / "operations" / request.operation_id
+        with sqlite3.connect(case.root / "namespace.sqlite") as connection:
+            recipe = n._decode(
+                connection.execute(
+                    "SELECT ownership_receipt FROM operations WHERE operation_id=?",
+                    (request.operation_id,),
+                ).fetchone()[0]
+            )
+        stage = operation / recipe["publication"]["request"]["staged_file_id"]
+        witness = stage
+        if fault == "unknown-payload":
+            witness = operation / _id()
+            witness.write_bytes(b"not owned by SQL recipe")
+        elif fault == "missing-stage":
+            stage.unlink()
+        elif fault == "corrupt-stage":
+            stage.chmod(0o600)
+            stage.write_bytes(b"x" * len(data))
+            stage.chmod(0o444)
+        before = witness.read_bytes() if witness.exists() else None
+        original = os.fsync
+
+        def fail_stage(fd):
+            if stage.exists() and os.fstat(fd).st_ino == stage.stat().st_ino:
+                raise OSError("persistent stage fsync failure")
+            return original(fd)
+
+        with monkeypatch.context() as patch:
+            if fault == "persistent-stage-sync":
+                patch.setattr(os, "fsync", fail_stage)
+            for _ in range(2):
+                with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+                    n.recover_namespace(case.root, case.cas_root, case.session, None)
+        assert (witness.read_bytes() if witness.exists() else None) == before
+        assert not cas.object_path(case.cas_root, spec["cas_id"]).exists()
+        if fault == "persistent-stage-sync":
+            assert n.recover_namespace(case.root, case.cas_root, case.session, None).revision == 1
+
+    for phase in ("before-reference", "before-acknowledge"):
+        case = Case(tmp_path / ("new-content-revoke-" + phase))
+        with case.open() as handle:
+            request = _new_file(case, handle, data)
+            with monkeypatch.context() as patch:
+                if phase == "before-reference":
+                    original = content.publish
+
+                    def revoked(*args):
+                        receipt = original(*args)
+                        case.session.active = False
+                        return receipt
+
+                    patch.setattr(content, "publish", revoked)
+                else:
+                    original = handle._receipt_state
+
+                    def revoked(*args):
+                        original(*args)
+                        case.session.active = False
+
+                    patch.setattr(handle, "_receipt_state", revoked)
+                with pytest.raises(n.NamespaceError, match="namespace-session-expired") as refusal:
+                    n.execute_namespace(handle, request, {spec["cas_id"]: data})
+                assert refusal.value.effect == (
+                    "recovery-required" if phase == "before-reference" else "namespace-committed"
+                )
+                assert handle.db.execute("SELECT revision FROM namespace").fetchone() == (
+                    (0,) if phase == "before-reference" else (1,)
+                )
+            case.session.active = True  # caller-fixture renewal, no credentials/grants
+        assert n.recover_namespace(case.root, case.cas_root, case.session, None).revision == 1
+        with case.open() as handle:
+            assert n.execute_namespace(handle, request, {}).revision_after == 1
+
+
+def _new_content_advice_proofs(tmp_path, monkeypatch):
+    data = b"complete stage even after another failed recovery\n"
+    spec = _new_spec(data)
+    for mode in ("short", "zero"):
+        case = Case(tmp_path / ("stage-write-" + mode))
+        with case.open() as handle:
+            request = _new_file(case, handle, data)
+            original_write, original_open = os.write, os.open
+            fired, creation_flags = [], []
+            operation = case.root / "operations" / request.operation_id
+
+            def opened(file, flags, *args, **kwargs):
+                if (
+                    isinstance(file, (str, Path))
+                    and Path(file).parent.resolve() == operation.resolve()
+                    and flags & os.O_WRONLY
+                    and n._UUID.fullmatch(Path(file).name)
+                ):
+                    creation_flags.append(flags)
+                return original_open(file, flags, *args, **kwargs)
+
+            def write(fd, chunk):
+                stages = (
+                    [p for p in operation.iterdir() if n._UUID.fullmatch(p.name)]
+                    if operation.exists()
+                    else []
+                )
+                if not fired and any(os.fstat(fd).st_ino == p.stat().st_ino for p in stages):
+                    fired.append(True)
+                    return (
+                        0
+                        if mode == "zero"
+                        else original_write(fd, chunk[: max(1, len(chunk) // 2)])
+                    )
+                return original_write(fd, chunk)
+
+            with monkeypatch.context() as patch:
+                patch.setattr(os, "write", write)
+                patch.setattr(os, "open", opened)
+                if mode == "short":
+                    assert (
+                        n.execute_namespace(handle, request, {spec["cas_id"]: data}).revision_after
+                        == 1
+                    )
+                    assert cas.object_path(case.cas_root, spec["cas_id"]).read_bytes() == data
+                else:
+                    with pytest.raises(
+                        n.NamespaceError, match="namespace-storage-recovery-required"
+                    ):
+                        n.execute_namespace(handle, request, {spec["cas_id"]: data})
+                    assert handle.db.execute(
+                        "SELECT state FROM operations WHERE operation_id=?", (request.operation_id,)
+                    ).fetchone() == ("staging",)
+                    assert handle.db.execute("SELECT revision FROM namespace").fetchone() == (0,)
+            assert fired and len(creation_flags) == 1, (mode, fired, creation_flags)
+            assert creation_flags[0] & os.O_EXCL and not creation_flags[0] & os.O_TRUNC
+        if mode == "zero":
+            assert n.recover_namespace(case.root, case.cas_root, case.session, None).revision == 0
+            with case.open() as handle:
+                assert (
+                    n.namespace_operation(handle, request.operation_id).error_code
+                    == "namespace-input-unfrozen"
+                )
+                assert not cas.object_path(case.cas_root, spec["cas_id"]).exists()
+
+    case = Case(tmp_path / "in-place-stage-recovery")
+    with case.open() as handle:
+        request = _new_file(case, handle, data)
+    _content_child(case, request, data, "stage-complete")
+    operation = case.root / "operations" / request.operation_id
+    stage = next(p for p in operation.iterdir() if n._UUID.fullmatch(p.name))
+    original_pwrite = os.pwrite
+    fired = []
+
+    def interrupted(fd, chunk, offset):
+        if os.fstat(fd).st_ino == stage.stat().st_ino and not fired:
+            fired.append(True)
+            original_pwrite(fd, chunk[: len(chunk) // 2], offset)
+            raise OSError("recovery's own partial rewrite failed")
+        return original_pwrite(fd, chunk, offset)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "pwrite", interrupted)
+        with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+            n.recover_namespace(case.root, case.cas_root, case.session, None)
+    assert fired and stage.read_bytes() == data
+    assert not cas.object_path(case.cas_root, spec["cas_id"]).exists()
+    assert n.recover_namespace(case.root, case.cas_root, case.session, None).revision == 1
+
+    case = Case(tmp_path / "source-precedence")
+
+    class BrokenSource(Mapping):
+        reads = 0
+        failure = AttributeError
+
+        def __iter__(self):
+            return iter([spec["cas_id"]])
+
+        def __len__(self):
+            return 1
+
+        def __getitem__(self, key):
+            self.reads += 1
+            raise self.failure("caller source failure must stay private")
+
+    with case.open() as handle:
+        for name, binding, revision, code in [
+            ("stale", handle.info().cas, 99, "namespace-revision-conflict"),
+            (
+                "foreign",
+                replace(handle.info().cas, store_id=_id()),
+                0,
+                "namespace-binding-mismatch",
+            ),
+        ]:
+            request = replace(
+                _new_file(case, handle, data, name=name),
+                expected_cas=binding,
+                expected_revision=revision,
+            )
+            source = BrokenSource()
+            for _ in range(2):
+                with pytest.raises(n.NamespaceError, match=code):
+                    n.execute_namespace(handle, request, source)
+            assert source.reads == 0
+            assert n.namespace_operation(handle, request.operation_id).state == "rejected"
+        for index, exception in enumerate((KeyError, AttributeError, ValueError)):
+            request = _new_file(case, handle, data, name=f"callback-{index}")
+            source = BrokenSource()
+            source.failure = exception
+            with pytest.raises(n.NamespaceError, match="^namespace-request-invalid$") as error:
+                n.execute_namespace(handle, request, source)
+            assert error.value.effect == "none" and source.reads == 1
+            assert n.namespace_operation(handle, request.operation_id).state == "unknown"
+            n.execute_namespace(handle, request, {spec["cas_id"]: data})
+        request = _new_file(case, handle, data, name="bad-mapping")
+        with pytest.raises(n.NamespaceError, match="^namespace-request-invalid$"):
+            n.execute_namespace(handle, request, None)
+        assert n.namespace_operation(handle, request.operation_id).state == "unknown"
+
+    case = Case(tmp_path / "post-publication-invariant")
+    with case.open() as handle:
+        request = _new_file(case, handle, data)
+        original = tx._changes
+
+        def changed(h, value, info, **kwargs):
+            if request.operation_id in h.publication_receipts:
+                n._refuse("namespace-name-conflict")
+            return original(h, value, info, **kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(tx, "_changes", changed)
+            with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+                n.execute_namespace(handle, request, {spec["cas_id"]: data})
+        assert handle.db.execute(
+            "SELECT state FROM operations WHERE operation_id=?", (request.operation_id,)
+        ).fetchone() == ("prepared",)
+        assert handle.db.execute("SELECT revision FROM namespace").fetchone() == (0,)
+        assert cas.verify(case.cas_root).ok
+    assert n.recover_namespace(case.root, case.cas_root, case.session, None).revision == 1
+
+    for fault in ("staging-shape", "pending-revision", "orphan-completion-temp"):
+        case = Case(tmp_path / ("authority-" + fault))
+        with case.open() as handle:
+            request = _new_file(case, handle, data)
+        _content_child(
+            case,
+            request,
+            data,
+            "cleanup-record" if fault == "orphan-completion-temp" else "reserved",
+        )
+        with sqlite3.connect(case.root / "namespace.sqlite") as connection:
+            raw = connection.execute(
+                "SELECT ownership_receipt FROM operations WHERE operation_id=?",
+                (request.operation_id,),
+            ).fetchone()[0]
+            recipe = n._decode(raw)
+            if fault == "staging-shape":
+                recipe["publication"] = None
+                connection.execute(
+                    "UPDATE operations SET ownership_receipt=? WHERE operation_id=?",
+                    (n.canonical_bytes(recipe).decode(), request.operation_id),
+                )
+            elif fault == "pending-revision":
+                connection.execute("UPDATE namespace SET revision=1")
+        witness = None
+        if fault == "orphan-completion-temp":
+            publication_id = recipe["publication"]["request"]["publication_id"]
+            witness = (
+                case.root
+                / "operations"
+                / request.operation_id
+                / f"publication.{publication_id}.tmp"
+            )
+            witness.write_bytes(b"unproved replacement bytes")
+        with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+            n.recover_namespace(case.root, case.cas_root, case.session, None)
+        if witness is not None:
+            assert witness.read_bytes() == b"unproved replacement bytes"
+
+
+def _new_receipt_shape_refusal(tmp_path):
+    case = Case(tmp_path / "retained-receipt-shape")
+    data = b"closed persisted publication receipt"
+    with case.open() as handle:
+        request = _new_file(case, handle, data)
+        n.execute_namespace(handle, request, {_new_spec(data)["cas_id"]: data})
+    with sqlite3.connect(case.root / "namespace.sqlite") as connection:
+        raw = connection.execute(
+            "SELECT ownership_receipt FROM operations WHERE operation_id=?", (request.operation_id,)
+        ).fetchone()[0]
+        recipe = n._decode(raw)
+        recipe["publication"]["receipt"]["unknown_field"] = True
+        connection.execute(
+            "UPDATE operations SET ownership_receipt=? WHERE operation_id=?",
+            (n.canonical_bytes(recipe).decode(), request.operation_id),
+        )
+    for action in (
+        case.open,
+        lambda: n.recover_namespace(case.root, case.cas_root, case.session, None),
+    ):
+        with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+            action()

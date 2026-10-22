@@ -1,20 +1,23 @@
-"""Atomic existing-content tree changes and deterministic durable retry outcomes."""
+"""Atomic namespace tree changes and deterministic durable retry outcomes."""
 
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from castle import cas
 from castle import namespace as n
+from castle import namespace_content as content_io
 from castle import namespace_store as store
 
 _ARGS = {
     "create-directory": {"entry_id", "parent_id", "name", "metadata"},
     "create-file": {"entry_id", "parent_id", "name", "metadata", "content"},
     "set-metadata": {"entry_id", "metadata"},
+    "replace-content": {"entry_id", "content"},
     "relocate": {"entry_id", "parent_id", "name"},
     "duplicate": {"entry_id", "parent_id", "name", "identities"},
     "delete-entry": {"entry_id"},
@@ -111,7 +114,12 @@ def _replay(handle: store.NamespaceHandle, row: dict[str, Any]) -> n.MutationRes
 
 
 def prepare(
-    handle: store.NamespaceHandle, request: dict[str, Any], *, evidence_present: bool = False
+    handle: store.NamespaceHandle,
+    request: dict[str, Any],
+    *,
+    evidence_present: bool = False,
+    publication=None,
+    rejection: str | None = None,
 ) -> None:
     info = handle.load_info()
     if info.revision == n.MAX_INTEGER:
@@ -121,7 +129,12 @@ def prepare(
         "SELECT 1 FROM entry_reservations WHERE entry_id=?", (identity,)
     ).fetchone() or identity in {info.namespace_id, info.database_generation}:
         n._refuse()
-    receipt: dict[str, Any] = {"receipt": handle._ownership(request, info), "expiry": {}}
+    receipt: dict[str, Any] = {
+        "receipt": handle._ownership(request, info),
+        "expiry": {},
+        "publication": {"request": asdict(publication), "receipt": None} if publication else None,
+        "precondition_error": rejection,
+    }
     if request["kind"] == "expire-results":
         for target in request["args"]["operation_ids"]:
             target_row = _row(handle, target)
@@ -142,7 +155,7 @@ def prepare(
         (
             identity,
             n._fingerprint(request),
-            "prepared",
+            "staging" if publication is not None or rejection is not None else "prepared",
             info.revision,
             None,
             None,
@@ -159,7 +172,9 @@ def prepare(
         handle._evidence(request, info)
 
 
-def execute(handle: store.NamespaceHandle, request: n.MutationRequest) -> n.MutationResult:
+def execute(
+    handle: store.NamespaceHandle, request: n.MutationRequest, sources: Mapping[str, object]
+) -> n.MutationResult:
     n._authorize(handle.session, request.kind if type(request) is n.MutationRequest else "execute")
     value = normalize(request)
     info = handle.load_info()
@@ -173,7 +188,39 @@ def execute(handle: store.NamespaceHandle, request: n.MutationRequest) -> n.Muta
         if row["fingerprint"] != n._fingerprint(value):
             n._refuse("namespace-operation-conflict")
         return _replay(handle, row)
-    prepare(handle, value)
+    rejection = (
+        "namespace-binding-mismatch"
+        if value["expected_cas"] != asdict(info.cas)
+        else "namespace-revision-conflict"
+        if value["expected_revision"] != info.revision
+        else None
+    )
+    data = None
+    if rejection is None:
+        # Retained outcomes and fresh binding/revision precede caller transport.
+        data = content_io.source(value, sources)
+        try:
+            _changes(
+                handle,
+                value,
+                info,
+                available=value["args"].get("content") if data is not None else None,
+            )
+        except n.NamespaceError as error:
+            if error.code in {
+                "namespace-storage-recovery-required",
+                "namespace-protection-unsupported",
+            }:
+                raise
+            rejection = error.code
+    descriptor = value["args"].get("content")
+    publication = None
+    if rejection is None and descriptor is not None and descriptor["cas_id"] not in handle.objects:
+        publication = content_io.new_request(handle, value)
+    prepare(handle, value, publication=publication, rejection=rejection)
+    if publication is not None:
+        content_io.write_stage(handle, publication, data)
+        content_io.promote(handle, value["operation_id"])
     return finish(handle, value["operation_id"])
 
 
@@ -203,7 +250,11 @@ def _content(handle: store.NamespaceHandle, cas_id: str, size: int) -> None:
 
 
 def _changes(
-    handle: store.NamespaceHandle, request: dict[str, Any], info: n.NamespaceInfo
+    handle: store.NamespaceHandle,
+    request: dict[str, Any],
+    info: n.NamespaceInfo,
+    *,
+    available: dict[str, Any] | None = None,
 ) -> tuple[dict[str, n.EntryRecord], set[str]]:
     entries = handle.entries()
     kind, args = request["kind"], request["args"]
@@ -235,7 +286,7 @@ def _changes(
         fresh(args["entry_id"])
         parent(args["parent_id"])
         content = args.get("content")
-        if content is not None:
+        if content is not None and content != available:
             _content(handle, content["cas_id"], content["size"])
         added = n.EntryRecord(
             args["entry_id"],
@@ -249,6 +300,19 @@ def _changes(
         )
         entries[added.entry_id] = added
         affected.add(added.entry_id)
+    elif kind == "replace-content":
+        source = entry(args["entry_id"])
+        if source.entry_id == info.root_id:
+            n._refuse("namespace-root-immutable")
+        if source.kind != "file":
+            n._refuse("namespace-kind-mismatch")
+        content = args["content"]
+        if content != available:
+            _content(handle, content["cas_id"], content["size"])
+        entries[source.entry_id] = replace(
+            source, cas_id=content["cas_id"], size=content["size"], changed_revision=revision
+        )
+        affected.add(source.entry_id)
     elif kind in {"relocate", "set-metadata", "delete-entry", "delete-subtree", "duplicate"}:
         source = entry(args["entry_id"])
         if source.entry_id == info.root_id and kind != "duplicate":
@@ -362,8 +426,9 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
     row = _row(handle, operation_id)
     if row is None:
         n._refuse("namespace-storage-recovery-required")
-    if row["state"] != "prepared":
+    if row["state"] not in {"staging", "prepared"}:
         return _replay(handle, row)
+    recipe, publication = content_io.recipe(handle, row)
     request = n._decode(row["canonical_request"])
     reconstructed = n.MutationRequest(
         request["namespace_id"],
@@ -377,13 +442,27 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
         n._refuse("namespace-storage-recovery-required")
     info = handle.load_info()
     rejection = None
+    publication_receipt = None
     try:
+        if recipe["precondition_error"] is not None:
+            n._refuse(recipe["precondition_error"])
+        if row["state"] == "staging":
+            n._refuse("namespace-input-unfrozen")
         if request["namespace_id"] != info.namespace_id or request["expected_cas"] != asdict(
             info.cas
         ):
             n._refuse("namespace-binding-mismatch")
         if request["expected_revision"] != info.revision:
             n._refuse("namespace-revision-conflict")
+        _changes(
+            handle, request, info, available=request["args"].get("content") if publication else None
+        )
+        if publication is not None:
+            publication_receipt = handle.publication_receipts.get(operation_id)
+            if publication_receipt is None:
+                publication_receipt = content_io.publish(handle, row)
+            handle.publication_receipts[operation_id] = publication_receipt
+            handle._cas_check(full=False)
         entries, affected = _changes(handle, request, info)
     except n.NamespaceError as error:
         if error.code in {
@@ -391,6 +470,9 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
             "namespace-protection-unsupported",
         }:
             raise
+        if publication_receipt is not None:
+            # A published command cannot become a durable domain rejection.
+            n._refuse("namespace-storage-recovery-required")
         rejection = n.NamespaceError(
             error.code, info.namespace_id, operation_id, info.revision, "none"
         )
@@ -444,6 +526,8 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
             }
         ).decode()
         handle.db.execute("UPDATE namespace SET service_state='ready'")
+    if rejection is None:
+        content_io.save_receipt(handle, row, publication_receipt)
     handle.db.execute(
         (
             "UPDATE operations SET "
@@ -460,22 +544,15 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
             operation_id,
         ),
     )
-    content_ids = {
-        entry.cas_id
-        for entry in handle.entries(live=False).values()
-        if entry.entry_id in affected and entry.cas_id is not None
-    }
-    if request["kind"] == "create-file":
-        content_ids.add(request["args"]["content"]["cas_id"])
-    for cas_id in content_ids:
-        handle.db.execute(
-            "INSERT OR IGNORE INTO dependencies VALUES ('operation',?,?,'request-result')",
-            (operation_id, cas_id),
-        )
+    handle.db.execute("DELETE FROM dependencies WHERE owner_kind='operation'")
+    handle.db.executemany(
+        "INSERT INTO dependencies VALUES (?,?,?,?)", sorted(operation_dependencies(handle))
+    )
     n._authorize(handle.session, request["kind"])
     store._commit(handle.db)
     handle.effect = "none" if rejection else "namespace-committed"
     cleanup_expired(handle, _row(handle, operation_id))
+    content_io.cleanup(handle, _row(handle, operation_id))
     handle._receipt_state(operation_id, "durable")
     n._authorize(handle.session, "acknowledge")
     if rejection is not None:
@@ -573,7 +650,9 @@ def operation(handle: store.NamespaceHandle, operation_id: str) -> n.OperationSt
             )
         else:
             state = row["state"]
-            if state not in {"prepared", "committed", "rejected", "retired"}:
+            if state == "staging":
+                state = "recovery-required"
+            if state not in {"prepared", "committed", "rejected", "retired", "recovery-required"}:
                 n._refuse("namespace-storage-recovery-required")
             error = n._decode(row["terminal_error"])["code"] if row["terminal_error"] else None
             result = n.OperationStatus(
@@ -582,7 +661,9 @@ def operation(handle: store.NamespaceHandle, operation_id: str) -> n.OperationSt
                 state,
                 n._result(n._decode(row["terminal_result"])) if row["terminal_result"] else None,
                 error,
-                "retry-same"
+                "recover"
+                if state == "recovery-required"
+                else "retry-same"
                 if state == "prepared"
                 else "refresh-new-token"
                 if state == "rejected"
@@ -595,3 +676,28 @@ def operation(handle: store.NamespaceHandle, operation_id: str) -> n.OperationSt
         raise
     n._authorize(handle.session, "status-result")
     return result
+
+
+def operation_dependencies(handle: store.NamespaceHandle) -> set[tuple[str, str, str, str]]:
+    entries = handle.entries(live=False)
+    expected = set()
+    for (identity,) in handle.db.execute("SELECT operation_id FROM operations").fetchall():
+        row = _row(handle, identity)
+        if row["state"] == "retired":
+            continue
+        request = n._decode(row["canonical_request"])
+        content_ids = set()
+        if row["state"] == "committed":
+            result = n._result(n._decode(row["terminal_result"]))
+            content_ids.update(
+                entries[key].cas_id
+                for key in result.affected_entry_ids
+                if key in entries and entries[key].cas_id is not None
+            )
+        if request["kind"] in {"create-file", "replace-content"} and row["state"] in {
+            "committed",
+            "rejected",
+        }:
+            content_ids.add(request["args"]["content"]["cas_id"])
+        expected.update(("operation", identity, cas_id, "request-result") for cas_id in content_ids)
+    return expected

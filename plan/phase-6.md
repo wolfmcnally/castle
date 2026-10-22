@@ -46,3 +46,7 @@ Use namespace §§14, 16–20 for exhaustive excision selectors, shared-owner re
 - [Excision](../briefs/content-excision.md), quiescence, prepared/active successor, retirement, and forward recovery.
 - [CRDT semantics](../briefs/crdt-semantics.md), epoch fencing and unchanged union.
 - [CAS contract](../briefs/cas-api.md), inventory and custody metadata.
+
+## Retained publication evidence inventory pin
+
+Namespace operation ownership now retains publication request/receipt and precondition-error fields in its SQL recipe until explicit result expiry. Its closed outer operation receipt remains prepared through payload cleanup and becomes durable afterward; committed SQL plus the saved validated publication receipt permits stage-absent cleanup recovery. Excision must inventory every retained request, receipt, recipe, deleted entry and dependency disclosure, including publication CasIDs and journal commitments, before retirement. Ordinary staging disposal and logical deletion remain distinct from fresh-database replacement, confidential cleanup and CAS excision. Preserve the existing explicit root/member fencing and never infer purge from absent stage files.

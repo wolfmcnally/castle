@@ -11,7 +11,7 @@ import stat
 import threading
 import uuid
 import weakref
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
@@ -19,6 +19,7 @@ from typing import Any
 
 from castle import cas, journal, store_state
 from castle import namespace as n
+from castle import namespace_content as content_io
 
 _TABLES = {
     ("namespace"): (
@@ -196,6 +197,8 @@ class NamespaceHandle:
         self.operation_id: str | None = None
         self.write_started = False
         self.effect = "none"
+        self.objects = {}
+        self.publication_receipts = {}
         if initialize is not None and (
             type(initialize) is not n.InitializeRequest
             or initialize.protection != {"kind": "unprotected"}
@@ -252,14 +255,18 @@ class NamespaceHandle:
                     self._initialize(initialize)
                 else:
                     self._read_anchor()
-                    self._cas_check()
+                    self._cas_check(identity_only=True)
                     self._open()
+                    self._validate(check_content=False)
+                    self._inventory()
+                    content_io.before_cas(self)
+                    self._cas_check()
                 self._validate()
                 self._recover_receipts()
                 from castle import namespace_transactions as transactions
 
                 prepared = self.db.execute(
-                    "SELECT operation_id FROM operations WHERE state='prepared'"
+                    "SELECT operation_id FROM operations WHERE state IN ('staging','prepared')"
                 ).fetchall()
                 if len(prepared) > 1:
                     n._refuse("namespace-storage-recovery-required")
@@ -325,12 +332,7 @@ class NamespaceHandle:
                     n._uuid(directory.name)
                     if directory.is_symlink() or not directory.is_dir():
                         n._refuse("namespace-root-unsafe")
-                    if {p.name for p in directory.iterdir()} - {
-                        "receipt.json",
-                        "request.json",
-                        "receipt.tmp",
-                    }:
-                        n._refuse("namespace-storage-recovery-required")
+                    content_io.inventory(self, directory, structural=self.connection is None)
                     for child in directory.iterdir():
                         _regular(child)
             else:
@@ -454,7 +456,7 @@ class NamespaceHandle:
         if self.db.execute("SELECT name FROM sqlite_master WHERE type='trigger'").fetchall():
             n._refuse("namespace-format-unsupported")
 
-    def _cas_check(self, *, full: bool = True) -> None:
+    def _cas_check(self, *, full: bool = True, identity_only: bool = False) -> None:
         current = self.cas_root.lstat()
         if (
             not stat.S_ISDIR(current.st_mode)
@@ -470,6 +472,8 @@ class NamespaceHandle:
         if hasattr(self, "binding") and self.binding != binding:
             n._refuse("namespace-binding-mismatch")
         self.binding = binding
+        if identity_only:
+            return
         if full:
             records, paths, _ = cas._validated_authority(self.cas_root, derived=True)
         else:
@@ -596,7 +600,7 @@ class NamespaceHandle:
         expected = self._ownership(request, self.load_info())
         if (
             not isinstance(recipe, dict)
-            or set(recipe) != {"receipt", "expiry"}
+            or set(recipe) != {"receipt", "expiry", "publication", "precondition_error"}
             or recipe["receipt"] != expected
         ):
             n._refuse("namespace-storage-recovery-required")
@@ -620,7 +624,7 @@ class NamespaceHandle:
                         continue
                 if raw == payload:
                     continue
-                if row["state"] != "prepared" or not payload.startswith(raw):
+                if row["state"] not in {"staging", "prepared"} or not payload.startswith(raw):
                     n._refuse("namespace-storage-recovery-required")
             descriptor = os.open(file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
             with os.fdopen(descriptor, "wb") as output:
@@ -691,10 +695,10 @@ class NamespaceHandle:
         directories = {p.name for p in (self.root / "operations").iterdir()}
         if directories - expected_ids - retired:
             n._refuse("namespace-storage-recovery-required")
-        incomplete = fault or any(row["state"] == "prepared" for row in rows)
+        incomplete = fault or any(row["state"] in {"staging", "prepared"} for row in rows)
         incomplete |= bool(directories & retired)
         for row in rows:
-            if row["state"] == "prepared":
+            if row["state"] in {"staging", "prepared"}:
                 continue
             directory = self.root / "operations" / row["operation_id"]
             if not directory.exists() or (directory / "receipt.tmp").exists():
@@ -704,7 +708,7 @@ class NamespaceHandle:
             expected = self._ownership(n._decode(row["canonical_request"]), self.load_info())
             if {**receipt, "state": "prepared"} != expected:
                 n._refuse("namespace-storage-recovery-required")
-            incomplete |= receipt["state"] != "durable"
+            incomplete |= receipt["state"] != "durable" or content_io.has_payload(self, row)
         # Conservative restart rule: never infer an interrupted durability
         # boundary from visibility alone. Explicit recovery owns all repair and
         # cleanup; ordinary open has made no evidence-file changes at this point.
@@ -718,7 +722,7 @@ class NamespaceHandle:
             self._reassert()
         for row in rows if incomplete else []:
             identity = row["operation_id"]
-            if row["state"] == "prepared":
+            if row["state"] in {"staging", "prepared"}:
                 self.operation_id = identity
                 self.effect = "recovery-required"
                 try:
@@ -729,6 +733,7 @@ class NamespaceHandle:
                 self.recovered.append(identity)
             else:
                 transactions.cleanup_expired(self, row)
+                content_io.cleanup(self, row)
                 receipt = self._receipt(identity)
                 if receipt["state"] != "durable":
                     self._receipt_state(identity, "durable")
@@ -821,7 +826,7 @@ class NamespaceHandle:
                 (entry.entry_id, entry.cas_id),
             )
 
-    def _validate(self) -> None:
+    def _validate(self, *, check_content: bool = True) -> None:
         info = self.load_info()
         n._uuid(info.namespace_id)
         n._uuid(info.root_id)
@@ -854,7 +859,9 @@ class NamespaceHandle:
             if entry.entry_id not in reservations:
                 n._refuse("namespace-format-unsupported")
             if entry.cas_id:
-                if entry.cas_id not in self.objects or self.objects[entry.cas_id][1] != entry.size:
+                if check_content and (
+                    entry.cas_id not in self.objects or self.objects[entry.cas_id][1] != entry.size
+                ):
                     n._refuse("namespace-storage-recovery-required")
                 expected.add(("entry", entry.entry_id, entry.cas_id, "content"))
         actual_entries = set(self.db.execute("SELECT * FROM dependencies WHERE owner_kind='entry'"))
@@ -863,8 +870,6 @@ class NamespaceHandle:
 
         from castle import namespace_transactions as transactions
 
-        operation_dependencies = set()
-        all_entries = self.entries(live=False)
         for (identity,) in self.db.execute("SELECT operation_id FROM operations").fetchall():
             n._uuid(identity)
             if identity in reservations or identity in {
@@ -894,10 +899,11 @@ class NamespaceHandle:
                     n._refuse("namespace-format-unsupported")
                 continue
             if (
-                row["state"] not in {"prepared", "committed", "rejected"}
+                row["state"] not in {"staging", "prepared", "committed", "rejected"}
                 or row["canonical_request"] is None
             ):
                 n._refuse("namespace-format-unsupported")
+            content_io.recipe(self, row)
             request = n._decode(row["canonical_request"])
             if (
                 request["operation_id"] != identity
@@ -906,9 +912,11 @@ class NamespaceHandle:
             ):
                 n._refuse("namespace-storage-recovery-required")
             n._integer(row["prepared_revision"])
-            if row["prepared_revision"] > info.revision:
+            if row["prepared_revision"] > info.revision or (
+                row["state"] in {"staging", "prepared"}
+                and row["prepared_revision"] != info.revision
+            ):
                 n._refuse("namespace-storage-recovery-required")
-            content_ids = set()
             if row["state"] == "committed":
                 result = n._result(n._decode(row["terminal_result"]))
                 if (
@@ -922,16 +930,6 @@ class NamespaceHandle:
                     or result.affected_entry_ids != sorted(set(result.affected_entry_ids))
                 ):
                     n._refuse("namespace-storage-recovery-required")
-                content_ids = {
-                    all_entries[key].cas_id
-                    for key in result.affected_entry_ids
-                    if key in all_entries and all_entries[key].cas_id is not None
-                }
-            if request["kind"] == "create-file" and row["state"] in {"committed", "rejected"}:
-                content_ids.add(request["args"]["content"]["cas_id"])
-            operation_dependencies.update(
-                ("operation", identity, content_id, "request-result") for content_id in content_ids
-            )
             if row["state"] == "rejected":
                 error = n._decode(row["terminal_error"])
                 if (
@@ -941,10 +939,9 @@ class NamespaceHandle:
                     or error.get("effect") != "none"
                 ):
                     n._refuse("namespace-storage-recovery-required")
-        if (
-            set(self.db.execute("SELECT * FROM dependencies WHERE owner_kind='operation'"))
-            != operation_dependencies
-        ):
+        if set(
+            self.db.execute("SELECT * FROM dependencies WHERE owner_kind='operation'")
+        ) != transactions.operation_dependencies(self):
             n._refuse("namespace-storage-recovery-required")
         if self.db.execute(
             "SELECT 1 FROM dependencies WHERE owner_kind NOT IN ('operation','entry') LIMIT 1"
@@ -992,12 +989,14 @@ class NamespaceHandle:
                         self.db.execute("SELECT service_state FROM namespace").fetchone()
                         != ("ready",)
                         or self.db.execute(
-                            "SELECT 1 FROM operations WHERE state='prepared'"
+                            "SELECT 1 FROM operations WHERE state IN ('staging','prepared')"
                         ).fetchone()
                     ):
                         n._refuse("namespace-storage-recovery-required")
                     yield
             except n.NamespaceError as error:
+                if error.code == "namespace-storage-recovery-required":
+                    self.failed = True
                 if error.namespace_id is None:
                     error.namespace_id = self.anchor.namespace_id
                 if self.connection is not None and self.db.in_transaction:
@@ -1053,11 +1052,13 @@ class NamespaceHandle:
             n._authorize(self.session, "info")
             return result
 
-    def execute(self, request: n.MutationRequest) -> n.MutationResult:
+    def execute(
+        self, request: n.MutationRequest, content_sources: Mapping[str, bytes]
+    ) -> n.MutationResult:
         from castle import namespace_transactions as transactions
 
         with self.admitted():
-            return transactions.execute(self, request)
+            return transactions.execute(self, request, content_sources)
 
     def read(self, request: n.ReadRequest) -> n.ReadResult:
         from castle import namespace_transactions as transactions

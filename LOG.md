@@ -717,3 +717,120 @@ Lessons:
 - No new candidate was filed and no rule was graduated. Existing source/schema, environment and log-witness rules cover the bounded mistakes; the actual publication defects are prevented by strengthened existing protocol cases. Lesson validation passed and no graduation-ready candidate was listed. All rejected evidence and counters remain intact.
 
 Sanitized offline report generation follows. The separate bare full handoff gate and verified local-only commit remain pending at this append-only record; no push/publication or live-store operation.
+
+## 2026-10-22 01:43 — START
+
+Phase 4 — New-byte namespace creation and replacement
+
+Execution trace: 0f8d7bd303a444b194ea8ad6dc549ffa
+
+Planned work:
+- Extend the delivered `project/castle/namespace.py`, `project/castle/namespace_store.py` and `project/castle/namespace_transactions.py` owners using the Phase 1 contract, Phase 2 existing-content authority and Phase 3 bounded CAS recovery. Keep `project/castle/__init__.py`'s lightweight import posture.
+- Implement create file/directory, read/list/resolve, replace file content, whole-object metadata replacement, atomic rename-plus-move, ordinary file/empty-directory deletion, and explicit atomic subtree deletion. Preserve stable IDs, identity reservation, root invariants, and shared blob independence.
+- Centralize NFC/casefold comparison, pinned Unicode policy, component/metadata limits, live sibling uniqueness, parent validity, reachability/cycle checks, and path refusal. Reject complete commands atomically rather than silently overwriting or renaming.
+- Serialize commands under the coordinator; validate expected namespace revision, canonical request fingerprint, reserved idempotency UUID, durable outcome, seven-day retry retention, and expired-token refusal. Stage/prepare, publish CAS through Phase 3, then commit live references/results/dependencies atomically. Recover pending intents before new writes; committed outcomes win over leftover staging.
+- Strengthen delivered `project/tests/test_namespace.py` and add `project/tests/test_namespace_transactions.py` where distinct publication proof needs it; include real concurrent clients/subprocess kills and independent before/after trees. Use opaque CAS provenance labels for namespace-owned writes.
+
+Authorization: operator approved goal-complete Phase3/4 new-content implementation; Phase3 is delivered, and current Phase4 continues on 2026-10-22 UTC. Separate later Phase5–7 approval is recorded, but those phases have not started. Same retained sole writer, synthetic local stores only. Full review and evidence lanes, Sol inline primary and opposite-harness Opus/high advice. Delivery restriction: “Local commits only for now.” No push, live data, snapshots, excision, DB replacement or expanded permissions.
+
+## 2026-10-22 02:47 — END
+Phase 4 — New-byte namespace creation and replacement
+
+The namespace now creates files from actual new immutable bytes and replaces file content while preserving identity. Publication is durable before references and the result commit together; identical retries return the saved outcome. The public disposable workflow also proves independent copies and logical deletion. No operator decision is needed to continue the already approved snapshot, excision and qualification sequence after local delivery.
+
+Execution trace: 0f8d7bd303a444b194ea8ad6dc549ffa
+Baseline: 66f496dc27866f7430057fb58ed8da97ae5d3f78.
+
+Files changed:
+- `project/castle/namespace_content.py` — immutable source capture, durable owned staging, closed publication recipe/receipt and exact owned cleanup.
+- `project/castle/namespace.py`, `project/castle/namespace_store.py`, `project/castle/namespace_transactions.py` — public bytes mapping, reservation-before-allocation, publication-before-reference commit, recovery ordering and complete entry/result dependency updates.
+- `project/tests/test_namespace.py`, `tests/proof-estate.yaml` — strengthen the two existing semantic/restart families and independent inventories without new families, leaves, admission or reset.
+- `project/examples/namespace_demo.py`, `README.md`, `project/README.md` — usable public new-byte workflow and precise source/retry/recovery limits.
+- `plan/INDEX.md`, `LOG.md`, `EXECUTION_LOG.jsonl`, three downstream AUTO pins and sanitized report — status and close bookkeeping, still pending at this accepted implementation record.
+
+Build status:
+- Final focused namespace/publication selection:3 passed40.22s; lint,85-file format, policy/proof estate, plan-delivery and public workflow passed, zero warnings.
+- Public workflow: actual new bytes, empty directory, rename/move, duplicate, replacement, stable IDs, independent original/copy bytes, retry/status and logical deletion; final revision9.
+- Candidate-bound final sequence: public workflow then `./bin/check all`; all196 tests passed210.95s, every policy gate passed, zero warnings after reading complete diagnostics. Product/full-tree identities unchanged. Command-zero and acceptance evidence validation passed.
+- Separate bare handoff full gate and verified local commit remain pending after all tracked close writes. No push/publication.
+
+Review lane: full, primary advisory. Evidence lane: full. Follow-up route: initial implementation with bounded advice-driven fixes, no second review.
+
+Role model/venue — orchestrated by Codex:
+- Planner/coder requested Sol6.1/high inline; primary provider-observed model, effort and harness version unreported. No delegated writer.
+- Reviewer and critic requested latest Opus/high under Claude; each one actual pass, normal watcher exit0. Observed independent model claude-opus-5-5; observed effort and harness version unreported. Real-read configuration-bound preflight passed before mutation.
+- Plan12 and code9 findings have21 explicit primary dispositions. Code adviser could read actual source; Bash unavailable, so primary separately inspected complete diffs. No substitute provider, allowance reset or duplicate review.
+- Bounded corrections: no truncate on recovery's verified complete stage, actual short/zero writes, caller mapping capture/error boundaries, binding before source inspection, post-publication invariant refusal, validated temporary cleanup and closed receipt shape on ordinary open.
+
+Candidate-bound evidence:
+- Accepted product: c5f1ce816a0e1cb385924e366c2b6ea2a857084a7d446af98ab600c2d48c999a
+- Unchanged implementation full tree: fd0609e3ac8774869b595ad2c7c870e2abc8e9fafe8ec1fcfa8a820e7461cc6d
+- Two actual managed final executions from gates.jsonl; diagnostic reviews are observations, not additional runs. No revision packet or reopened advisory pass.
+- Proof estate remains163 families/218 leaves with frozen budgets and zero new admission/reset; no new effectiveness assay claimed.
+
+### Execution timing
+
+Execution trace: 0f8d7bd303a444b194ea8ad6dc549ffa
+- Outcome: `success`
+- Makespan: 3820600937500 ns (3820.600937500 s)
+- Intelligence: 716652461042 ns (716.652461042 s)
+- Gates: 216170443084 ns (216.170443084 s)
+- Orchestration: 3820159977042 ns (3820.159977042 s)
+- Wait: 715759205334 ns (715.759205334 s)
+- Retry/rework: 0 ns (0.000000000 s)
+- Failed work: 0 ns (0.000000000 s)
+- Unattributed: 440960458 ns (0.440960458 s)
+- Category totals are interval unions and may overlap.
+
+#### Slowest material spans
+
+- `orchestration.implementation` — category `reconciliation`, attempt 1, outcome `success`: 2756381999250 ns (2756.381999250 s)
+- `orchestration.acceptance` — category `reconciliation`, attempt 1, outcome `success`: 554992933500 ns (554.992933500 s)
+- `orchestration.planning` — category `reconciliation`, attempt 1, outcome `success`: 507726678458 ns (507.726678458 s)
+- `role.code-review` — category `intelligence`, attempt 1, outcome `success`: 401156399542 ns (401.156399542 s)
+- `role.code-review` — category `wait`, attempt 1, outcome `success`: 400726541709 ns (400.726541709 s)
+
+
+Acceptance:
+- Objective: immutable exact bytes; SQL ownership before allocation and durable stage before prepared; validated publication receipt before atomic live references/results/dependencies; stable replacement identity; independent copied content and logical deletion; equal-revision and same-UUID races; replay before source inspection;28 real child-death create/replace boundaries; fresh recovery writes; short/zero/persistent stage faults; CAS append/index, SQL uncertain commit, receipt and cleanup faults; authorization loss; malformed/corrupt/unknown evidence refusal. All earlier namespace/CAS assertions remain and full gate passed.
+- Parked for the operator: no phase-owned interactive demo. Synthetic process loss and injected failures do not establish hardware power-loss, platform/protected deployment or external custody qualification. Those remain explicit later requirements.
+
+Material limits:
+- A torn first publication record has no supported runtime repair. Its saved journal prefix/events are unavailable, and SQL ownership alone does not prove those bytes; normal open and explicit recovery both refuse and preserve residue. A real occurrence requires separately supported storage/owner intervention. This conservative accepted Phase3/section17 boundary was retained rather than guessed away.
+- An empty source mapping uses existing-content binding semantics: missing content is a durable rejection, so retry needs a new operation UUID. Malformed or mismatching supplied bytes fail before reservation and may be corrected under the same UUID. Retained results are checked before transport/source inspection.
+- Unreferenced durable CAS residue and namespace deletion authorize no garbage collection. Cross-domain orchestration remains external; no distributed atomicity or encryption deployment is implied.
+
+Delivery: restricted — “Local commits only for now.” Synthetic stores only; no live-data cleanup, new access/grants/credentials, public or remote publication, or duplicate workers. Handoff gate and clean verified local commit remain pending at this record.
+
+Ripple:
+- AUTO pending: exact Phase4 completion ledger preserving the historical release arrow.
+- AUTO pending: Phase5 immutable-source/publication/order/dependency integration pin; Phase6 complete retained publication disclosure inventory and cleanup-versus-purge distinction; Phase7 extend the real public workflow rather than seed SQL.
+- DECIDE:none for this close. The operator separately approved Phases5–7 on2026-10-22 after this phase qualifies; protected environment, live data, extra access, release publication and consuming-repository changes remain outside that approval.
+
+Lessons:
+- None newly filed or graduated. Existing allocation-before-files, canonical tooling environment and terminal-log rules remain adequate; failure to follow the environment wrapper was corrected by exact supported reviewed invocation. All original failures remain retained. Stage and receipt defects are prevented by strengthened existing executable families, without adding a proof leaf.
+- Short-write instrumentation initially counted legitimate read-only opens, then used an unresolved temporary-path spelling; exact diagnostic probes corrected the instrument before relying on it. Original failures are preserved. Timeout recommendation is read-only:536 existing historical incomplete/malformed schema-3 sample diagnostics were inspected and retained, not accepted as successful samples; no group reaches30 valid samples and no budgets change.
+
+User Demo: N/A — this phase delivers the library; interactive command workflows are qualified in Phase 7.
+
+Test protocol:
+- Run `./bin/python project/examples/namespace_demo.py` in this checkout. It allocates disposable synthetic stores, prints new and replacement content separately, proves copy independence and finishes at revision9. Expected: normal exit and complete workflow assertions.
+- Run `./bin/test project/tests/test_namespace.py project/tests/test_cas_recovery.py` for the retained concurrency, process-loss and refusal proofs. These do not operate on live stores.
+
+Remaining:
+- Apply/verify the accepted ledger and prepared three AUTO pins, append actual bookkeeping and sanitized report, then run the separate bare full handoff gate, commit locally and verify clean custody.
+- Continue approved Phase5 snapshots/folder admission, then Phase6 excision/recovery and Phase7 consumer qualification with their own reviews/gates. Required platform access that is absent parks only that dependent action; no release or external adoption is claimed.
+
+## 2026-10-22 02:47 — END (bookkeeping)
+
+Phase 4 — New-byte namespace creation and replacement
+
+The exact accepted completion ledger was applied and verified. The three prepared AUTO pins now describe the delivered immutable-source/publication integration in Phase5, the retained publication disclosure inventory and cleanup-versus-purge boundary in Phase6, and the public real-byte consumer fixture in Phase7. The initiative narrative records Phase4 delivery qualification and preserves the separate approved sequential continuation through Phases5–7, synthetic/local only. The historical release arrow and all earlier accepted evidence remain.
+
+Execution trace: 0f8d7bd303a444b194ea8ad6dc549ffa
+
+Lessons:
+- No new candidate or occurrence was filed and no rule graduated. Existing allocation, environment and log-witness rules cover the bounded mistakes; runtime defects are prevented by strengthened existing proof families. Lesson validation passed with no graduation-ready candidate. All original failures and review counters remain intact.
+- Read-only timeout diagnostics contain536 historical incomplete/malformed schema-3 samples; all diagnostic lines were matched to that exact condition. No target reaches30 valid samples and no configuration change follows.
+
+Sanitized offline report generation follows. The separate bare full handoff gate and verified local-only commit remain pending at this append-only record; no push, publication or live-store operation.

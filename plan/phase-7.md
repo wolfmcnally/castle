@@ -53,3 +53,7 @@ Map the closed typed API and command ownership in namespace §14 exactly, includ
 ## Publication durability qualification pin
 
 The delivered owned publisher synchronizes object, journal and operation evidence with plain `os.fsync`/directory sync, while its derived SQLite index additionally sets and reads back `fullfsync=ON`. Do not describe these as a uniform Darwin device-cache flush guarantee. Process termination and wrapper fault injection do not certify hardware power-loss durability. The later environment/platform qualification must report the actual filesystem, VFS and flush behavior before making stronger claims; no adapter deployment, new permission or live-store test is authorized by this pin.
+
+## Public new-byte workflow pin
+
+The delivered `project/examples/namespace_demo.py` now uses public APIs to create actual new bytes, duplicate a subtree, replace the original with its stable ID and verify that the duplicate retains the old bytes. Its deterministic library workflow is an automated acceptance gate, not interactive user acceptance. Extend this same consumer fixture for folder/snapshot/status/export behaviors without direct SQL seeding. Keep immutable source-mapping semantics, stable replacement identity, retained-outcome replay before source inspection and exact qualification boundaries in the library/CLI/artifact handoff.

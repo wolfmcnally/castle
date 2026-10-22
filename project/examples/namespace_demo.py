@@ -1,4 +1,4 @@
-"""Disposable existing-content namespace workflow, using public APIs only.
+"""Disposable new-content namespace workflow, using public APIs only.
 
 Run from the checkout with its Python wrapper. All created stores are synthetic
 and temporary. LocalSession is a trusted caller fixture, not authentication or
@@ -8,6 +8,7 @@ an encryption backend. No active namespace shares its CAS with another writer.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import fcntl
 import os
 import tempfile
@@ -146,7 +147,12 @@ def main() -> None:
         cas_root, namespace_root = root / "cas", root / "namespace"
         source = root / "stored.txt"
         source.write_text("Immutable shared content.\n")
-        stored = cas.ingest_file(cas_root, source, "namespace-demo")
+        cas.ingest_file(cas_root, source, "namespace-initialization-seed")
+        created_bytes = b"Actual newly published namespace bytes.\n"
+        created_content = {
+            "cas_id": "sha256:" + hashlib.sha256(created_bytes).hexdigest(),
+            "size": len(created_bytes),
+        }
         session = LocalSession(namespace_root, cas_root, root / "domain.lock")
         info = initialize(namespace_root, cas_root, session)
         folder, empty, file_id, target = identity(), identity(), identity(), identity()
@@ -172,11 +178,15 @@ def main() -> None:
                         "parent_id": folder,
                         "name": "Stored.txt",
                         "metadata": {},
-                        "content": {"cas_id": stored.cas_id, "size": source.stat().st_size},
+                        "content": created_content,
                     },
                 ),
             ]:
-                n.execute_namespace(handle, mutation(handle, kind, args), {})
+                n.execute_namespace(
+                    handle,
+                    mutation(handle, kind, args),
+                    {created_content["cas_id"]: created_bytes} if kind == "create-file" else {},
+                )
             show(handle, "Original root:", info.root_id)
             show(handle, "Original directory:", folder)
             show(handle, "Browse the empty directory:", empty)
@@ -256,6 +266,48 @@ def main() -> None:
             copy_empty = next(pair["new_id"] for pair in mapping if pair["source_id"] == empty)
             show(handle, "Copy has fresh IDs and shared content:", copy_root)
             show(handle, "Copied empty directory:", copy_empty)
+            replacement = b"Replacement bytes keep the original entry identity.\n"
+            replacement_content = {
+                "cas_id": "sha256:" + hashlib.sha256(replacement).hexdigest(),
+                "size": len(replacement),
+            }
+            replace_request = mutation(
+                handle, "replace-content", {"entry_id": file_id, "content": replacement_content}
+            )
+            replaced = n.execute_namespace(
+                handle, replace_request, {replacement_content["cas_id"]: replacement}
+            )
+            assert n.execute_namespace(handle, replace_request, {}) == replaced
+            current = n.read_namespace(
+                handle,
+                n.ReadRequest(
+                    info.namespace_id, info.cas, None, "get-entry", {"entry_id": file_id}
+                ),
+            ).value
+            copy_file = next(pair["new_id"] for pair in mapping if pair["source_id"] == file_id)
+            copied = n.read_namespace(
+                handle,
+                n.ReadRequest(
+                    info.namespace_id, info.cas, None, "get-entry", {"entry_id": copy_file}
+                ),
+            ).value
+            assert (
+                current.entry_id == file_id
+                and current.name == resolved.name
+                and current.parent_id == resolved.parent_id
+                and current.metadata == resolved.metadata
+            )
+            assert cas.object_path(cas_root, current.cas_id).read_bytes() == replacement
+            assert cas.object_path(cas_root, copied.cas_id).read_bytes() == created_bytes
+            print("Replaced original, stable ID:", current.entry_id)
+            print(
+                "Original entry now holds replacement bytes:",
+                cas.object_path(cas_root, current.cas_id).read_bytes(),
+            )
+            print(
+                "Independent copy retains earlier bytes:",
+                cas.object_path(cas_root, copied.cas_id).read_bytes(),
+            )
             n.execute_namespace(
                 handle, mutation(handle, "delete-subtree", {"entry_id": copy_root}), {}
             )
@@ -270,7 +322,7 @@ def main() -> None:
             print("Committed revision:", handle.info().revision)
         print(
             (
-                "Only disposable unprotected roots were used; uploads, snapshots "
+                "Only disposable unprotected roots were used; folder import, snapshots "
                 "and excision are deferred."
             )
         )

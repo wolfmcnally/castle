@@ -43,3 +43,7 @@ Use namespace §§14–16 and 20 for exact raw UTF-8/scalar-key canonical encodi
 - [Namespace architecture](../briefs/coordinated-namespace-crud.md), §§6–7, 9–10, and 12; exact contracts §§14–20.
 - [CAS contract](../briefs/cas-api.md), folder ingest and historical sightings.
 - [CRDT semantics](../briefs/crdt-semantics.md), no automatic current-state selection.
+
+## New-content integration pin
+
+Build on the delivered `namespace_content.py` integration and existing namespace semantic/restart proof families. `execute_namespace` captures an exact immutable bytes mapping outside the canonical request; file create/replace publishes a closed Phase3 receipt before atomic namespace/result commit. The private SQL ownership recipe reserves allocation before staging, then admits prepared only after durable immutable bytes. Folder/snapshot publication must retain these ordering, retry, dependency and explicit-recovery guarantees when extending to its needed complete inventory; one-file internals are not a new public limit. Retained operation dependencies refer to current/deleted affected entry payloads plus explicit content request bindings, not automatic historic snapshots.

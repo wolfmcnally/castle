@@ -1,7 +1,7 @@
-"""Typed, serialized namespace operations over already admitted CAS content.
+"""Typed, serialized namespace operations and immutable content publication.
 
 The caller supplies authorization and one stable protection-domain lock. This
-library does not ingest bytes, operate across domains, or claim encryption.
+library publishes immutable bytes under that fence, without cross-domain atomicity or encryption.
 """
 
 from __future__ import annotations
@@ -387,13 +387,13 @@ def open_namespace(
 def execute_namespace(
     handle: NamespaceHandle,
     request: MutationRequest,
-    content_sources: Mapping[str, object],
+    content_sources: Mapping[str, bytes],
     excision_roots: object = None,
 ) -> MutationResult:
-    if content_sources or excision_roots is not None:
-        _authorize(handle.session, request.kind)
+    if excision_roots is not None:
+        _authorize(handle.session, request.kind if type(request) is MutationRequest else "execute")
         _refuse()
-    return handle.execute(request)
+    return handle.execute(request, content_sources)
 
 
 def read_namespace(handle: NamespaceHandle, request: ReadRequest) -> ReadResult:
