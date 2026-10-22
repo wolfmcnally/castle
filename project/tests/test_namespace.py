@@ -538,6 +538,21 @@ def test_namespace_transactions_and_admission(
     runpy.run_path(str(Path(__file__).with_name("test_namespace_onboarding.py")))["semantic_proof"](
         tmp_path, monkeypatch, Case, _tree
     )
+    runpy.run_path(str(Path(__file__).with_name("test_namespace_excision.py")))["primitive_proof"](
+        tmp_path, monkeypatch
+    )
+    runpy.run_path(str(Path(__file__).with_name("test_namespace_excision.py")))["recipe_proof"](
+        tmp_path, monkeypatch, Case
+    )
+    runpy.run_path(str(Path(__file__).with_name("test_namespace_excision.py")))["workflow_proof"](
+        tmp_path, monkeypatch, Case
+    )
+    runpy.run_path(str(Path(__file__).with_name("test_namespace_excision.py")))["metadata_proof"](
+        tmp_path, Case
+    )
+    runpy.run_path(str(Path(__file__).with_name("test_namespace_excision.py")))[
+        "concurrency_proof"
+    ](tmp_path, monkeypatch, Case)
 
 
 def _child(case: Case, request: n.MutationRequest, boundary: str) -> subprocess.CompletedProcess:
@@ -1011,6 +1026,9 @@ n.create_namespace(Path({str(root)!r}),Path({str(owner.cas_root)!r}),session,req
     _new_receipt_shape_refusal(tmp_path)
     runpy.run_path(str(Path(__file__).with_name("test_namespace_snapshots.py")))["restart_proof"](
         tmp_path, monkeypatch, Case, _tree, _content_child
+    )
+    runpy.run_path(str(Path(__file__).with_name("test_namespace_excision.py")))["restart_proof"](
+        tmp_path, monkeypatch, Case
     )
 
 

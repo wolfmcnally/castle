@@ -1063,8 +1063,8 @@ def isolated_catalog_proof(tmp_path, monkeypatch, Case):
                 image(case.root / "operations") == before_ops and image(case.cas_root) == before_cas
             )
         if fault in {"namespace", "origin", "schema"}:
-            # Qualify the isolating oracle: removing only the semantic decoder
-            # admits this otherwise-consistent graph. No store fixture is changed.
+            # Qualify the isolating oracle: disabling the relevant semantic
+            # guard(s) admits the coherent negative graph. Fixtures stay intact.
             with monkeypatch.context() as patch:
                 patch.setattr(
                     snapshots,
@@ -1073,6 +1073,15 @@ def isolated_catalog_proof(tmp_path, monkeypatch, Case):
                         cas.object_path(handle.cas_root, record.cas_id).read_bytes()
                     ),
                 )
+                if fault == "origin":
+                    # Phase6 provenance is an independent guard after decode.
+                    # First prove it still refuses, then qualify the two-guard
+                    # removal control only inside this disposable mutation.
+                    with pytest.raises(
+                        n.NamespaceError, match="^namespace-storage-recovery-required$"
+                    ):
+                        case.open()
+                    patch.setattr(snapshots, "validate_provenance", lambda *args, **kwargs: None)
                 with case.open() as h:
                     assert h.info().revision == 1
 

@@ -353,7 +353,7 @@ def _snapshot(value: object) -> SnapshotRecord:
 class MutationResult:
     namespace_id: str
     operation_id: str
-    request_fingerprint: str
+    request_fingerprint: str | None
     kind: str
     revision_before: int
     revision_after: int
@@ -410,10 +410,29 @@ def _result(value: dict[str, Any]) -> MutationResult:
     try:
         _integer(value["revision_before"])
         _integer(value["revision_after"])
+        _uuid(value["namespace_id"])
+        _uuid(value["operation_id"])
+        if value["revision_after"] != value["revision_before"] + 1:
+            _refuse()
+        fingerprint = value["request_fingerprint"]
+        if value["kind"] == "excise":
+            if (
+                fingerprint is not None
+                or value["affected_entry_ids"] != []
+                or value["snapshot"] is not None
+            ):
+                _refuse()
+        elif not isinstance(fingerprint, str) or re.fullmatch(r"[0-9a-f]{64}", fingerprint) is None:
+            _refuse()
         if not isinstance(value["affected_entry_ids"], list):
             _refuse()
         for identity in value["affected_entry_ids"]:
             _uuid(identity)
+        if (
+            value["affected_entry_ids"] != sorted(set(value["affected_entry_ids"]))
+            or len(value["affected_entry_ids"]) > MAX_ENTRIES
+        ):
+            _refuse()
     except (NamespaceError, KeyError, TypeError):
         _refuse("namespace-storage-recovery-required")
     value["cas_binding"] = StoreIdentity(**value["cas_binding"])
@@ -469,6 +488,10 @@ def execute_namespace(
     content_sources: Mapping[str, bytes],
     excision_roots: object = None,
 ) -> MutationResult:
+    if type(request) is MutationRequest and request.kind == "excise":
+        from castle import namespace_excision as cutover
+
+        return cutover.execute(handle, request, content_sources, excision_roots)
     if excision_roots is not None:
         _authorize(handle.session, request.kind if type(request) is MutationRequest else "execute")
         _refuse()
@@ -493,7 +516,10 @@ def recover_namespace(
 ) -> RecoveryResult:
     _authorize(session, "recover")
     if recovery_roots is not None:
-        _refuse("namespace-replacement-invalid")
+        with NamespaceHandle(
+            namespace_root, cas_root, session, recover=True, cutover_recovery=recovery_roots
+        ) as handle:
+            return handle.cutover_result
     with NamespaceHandle(namespace_root, cas_root, session, recover=True) as handle:
         info = handle.info()
         return RecoveryResult(

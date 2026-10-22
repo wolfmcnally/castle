@@ -954,3 +954,168 @@ Lessons:
 - Read-only timeout analysis retained536 existing incomplete/malformed schema-3 diagnostics; every line was inspected against that exact condition. No target has30 valid samples and no configuration changes follow.
 
 Sanitized offline report generation follows. The separate bare full handoff gate and verified local-only commit remain pending; no push, live-store operation, new access or release publication.
+
+## 2026-10-22 04:48 — START
+
+Phase 6 — Namespace excision coordination and epoch fencing
+
+Execution trace: c203137572884a63904b860487db3751
+
+Planned work:
+- Implement the deferred fresh namespace database generation/replacement protocol from namespace §18: exact selection-free marker, fresh-image validation, directory durability, sidecar disposal, cleanup-scanned/verified stages and interrupted forward recovery. Original Phase 3 requirements are retained here; ordinary Phase 2 SQLite recovery is not this confidential cleanup mechanism.
+
+- Add the proposed `project/castle/namespace_excision.py` coordinator and `project/tests/test_namespace_excision.py`. Integrate with existing `project/castle/excision.py` and `project/castle/store_state.py` through their contract-defined lifecycle boundaries; do not reimplement retirement or invent rollback after retirement.
+- Stop namespace and direct CAS admission, drain readers/handles, inventory source/shared-owner dependencies, deleted metadata, snapshots, requests/results, staging, journal sightings, remote records, derived indexes, and consumer obligations. Refuse conflicting live ownership or forbidden metadata attached to retained shared content unless explicit caller selection/custody boundaries resolve it.
+- Implement all five durable stages: sanitized snapshot recipes before retirement; completed Castle forward cutover; successor-bound manifest ingestion while blocked; atomic retained reference/binding/dependency publication; fresh namespace database and owned-residue cleanup with the replacement-marker protocol. Source CAS identities remain stable; catalog/epoch bindings advance.
+- Publish distinct reference-publication, cleanup, and completion outcomes. Preserve only permitted identity reservations and selection-free recovery evidence. Report external backup/replica/key/plaintext obligations separately from the enforced local boundary.
+- Fence prepared/retired/foreign epochs on ordinary opens and admission; old replicas cannot merge into the successor, but explicit re-ingestion is a separately authorized intake decision. Derived retrieval reconciliation is required before it reports current completion.
+
+Authorization: operator separately approved sequential Phases5–7 on 2026-10-22 UTC after Phase4 qualification. Phase5 is delivered locally; current Phase6 uses the same retained sole writer, synthetic local stores only, full review/evidence lanes and Sol inline primary with opposite-harness Opus/high advice. Delivery restriction: “Local commits only for now.” No live data, new access/grants/credentials, public or remote publication, duplicate workers or release. Consumer qualification remains the next sequential phase.
+
+## 2026-10-22 12:57 — PARK
+Phase 6 — Original-root proof must survive cutover cleanup
+
+Execution trace: c203137572884a63904b860487db3751
+Candidate lineage: kickoff-evidence: candidate advanced to 2bb20f47b4b0… (root-proof-authority-reconciliation)
+2bb20f47b4b062f7352cfc9ec40d92985b884f8dd4cea1ba28aa7cf1e9b8d621; retained from the reviewed implementation with only the independently authorized nested-metadata regression added afterward. No restoration or history rewrite; the original reviewed source and95-line plan are separately preserved.
+
+The completed-root replica probe admitted a different same-ID successor path after private intent disposal. This fails the existing explicit-root refusal criterion. The current six-field completion and unchanged marker do not preserve that proof. The controlling contradiction is the owning brief's requirement to check original commitments on every recovery while keeping them only in subsequently disposed private intent. Original brief SHA-256: 136567dadb62ac4a016468de24229158fa164e42b21cc0df5ec2d1ab601daf94. Failed replica and revocation probes, all earlier failed tests and the11-finding first CODE report remain unaltered in scratch/runtime evidence.
+
+Existing Phase6 authority and the attributable scoped correction relay authorize exactly two SQL root-commitment fields using the unchanged canonical resolved-root hash formula, plus owning sections16/18 reconciliation. This is a bounded implementation correction, not a new personal approval gate. CAS/public APIs/marker and permissions stay unchanged; missing proof still refuses. Old-schema migration/adoption and selected private payload retention remain forbidden.
+
+Processes/resources: first CODE watcher is terminal exit0, actual report ingested; last focused run is terminal exit1 reproducing the nested metadata false positive. Exact process-table observation found no run-owned process. Synthetic handles/child processes are closed; the sole worker intentionally retains its supported task lease. No full gate or delivery is claimed.
+
+Remaining: preserve original hashes before image-ready, validate them before disposal and every later root-dependent payload operation, qualify wrong-root and absent/malformed proof refusals; resolve the existing CODE findings and revocation boundary; run affected regressions, actual public workflow and both full gates before a local commit. Continue through a fresh captured-authority run carrying the same plan/advice/counters. PLAN1/CODE1 remain consumed; no reset or duplicate pass. The scoped operator relay permits continuation without consuming self-resume budget;3 remain.
+
+Lessons:
+The evidence lifetime must extend through the last promised check: disposal of private intent cannot erase the sole witness needed by later fail-closed recovery. The immediate executable correction and its negative probes own prevention; provisional lesson harvesting remains pending at final close.
+
+## 2026-10-22 12:57 — END
+Phase 6 — Parked for approved owning-contract reconciliation; implementation incomplete, no delivery
+
+Execution trace: c203137572884a63904b860487db3751
+All original history and rejected/failed artifacts are preserved. Phase6 stays in progress. Fresh authority capture and carried advice precede remaining executable work; Phase7 remains sequential and unstarted.
+
+Lessons:
+See the preceding PARK diagnosis; no rule or safeguard is weakened.
+
+## 2026-10-22 13:00 — START (resumed)
+Phase6 — Approved original-root proof correction and retained CODE fixes
+
+Execution trace: 19d5862c7dec41c592bf60e5478a92c4
+Time basis: UTC for this block and the preceding12:57 PARK/END. The ordinary writer's locally synthesized06:59 header was rejected before mutation because it regressed behind those UTC records. Preserve the rejected invocation; this single bounded append supplies the actual UTC wall clock through the same supported writer, without editing old blocks, backdating, policy changes or product identity changes. Subsequent blocks use explicit actual UTC headers to retain one chronology.
+
+Planned work:
+- Implement the deferred fresh namespace database generation/replacement protocol from namespace §18: exact selection-free marker, fresh-image validation, directory durability, sidecar disposal, cleanup-scanned/verified stages and interrupted forward recovery. Original Phase 3 requirements are retained here; ordinary Phase 2 SQLite recovery is not this confidential cleanup mechanism.
+
+- Add the proposed `project/castle/namespace_excision.py` coordinator and `project/tests/test_namespace_excision.py`. Integrate with existing `project/castle/excision.py` and `project/castle/store_state.py` through their contract-defined lifecycle boundaries; do not reimplement retirement or invent rollback after retirement.
+- Stop namespace and direct CAS admission, drain readers/handles, inventory source/shared-owner dependencies, deleted metadata, snapshots, requests/results, staging, journal sightings, remote records, derived indexes, and consumer obligations. Refuse conflicting live ownership or forbidden metadata attached to retained shared content unless explicit caller selection/custody boundaries resolve it.
+- Implement all five durable stages: sanitized snapshot recipes before retirement; completed Castle forward cutover; successor-bound manifest ingestion while blocked; atomic retained reference/binding/dependency publication; fresh namespace database and owned-residue cleanup with the replacement-marker protocol. Source CAS identities remain stable; catalog/epoch bindings advance.
+- Publish distinct reference-publication, cleanup, and completion outcomes. Preserve only permitted identity reservations and selection-free recovery evidence. Report external backup/replica/key/plaintext obligations separately from the enforced local boundary.
+- Fence prepared/retired/foreign epochs on ordinary opens and admission; old replicas cannot merge into the successor, but explicit re-ingestion is a separately authorized intake decision. Derived retrieval reconciliation is required before it reports current completion.
+
+Continue the same reviewed95-line plan with the exact scoped two-field SQL/owning-contract amendment. Original failed trace is truthfully parked, original contract and negative probes preserved. PLAN1/CODE1 and all11 CODE findings carry across; no reset, duplicate reviewer, writer or grant. Same sole worker; synthetic stores and local commits only, no push/publication or live data. Remaining runtime corrections, public workflow, affected regressions and both full gates remain unproved.
+
+## 2026-10-22 13:20 — END
+Phase 6 — Coordinated excision and forward recovery
+
+Castle can now remove an explicitly selected synthetic namespace/CAS dependency closure, preserve retained files and snapshots, and reopen the successor only after fresh database replacement and owned cleanup. A retry preserves its original outcome; ordinary requests remain blocked during the transition. Completed recovery still verifies the original caller paths after private selection evidence is gone. No further owner decision is needed to continue the already approved consumer qualification work.
+
+Execution trace: 19d5862c7dec41c592bf60e5478a92c4
+Time basis: UTC. Baseline: cbb6292a18ea1aeba869e1feed62a0e9b919b0cb.
+
+Files changed:
+- `project/castle/namespace_excision.py` and `namespace_replacement.py` — complete explicit closure, private durable recipes, delivered CAS transition and successor publications, atomic references, fresh logical SQL replacement, independent retained-authority checks, exact disposal, root-bound recovery and proven pre-retirement abort.
+- Existing namespace API/store/content/snapshot/transaction owners — lifecycle fencing, eight-field completion schema, original-root commitments, immutable historical epoch/result joins, safe retired status and dependency/cache reconciliation. Existing CAS/publisher/journal/merge implementations remain unchanged.
+- Existing namespace semantic/restart families invoke the new excision helper; proof estate keeps163 families/218 leaves. The public example and README files show actual disposable cutover/recovery and precise limits.
+- Owning brief §§16/18 — authorized two root commitments preserve the preexisting refusal contract; unchanged hash formula/public API/marker/CAS, explicit offline guessability/linkability and missing-proof refusal. Original accepted brief and failed replica probe are preserved.
+- Ledger/ripple/user-action/lesson/report updates — pending after this accepted implementation record; existing release marker/history stay intact.
+
+Build status:
+- Final affected namespace/publisher/CAS/merge selection:42 passed102.10s. Final focused lint,92-file format, policy/proof inventory and plan-delivery checks passed without outstanding warnings. An early nested-metadata reproduction failed as intended; its post-fix assertion initially called a nonexistent test accessor, which was corrected to the actual typed inventory. A missing stdlib import was caught by lint and fixed. All original diagnostics remain.
+- Public final workflow: actual create/replace/duplicate/move/delete/new-byte/folder/empty-directory/snapshot/export/reference-delete flow at revision12 plus separate explicit excision/repeat-recovery flow passed. No SQL seeding.
+- Candidate-bound full implementation gate passed with complete diagnostics reviewed, zero outstanding warnings; command-zero and acceptance validation pass. Separate bare handoff gate/local delivery remain pending after all tracked close writes.
+
+Review lane: full primary advisory. Evidence lane: full. Follow-up route: approved full-cycle authority continuation carrying the existing plan and advice; no duplicate planning or review.
+
+Role model/venue — orchestrated by Codex:
+- Planner/coder requested Sol6.1/high inline in the same sole retained worker; observed model/effort/harness version unreported.
+- Plan reviewer/code critic requested latest Opus/high under Claude. Both actual init events report claude-opus-5-5 and Claude Code2.1.308; observed effort unreported. Current real-read preflight succeeds with existing credentials/provider.
+- The original trace contains one successful plan report with9 findings and one successful CODE report with11. All20 have current explicit adopted dispositions and fresh bounded falsifiers. The fresh trace carries exact original report/candidate/dispatch provenance; phase-wide PLAN1/CODE1 remain consumed. No additional reviewer/pass/reset was used.
+- Actual review findings exposed later-cutover epoch recovery, abort restoration temporary ownership, substring command classification, pre-intent destination refusal, dead persisted fields, metadata-key over-refusal, dropped-snapshot recipe closure and retained-file scan breadth. The primary also reproduced revoked-session recipe access and completed-root replica admission. Corrections retain original scope and complete objective proof obligations.
+- Original trace was truthfully finalized error/parked before the scoped root-schema correction and preserved byte-for-byte. New captured authority and carried advice retain lineage. One resumed START append refused before mutation because UTC and local timestamp synthesis differed; a single same-writer explicit actual UTC append passed with exact original prefix and unchanged product identity. No safeguard/policy/permission change follows.
+
+Candidate-bound evidence:
+- Accepted product: 020e36e11814b84c688e798d3b139fe2b5a044f4a2ab9131d8bb9a869b6923c2
+- Unchanged implementation full tree: 52e206ed6f91934fbbdfff4bc85d3d850b03588a0ac747ed3cd714f3dafe2225
+- Two actual final gate executions, each with reviewed diagnostics; diagnostic observations are not extra runs. Reports carry their original source identities. No reopened or discarded advice, revision packet, fabricated role or budget reset.
+
+### Execution timing
+
+Execution trace: 19d5862c7dec41c592bf60e5478a92c4
+- Outcome: `success`
+- Makespan: 1278756960542 ns (1278.756960542 s)
+- Intelligence: 0 ns (0.000000000 s)
+- Gates: 243364902458 ns (243.364902458 s)
+- Orchestration: 1278398864460 ns (1278.398864460 s)
+- Wait: 0 ns (0.000000000 s)
+- Retry/rework: 0 ns (0.000000000 s)
+- Failed work: 0 ns (0.000000000 s)
+- Unattributed: 358096082 ns (0.358096082 s)
+- Category totals are interval unions and may overlap.
+
+#### Slowest material spans
+
+- `orchestration.implementation` — category `reconciliation`, attempt 1, outcome `success`: 803982674917 ns (803.982674917 s)
+- `orchestration.acceptance` — category `reconciliation`, attempt 1, outcome `success`: 401403791834 ns (401.403791834 s)
+- `gate.full` — category `gate`, attempt 1, outcome `success`: 241394017125 ns (241.394017125 s)
+- `orchestration.setup` — category `reconciliation`, attempt 1, outcome `success`: 72937790917 ns (72.937790917 s)
+- `gate.workflow` — category `gate`, attempt 1, outcome `success`: 1970885333 ns (1.970885333 s)
+
+Acceptance:
+- Objective: complete selected live/deleted/metadata/operation/catalog closure and shared-owner refusals; durable bounded sanitized recipes before retirement; accepted CAS/publisher receipts before atomic references; one transition revision while unavailable; fresh logical image with exact generation/digest/rename/sidecar ordering; independent retained namespace/CAS and operation-file checks before owned witness disposal; safe selection-free completion/status and original-root proof after disposal; all33 first-cutover child-exit boundaries, four second-cutover post-retirement exits, unknown residue preservation, short/zero/persistent sync/uncertain SQL faults, explicit forward retry, interrupted prior-marker abort and admission/export/session boundaries. Claims are bound to this local synthetic candidate.
+- Parked for the operator: protected adapter/deployment, real-store seed or purge selections, external copies/backup/export custody and future release/publication remain separate. Actual filesystem/VFS/device/hardware power-loss qualification is unproved; consumer CLI/Linux/exact-artifact qualification remains the approved next phase.
+
+Limits:
+- Hashes are original canonical resolved-root equality witnesses. Unsalted predictable paths permit offline guesses/linkage; no path secrecy, routing, authentication or grants. Missing/NULL/malformed/old-schema/mismatched proof refuses, without migration or inferred proof. No selected plaintext, names, CasIDs or removed-selection fingerprint remains in completion.
+- A fresh marker/image write and directory boundary establish only that new qualified boundary, never retroactively certify an earlier failed write. Wrapper faults/process death do not prove hardware power-loss or physical erasure.
+- Excision is forward-only after actual retirement. Pre-retirement abort can leave a bound prepared destination fenced as caller-owned residue; no automatic deletion, adoption, new-content GC or external cleanup is authorized. Single caller-owned domain admission excludes cooperative direct writers; no distributed atomicity is implied.
+
+Delivery: restricted — “Local commits only for now.” Synthetic stores only; no push, live data, new access, credentials changes, publication or duplicate writer. Handoff gate and exact clean local commit remain pending at this record.
+
+Ripple:
+- AUTO pending: Phase6 completion in the authoritative ledger, preserving the existing release arrow; initiative distinguishes qualified local excision from pending consumer qualification.
+- AUTO pending: Phase7 exact explicit-root/status/schema/abort/qualification pins and scoped user-action update; no consumer repository edits.
+- DECIDE:none for this close. Continue the already approved synthetic consumer/platform/artifact qualification; missing access parks only dependent claims, without weakening the release boundary.
+
+Lessons:
+- Pending local/test candidate `indefinable-caracara`: preserve independently durable recovery witnesses through the last promised retry check. One observed root-proof lifetime contradiction; no graduation.
+- Later-epoch restart and revoked-session negative controls strengthen existing proof families. Existing timestamp/append-only rules already require real consistent time; the UTC/local caller mismatch is recorded and corrected without another rule. All failed/rejected originals remain.
+- Timeout recommendation retained536 known incomplete/malformed historical schema-3 diagnostics, every line classified; no target has30 successful samples, exact per-target count unreported. No budgets/configuration changes.
+
+User Demo: N/A — destructive cutover is demonstrated by disposable behavioral proofs, not a request for the owner to purge real content interactively.
+
+Test protocol:
+- Run `./bin/python project/examples/namespace_demo.py`. Expected: actual disposable operations/folder/snapshot flow, retained folder/redacted snapshot reopened on successor, selection-free repeat recovery and printed synthetic limits. Original caller input remains outside cleanup.
+- Run `./bin/test project/tests/test_namespace.py project/tests/test_cas_recovery.py project/tests/test_cas.py project/tests/test_merge.py`. Expected: retained concurrency/interruption/refusal and unchanged ordinary CAS laws pass. These commands authorize no real-store purge.
+
+Remaining:
+- Apply and verify the accepted ledger, AUTO pins and candidate lesson; append truthful actual close outcomes and sanitized report. Run the separate bare full handoff gate, then verify an exact local commit and clean checkout.
+- Continue approved Phase7 through its own review/budget/full gates. This delivers no release or consumer adoption.
+
+## 2026-10-22 13:22 — END (bookkeeping)
+Phase 6 — Applied qualified local excision handoff records
+
+Execution trace: 19d5862c7dec41c592bf60e5478a92c4
+Time basis: UTC. The exact status-only completion transition was accepted, applied and verified before AUTO narrative/ripple writes. The existing release arrow and completed phase prose/history remain unchanged. The initiative, pending consumer phase and scoped user action now record the qualified local excision/root-proof/abort surface and remaining platform/protected/external-custody limits. No new product decision or permission is inferred.
+
+The local/test candidate lesson `indefinable-caracara` is filed with one original root-proof lifetime observation; lesson validation passes and no candidate is graduation-ready. No rule/configuration/budget change occurred. Original wrong-root probe, contract, review artifacts, red diagnostics and failed trace remain preserved. The reviewed candidate passed196 tests237.71s and the public workflow with zero warnings; actual full handoff gate and clean local delivery remain pending.
+
+Acceptance:
+- Objective: unchanged accepted implementation and exact applied AUTO records; final report/handoff gate remain pending.
+- Parked for the operator: actual protected deployment, hardware/VFS durability, real stores and external-copy custody; consumer qualification remains sequential approved work.
+
+Delivery: restricted — “Local commits only for now.” No push/publication/live-data actions.
+
+Lessons:
+- `indefinable-caracara` filed; no graduation. Existing timestamp and append-only rules retained; explicit actual UTC headers preserve chronology without historical edits.

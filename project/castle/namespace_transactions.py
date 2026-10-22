@@ -27,6 +27,7 @@ _ARGS = {
     "import-folder": {"parent_id", "entries"},
     "snapshot": {"snapshot_id"},
     "delete-snapshot": {"snapshot_id"},
+    "excise": {"selection", "snapshot_actions"},
 }
 
 
@@ -121,6 +122,10 @@ def normalize(request: n.MutationRequest) -> dict[str, Any]:
         if len(set(values)) != len(values) or value["operation_id"] in values:
             n._refuse()
         args["operation_ids"] = sorted(values)
+    if kind == "excise":
+        from castle import namespace_excision as cutover
+
+        value["args"] = cutover.normalize(args)
     n.canonical_bytes(value)
     return value
 
@@ -169,7 +174,7 @@ def prepare(
         or handle.db.execute(
             "SELECT 1 FROM snapshot_reservations WHERE snapshot_id=?", (identity,)
         ).fetchone()
-        or identity in {info.namespace_id, info.database_generation}
+        or identity in handle.authority_ids()
     ):
         n._refuse()
     receipt: dict[str, Any] = {
@@ -252,6 +257,8 @@ def execute(
             if value["kind"] == "snapshot":
                 snapshot, raw = snapshots.capture(handle, value["args"]["snapshot_id"])
                 data = {snapshot.cas_id: raw}
+            elif value["kind"] == "delete-snapshot":
+                snapshot = snapshots.catalog(handle, value["args"]["snapshot_id"])
         except n.NamespaceError as error:
             if error.code in {
                 "namespace-storage-recovery-required",
@@ -261,7 +268,7 @@ def execute(
             rejection = error.code
     publications = content_io.new_requests(handle, value, data) if rejection is None else []
     prepare(handle, value, publications=publications, snapshot=snapshot, rejection=rejection)
-    if snapshot is not None:
+    if snapshot is not None and value["kind"] == "snapshot":
         handle.pending_captures[(value["operation_id"], snapshot)] = data[snapshot.cas_id]
     if publications:
         for item in publications:
@@ -324,7 +331,7 @@ def _changes(
 
     def fresh(identity: str) -> None:
         if (
-            identity in {info.namespace_id, info.database_generation, request["operation_id"]}
+            identity in handle.authority_ids() | {request["operation_id"]}
             or handle.db.execute(
                 "SELECT 1 FROM entry_reservations WHERE entry_id=?", (identity,)
             ).fetchone()
@@ -694,9 +701,7 @@ def read(
         entries = handle.entries()
         if kind in {"inspect-snapshot", "export-snapshot"}:
             record = snapshots.catalog(handle, args["snapshot_id"])
-            result = n.SnapshotView(
-                record, snapshots.decode(handle, record, expected_origin={"kind": "capture"})
-            )
+            result = n.SnapshotView(record, snapshots.catalog_view(handle, record))
         elif kind == "info":
             result = info
         elif kind == "resolve":
@@ -753,6 +758,17 @@ def operation(handle: store.NamespaceHandle, operation_id: str) -> n.OperationSt
             )
         else:
             state = row["state"]
+            completed = None
+            if (
+                state == "retired"
+                and handle.db.execute(
+                    "SELECT 1 FROM replacement_completion WHERE operation_id=? AND completed=1",
+                    (operation_id,),
+                ).fetchone()
+            ):
+                from castle import namespace_excision as cutover
+
+                completed = cutover.completed_result(handle, operation_id)
             if state == "staging":
                 state = "recovery-required"
             if state not in {"prepared", "committed", "rejected", "retired", "recovery-required"}:
@@ -762,7 +778,9 @@ def operation(handle: store.NamespaceHandle, operation_id: str) -> n.OperationSt
                 info.namespace_id,
                 operation_id,
                 state,
-                n._result(n._decode(row["terminal_result"])) if row["terminal_result"] else None,
+                n._result(n._decode(row["terminal_result"]))
+                if row["terminal_result"]
+                else completed,
                 error,
                 "recover"
                 if state == "recovery-required"
@@ -790,7 +808,9 @@ def operation_dependencies(handle: store.NamespaceHandle) -> set[tuple[str, str,
             continue
         request = n._decode(row["canonical_request"])
         content_ids = set(content_io.specs(request))
-        value = content_io.decode_recipe(row["ownership_receipt"])
+        value = content_io.recipe(handle, row)[0]
+        if request["kind"] == "excise":
+            content_ids.update(request["args"]["selection"]["content_ids"])
         content_ids.update(item["request"]["cas_id"] for item in value["publication"])
         if row["state"] == "committed":
             result = n._result(n._decode(row["terminal_result"]))
@@ -802,8 +822,6 @@ def operation_dependencies(handle: store.NamespaceHandle) -> set[tuple[str, str,
             if result.snapshot:
                 content_ids.add(result.snapshot.cas_id)
             if request["kind"] == "delete-snapshot":
-                content_ids.add(
-                    snapshots.catalog(handle, request["args"]["snapshot_id"], live=False).cas_id
-                )
+                content_ids.add(n._snapshot(value["snapshot"]).cas_id)
         expected.update(("operation", identity, cas_id, "request-result") for cas_id in content_ids)
     return expected

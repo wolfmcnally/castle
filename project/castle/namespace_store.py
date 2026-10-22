@@ -13,7 +13,7 @@ import uuid
 import weakref
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
@@ -61,7 +61,8 @@ _TABLES = {
         "CREATE TABLE replacement_completion (operation_id TEXT PRIMARY "
         "KEY, target_generation TEXT NOT NULL, cas_binding TEXT NOT NULL, "
         "revision_before INTEGER NOT NULL, revision_after INTEGER NOT "
-        "NULL, completed INTEGER NOT NULL)"
+        "NULL, completed INTEGER NOT NULL, predecessor_root_commitment TEXT NOT NULL, "
+        "successor_root_commitment TEXT NOT NULL)"
     ),
 }
 _HANDLES: weakref.WeakSet[NamespaceHandle] = weakref.WeakSet()
@@ -198,6 +199,7 @@ class NamespaceHandle:
         *,
         initialize: n.InitializeRequest | None = None,
         recover: bool = False,
+        cutover_recovery: object = None,
     ) -> None:
         self.session = session
         n._authorize(
@@ -249,6 +251,11 @@ class NamespaceHandle:
             self.domain_context = domain_context
             self._lock(self.root / "coordinator.lock", create=initialize is not None)
             _HANDLES.add(self)
+            if cutover_recovery is not None:
+                from castle import namespace_excision as cutover
+
+                self.cutover_result = cutover.recover(self, cutover_recovery)
+                return
             with journal._stable_lock(self.cas_root):
                 self._inventory(initializing=initialize is not None)
                 if initialize is not None:
@@ -258,6 +265,12 @@ class NamespaceHandle:
                     self._read_anchor()
                     self._cas_check(identity_only=True)
                     self._open()
+                    pending = self.db.execute(
+                        "SELECT canonical_request FROM operations "
+                        "WHERE state IN ('staging','prepared')"
+                    ).fetchall()
+                    if any(n._decode(raw)["kind"] == "excise" for (raw,) in pending):
+                        n._refuse("namespace-storage-recovery-required")
                     self._validate(check_content=False)
                     self._inventory()
                     content_io.before_cas(self)
@@ -321,8 +334,13 @@ class NamespaceHandle:
             else {"coordinator.lock", "operations", "namespace.sqlite", "namespace.sqlite-journal"}
         )
         names = {p.name for p in self.root.iterdir()}
-        if "replacement.json" in names:
-            n._refuse("namespace-replacement-invalid")
+        from castle import namespace_replacement as replacement
+
+        marker = replacement.read(self.root)
+        if marker is not None:
+            if initializing or marker["stage"] != "complete":
+                n._refuse("namespace-storage-recovery-required")
+            allowed.add("replacement.json")
         if names - allowed:
             n._refuse("namespace-storage-recovery-required")
         for file in self.root.iterdir():
@@ -597,8 +615,8 @@ class NamespaceHandle:
         unknown files, links or wrong authority remain a refusal.
         """
         request = n._decode(row["canonical_request"])
-        recipe = content_io.decode_recipe(row["ownership_receipt"])
-        expected = self._ownership(request, self.load_info())
+        recipe = content_io.recipe(self, row)[0]
+        expected = self._ownership(request, self.ownership_info(row))
         if (
             not isinstance(recipe, dict)
             or set(recipe) != {"receipt", "expiry", "publication", "precondition_error", "snapshot"}
@@ -706,7 +724,9 @@ class NamespaceHandle:
                 incomplete = True
                 continue
             receipt = self._receipt(row["operation_id"])
-            expected = self._ownership(n._decode(row["canonical_request"]), self.load_info())
+            expected = self._ownership(
+                n._decode(row["canonical_request"]), self.ownership_info(row)
+            )
             if {**receipt, "state": "prepared"} != expected:
                 n._refuse("namespace-storage-recovery-required")
             incomplete |= receipt["state"] != "durable" or content_io.has_payload(self, row)
@@ -827,7 +847,13 @@ class NamespaceHandle:
                 (entry.entry_id, entry.cas_id),
             )
 
-    def _validate(self, *, check_content: bool = True) -> None:
+    def _validate(
+        self,
+        *,
+        check_content: bool = True,
+        replacement_pending: bool = False,
+        cutover_operation: str | None = None,
+    ) -> None:
         info = self.load_info()
         n._uuid(info.namespace_id)
         n._uuid(info.root_id)
@@ -838,21 +864,32 @@ class NamespaceHandle:
             n._refuse("namespace-protection-unsupported")
         if info.cas != self.binding:
             n._refuse("namespace-binding-mismatch")
-        if {k: v for k, v in asdict(info).items() if k != "revision"} != {
-            k: v for k, v in asdict(self.anchor).items() if k != "revision"
-        }:
-            n._refuse("namespace-binding-mismatch")
+        from castle import namespace_replacement as replacement
+
+        marker = replacement.read(self.root)
+        if cutover_operation is not None:
+            from castle import namespace_excision as cutover
+
+            _, intent = cutover._intent(self, cutover_operation)
+            if intent["stage"] not in {"staging", "prepared"} or info != n._info(
+                intent["source_info"]
+            ):
+                replacement.invalid()
+            marker = intent["prior_marker"]
+        self.epoch_intervals = replacement.epochs(
+            self.anchor,
+            info,
+            self.db.execute("SELECT * FROM replacement_completion").fetchall(),
+            marker,
+            allow_pending=replacement_pending,
+        )
         _tree(info, self.entries())
         reservations = {
             row[0] for row in self.db.execute("SELECT entry_id FROM entry_reservations")
         }
         for identity in reservations:
             n._uuid(identity)
-        if (
-            info.root_id not in reservations
-            or info.namespace_id in reservations
-            or info.database_generation in reservations
-        ):
+        if info.root_id not in reservations or bool(self.authority_ids() & reservations):
             n._refuse("namespace-format-unsupported")
         expected = set()
         for entry in self.entries(live=False).values():
@@ -873,12 +910,11 @@ class NamespaceHandle:
 
         for (identity,) in self.db.execute("SELECT operation_id FROM operations").fetchall():
             n._uuid(identity)
-            if identity in reservations or identity in {
-                info.namespace_id,
-                info.database_generation,
-            }:
+            if identity in reservations or identity in self.authority_ids():
                 n._refuse("namespace-format-unsupported")
             row = transactions._row(self, identity)
+            if identity == cutover_operation:
+                continue
             if row["state"] == "retired":
                 if (
                     any(
@@ -904,8 +940,25 @@ class NamespaceHandle:
                 or row["canonical_request"] is None
             ):
                 n._refuse("namespace-format-unsupported")
-            content_io.recipe(self, row)
             request = n._decode(row["canonical_request"])
+            try:
+                if (
+                    not isinstance(request, dict)
+                    or request.get("schema") != "castle.namespace_request.v1"
+                ):
+                    n._refuse()
+                reconstructed = n.MutationRequest(
+                    **{key: value for key, value in request.items() if key != "schema"}
+                )
+                reconstructed = replace(
+                    reconstructed, expected_cas=store_state._identity(reconstructed.expected_cas)
+                )
+                normalized = transactions.normalize(reconstructed)
+                if n.canonical_bytes(normalized).decode() != row["canonical_request"]:
+                    n._refuse()
+            except (n.NamespaceError, store_state.StoreStateError, TypeError, ValueError):
+                n._refuse("namespace-storage-recovery-required")
+            content_io.recipe(self, row)
             if (
                 request["operation_id"] != identity
                 or request["namespace_id"] != info.namespace_id
@@ -925,7 +978,9 @@ class NamespaceHandle:
                     or result.operation_id != identity
                     or result.request_fingerprint != row["fingerprint"]
                     or result.kind != request["kind"]
-                    or result.cas_binding != info.cas
+                    or result.cas_binding != self.ownership_info(row).cas
+                    or request["expected_cas"] != asdict(result.cas_binding)
+                    or request["expected_revision"] != result.revision_before
                     or result.revision_after != result.revision_before + 1
                     or result.revision_after > info.revision
                     or result.revision_before != row["prepared_revision"]
@@ -943,9 +998,17 @@ class NamespaceHandle:
                         result.snapshot != saved
                         or saved.snapshot_id != request["args"]["snapshot_id"]
                         or saved.captured_revision != result.revision_before
-                        or snapshots.catalog(self, saved.snapshot_id, live=False) != saved
+                        or (
+                            result.cas_binding == info.cas
+                            and snapshots.catalog(self, saved.snapshot_id, live=False) != saved
+                        )
                     ):
                         n._refuse("namespace-storage-recovery-required")
+                    if result.cas_binding != info.cas:
+                        historical = snapshots.decode(
+                            self, saved, expected_binding=result.cas_binding
+                        )
+                        snapshots.validate_provenance(self, historical, result.cas_binding)
                 elif result.snapshot is not None:
                     n._refuse("namespace-storage-recovery-required")
             if row["state"] == "rejected":
@@ -974,11 +1037,30 @@ class NamespaceHandle:
 
         if set(
             self.db.execute("SELECT * FROM dependencies WHERE owner_kind='snapshot'")
-        ) != snapshots.dependencies(self, check_content=check_content):
+        ) != snapshots.dependencies(
+            self, check_content=check_content, allow_pending=replacement_pending
+        ):
             n._refuse("namespace-storage-recovery-required")
-        for table in ("replacement_completion",):
-            if self.db.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone():
-                n._refuse("namespace-format-unsupported")
+        for (operation,) in self.db.execute("SELECT operation_id FROM replacement_completion"):
+            if self.db.execute(
+                "SELECT state FROM operations WHERE operation_id=?", (operation,)
+            ).fetchone() != ("retired",):
+                n._refuse("namespace-replacement-invalid")
+
+    def ownership_info(self, row: dict[str, Any]) -> n.NamespaceInfo:
+        from castle import namespace_replacement as replacement
+
+        info = self.load_info()
+        intervals = getattr(self, "epoch_intervals", [(0, info.cas, info.database_generation)])
+        binding, generation = replacement.epoch_at(intervals, row["prepared_revision"])
+        return replace(info, cas=binding, database_generation=generation)
+
+    def authority_ids(self) -> set[str]:
+        info = self.load_info()
+        return {info.namespace_id, info.database_generation, self.anchor.database_generation} | {
+            row[0]
+            for row in self.db.execute("SELECT target_generation FROM replacement_completion")
+        }
 
     def _io_failed(self) -> None:
         self.failed = True

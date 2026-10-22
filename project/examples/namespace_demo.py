@@ -136,6 +136,119 @@ def show(handle: n.NamespaceHandle, label: str, directory_id: str) -> None:
         )
 
 
+def excision_workflow(root: Path) -> None:
+    """A separate disposable cutover with explicit selection and a new session."""
+    root.mkdir()
+    predecessor, successor = root / "before", root / "after"
+    namespace_root, domain_lock = root / "namespace", root / "domain.lock"
+    source = root / "retained-input.txt"
+    source.write_bytes(b"Caller-owned original input deliberately remains outside CAS cleanup.\n")
+    retained = cas.ingest_file(predecessor, source, "disposable-cutover-seed")
+    session = LocalSession(namespace_root, predecessor, domain_lock)
+    info = initialize(namespace_root, predecessor, session)
+    with n.open_namespace(namespace_root, predecessor, session) as handle:
+        folder, selected = identity(), identity()
+        n.execute_namespace(
+            handle,
+            mutation(
+                handle,
+                "create-directory",
+                {
+                    "entry_id": folder,
+                    "parent_id": info.root_id,
+                    "name": "Retained empty folder",
+                    "metadata": {},
+                },
+            ),
+            {},
+        )
+        payload = b"Disposable selected namespace content.\n"
+        cas_id = "sha256:" + hashlib.sha256(payload).hexdigest()
+        created = n.execute_namespace(
+            handle,
+            mutation(
+                handle,
+                "create-file",
+                {
+                    "entry_id": selected,
+                    "parent_id": info.root_id,
+                    "name": "Selected.txt",
+                    "metadata": {},
+                    "content": {"cas_id": cas_id, "size": len(payload)},
+                },
+            ),
+            {cas_id: payload},
+        )
+        snapshot = n.execute_namespace(
+            handle, mutation(handle, "snapshot", {"snapshot_id": identity()}), {}
+        )
+        request = mutation(
+            handle,
+            "excise",
+            {
+                "selection": {
+                    "content_ids": [cas_id, snapshot.snapshot.cas_id],
+                    "entry_ids": [selected],
+                    "metadata_entry_ids": [],
+                    "operation_ids": [created.operation_id, snapshot.operation_id],
+                },
+                "snapshot_actions": [
+                    {
+                        "snapshot_id": snapshot.snapshot.snapshot_id,
+                        "action": "replace",
+                        "remove_entry_ids": [selected],
+                        "clear_metadata_entry_ids": [],
+                    }
+                ],
+            },
+        )
+        result = n.execute_namespace(
+            handle, request, {}, {"predecessor_root": predecessor, "successor_root": successor}
+        )
+        assert handle.closed and result.revision_after == 4
+    next_session = LocalSession(namespace_root, successor, domain_lock)
+    with n.open_namespace(namespace_root, successor, next_session) as handle:
+        current = handle.info()
+        assert [entry.name for entry in browse(handle, current.root_id)] == [
+            "Retained empty folder"
+        ]
+        assert cas.require_object(successor, retained.cas_id).read_bytes() == source.read_bytes()
+        assert not cas.object_path(successor, cas_id).exists()
+        status = n.namespace_operation(handle, request.operation_id)
+        assert status.state == "retired" and status.result == result
+        view = n.read_namespace(
+            handle,
+            n.ReadRequest(
+                current.namespace_id,
+                current.cas,
+                None,
+                "inspect-snapshot",
+                {"snapshot_id": snapshot.snapshot.snapshot_id},
+            ),
+        ).value
+        assert view.manifest["origin"] == {"kind": "redacted", "operation_id": request.operation_id}
+        assert {entry["entry_id"] for entry in view.manifest["entries"]} == {info.root_id, folder}
+    recovered = n.recover_namespace(
+        namespace_root,
+        predecessor,
+        session,
+        {
+            "predecessor_root": predecessor,
+            "successor_root": successor,
+            "operation_id": request.operation_id,
+            "expected_predecessor": info.cas,
+            "action": "resume",
+        },
+    )
+    assert recovered.state == "ready" and recovered.revision == 4
+    print(
+        "Disposable excision: selected content removed, retained folder and redacted snapshot reopened."
+    )
+    print(
+        "Selection-free repeat recovery confirms completion; original caller input remains outside cleanup."
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--operation-id", help="UUIDv4 token for the duplicate and its retry")
@@ -411,10 +524,11 @@ def main() -> None:
             print("Snapshot captured revision:", record.captured_revision)
             print("Snapshot catalog removed; immutable bytes remain retained.")
             print("Committed revision:", handle.info().revision)
+        excision_workflow(root / "cutover-example")
         print(
             (
-                "Only disposable unprotected roots were used; epoch excision and protected "
-                "deployment remain separate qualification."
+                "Only disposable unprotected roots were used; physical erasure, protected "
+                "deployment and hardware power-loss qualification remain unproved."
             )
         )
 

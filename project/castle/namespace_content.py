@@ -140,10 +140,14 @@ def recipe(
 ) -> tuple[dict[str, Any], list[publication.PublicationRequest]]:
     value = decode_recipe(row["ownership_receipt"])
     request = n._decode(row["canonical_request"])
+    if request["kind"] == "excise" and "cutover" in value:
+        from castle import namespace_excision as cutover
+
+        return cutover.aborted_recipe(handle, row, value), []
     if (
         not isinstance(value, dict)
         or set(value) != {"receipt", "expiry", "publication", "precondition_error", "snapshot"}
-        or value["receipt"] != handle._ownership(request, handle.load_info())
+        or value["receipt"] != handle._ownership(request, handle.ownership_info(row))
         or not isinstance(value["expiry"], dict)
         or not isinstance(value["publication"], list)
         or (value["precondition_error"] is not None and value["precondition_error"] not in n._CODES)
@@ -154,13 +158,17 @@ def recipe(
     if value["snapshot"] is not None:
         snapshot = n._snapshot(value["snapshot"])
         if (
-            request["kind"] != "snapshot"
+            request["kind"] not in {"snapshot", "delete-snapshot"}
             or snapshot.snapshot_id != request["args"]["snapshot_id"]
-            or snapshot.captured_revision != row["prepared_revision"]
+            or (
+                request["kind"] == "snapshot"
+                and snapshot.captured_revision != row["prepared_revision"]
+            )
+            or snapshot.captured_revision > row["prepared_revision"]
         ):
             n._refuse("namespace-storage-recovery-required")
         declared = {snapshot.cas_id: snapshot.size}
-        if row["state"] in {"staging", "prepared"}:
+        if request["kind"] == "snapshot" and row["state"] in {"staging", "prepared"}:
             from castle import namespace_snapshots as snapshots
 
             key = (row["operation_id"], snapshot)
@@ -169,7 +177,7 @@ def recipe(
                 if expected != snapshot:
                     n._refuse("namespace-storage-recovery-required")
                 handle.pending_captures[key] = raw
-    elif request["kind"] == "snapshot" and value["precondition_error"] is None:
+    elif request["kind"] in {"snapshot", "delete-snapshot"} and value["precondition_error"] is None:
         n._refuse("namespace-storage-recovery-required")
     result = []
     used = {request["namespace_id"], request["operation_id"]}
@@ -180,7 +188,7 @@ def recipe(
         fields = dict(saved["request"])
         fields["cas_binding"] = n.StoreIdentity(**fields["cas_binding"])
         item = publication.PublicationRequest(**fields)
-        publication._request(item, handle.binding)
+        publication._request(item, handle.ownership_info(row).cas)
         if (
             item.namespace_id != handle.anchor.namespace_id
             or item.operation_id != row["operation_id"]
@@ -439,6 +447,12 @@ def validate_receipt(
 def cleanup(handle: NamespaceHandle, row: dict[str, Any]) -> None:
     value, requests = recipe(handle, row)
     directory = handle.root / "operations" / row["operation_id"]
+    if handle.ownership_info(row).cas != handle.binding:
+        if names(requests) & (
+            {item.name for item in directory.iterdir()} if directory.exists() else set()
+        ):
+            n._refuse("namespace-storage-recovery-required")
+        return  # Historical terminal evidence stays byte-identical; no old CAS replay.
     raw_journal = (handle.cas_root / journal.JOURNAL_FILENAME).read_bytes() if requests else b""
     remotes = Counter(cas._snapshot_remotes(handle.cas_root)) if requests else Counter()
     for request, saved in zip(requests, value["publication"], strict=True):

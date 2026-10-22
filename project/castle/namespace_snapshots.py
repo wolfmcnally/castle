@@ -64,10 +64,15 @@ def decode(
     *,
     check_content: bool = True,
     expected_origin: dict[str, str] | None = None,
+    expected_binding: n.StoreIdentity | None = None,
 ) -> dict[str, Any]:
     try:
         return _decode_manifest(
-            handle, record, check_content=check_content, expected_origin=expected_origin
+            handle,
+            record,
+            check_content=check_content,
+            expected_origin=expected_origin,
+            expected_binding=expected_binding,
         )
     except (n.NamespaceError, OSError, TypeError, KeyError, ValueError):
         n._refuse("namespace-storage-recovery-required")
@@ -79,6 +84,7 @@ def _decode_manifest(
     *,
     check_content: bool = True,
     expected_origin: dict[str, str] | None = None,
+    expected_binding: n.StoreIdentity | None = None,
 ) -> dict[str, Any]:
     from castle.namespace_store import _policy, _regular, _tree
 
@@ -109,7 +115,7 @@ def _decode_manifest(
         or value["namespace_id"] != info.namespace_id
         or value["policy"] != info.policy
         or value["root_id"] != info.root_id
-        or parsed_binding != info.cas
+        or parsed_binding != (expected_binding or info.cas)
         or value["captured_revision"] != record.captured_revision
         or record.captured_revision > info.revision
     ):
@@ -157,16 +163,53 @@ def _decode_manifest(
     return value
 
 
+def validate_provenance(
+    handle: NamespaceHandle,
+    value: dict[str, Any],
+    binding: n.StoreIdentity,
+    *,
+    allow_pending: bool = False,
+) -> None:
+    origin = value["origin"]
+    if origin == {"kind": "capture"}:
+        return
+    row = handle.db.execute(
+        "SELECT cas_binding,revision_after,completed FROM replacement_completion "
+        "WHERE operation_id=?",
+        (origin["operation_id"],),
+    ).fetchone()
+    if (
+        row is None
+        or n._decode(row[0]) != binding.to_dict()
+        or type(row[1]) is not int
+        or row[1] <= value["captured_revision"]
+        or type(row[2]) is not int
+        or row[2] not in ({0, 1} if allow_pending else {1})
+    ):
+        n._refuse("namespace-storage-recovery-required")
+
+
+def catalog_view(
+    handle: NamespaceHandle,
+    record: n.SnapshotRecord,
+    *,
+    check_content: bool = True,
+    allow_pending: bool = False,
+) -> dict[str, Any]:
+    value = decode(handle, record, check_content=check_content)
+    validate_provenance(handle, value, handle.load_info().cas, allow_pending=allow_pending)
+    return value
+
+
 def dependencies(
-    handle: NamespaceHandle, *, check_content: bool = True
+    handle: NamespaceHandle, *, check_content: bool = True, allow_pending: bool = False
 ) -> set[tuple[str, str, str, str]]:
-    info = handle.load_info()
     reserved = {
         row[0] for row in handle.db.execute("SELECT snapshot_id FROM snapshot_reservations")
     }
     others = {row[0] for row in handle.db.execute("SELECT entry_id FROM entry_reservations")}
     others.update(row[0] for row in handle.db.execute("SELECT operation_id FROM operations"))
-    others.update({info.namespace_id, info.database_generation})
+    others.update(handle.authority_ids())
     for identity in reserved:
         n._uuid(identity)
         if identity in others:
@@ -180,8 +223,8 @@ def dependencies(
             n._refuse("namespace-storage-recovery-required")
         cached = handle.snapshot_cache.get(record.snapshot_id)
         if cached is None or cached[0] != record:
-            view = decode(
-                handle, record, check_content=check_content, expected_origin={"kind": "capture"}
+            view = catalog_view(
+                handle, record, check_content=check_content, allow_pending=allow_pending
             )
             members = {e["cas_id"]: e["size"] for e in view["entries"] if e["cas_id"] is not None}
             handle.snapshot_cache[record.snapshot_id] = (record, members)
@@ -212,7 +255,7 @@ def _retained(handle: NamespaceHandle) -> list[_RetainedSnapshot]:
             "SELECT snapshot_id,live FROM snapshots ORDER BY snapshot_id"
         ):
             record = catalog(handle, identity, live=False)
-            view = decode(handle, record, expected_origin={"kind": "capture"})
+            view = catalog_view(handle, record)
             result.append(
                 _RetainedSnapshot(
                     record,
@@ -233,12 +276,7 @@ def precondition(handle: NamespaceHandle, request: dict[str, Any]) -> None:
         catalog(handle, identity)
         return
     info = handle.load_info()
-    if identity in {
-        info.namespace_id,
-        info.root_id,
-        info.database_generation,
-        request["operation_id"],
-    } or any(
+    if identity in handle.authority_ids() | {info.root_id, request["operation_id"]} or any(
         handle.db.execute(f"SELECT 1 FROM {table} WHERE {field}=?", (identity,)).fetchone()
         for table, field in (
             ("entry_reservations", "entry_id"),
