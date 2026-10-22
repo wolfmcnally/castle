@@ -13,13 +13,15 @@ from pathlib import Path
 
 import castle
 
+VERSION = "0.2.0"
+
 
 def main() -> None:
     prefix = Path(sys.prefix).resolve()
     module = Path(castle.__file__).resolve()
     if not module.is_relative_to(prefix):
         raise AssertionError(f"Castle import escaped installed environment: {module}")
-    if castle.__version__ != "0.1.1":
+    if castle.__version__ != VERSION:
         raise AssertionError(f"Unexpected version: {castle.__version__}")
     cli = prefix / "bin" / "castle"
     if not cli.is_file():
@@ -47,7 +49,7 @@ def main() -> None:
             return result.stdout
 
         run("--help")
-        if run("--version").strip() != "castle 0.1.1":
+        if run("--version").strip() != f"castle {VERSION}":
             raise AssertionError("Console version disagrees with package metadata")
         run("init", "--root", str(store))
         ingest = json.loads(

@@ -476,18 +476,27 @@ def _expire(handle: store.NamespaceHandle, request: dict[str, Any], current_time
 
 
 def cleanup_expired(handle: store.NamespaceHandle, row: dict[str, Any]) -> None:
-    if row["state"] != "committed" or row["canonical_request"] is None:
+    if row["state"] not in {"committed", "rejected"} or row["canonical_request"] is None:
         return
     request = n._decode(row["canonical_request"])
     if request["kind"] != "expire-results":
         return
-    recipe = content_io.decode_recipe(row["ownership_receipt"])["expiry"]
-    for identity, expected in recipe.items():
+    recipe = content_io.decode_recipe(row["ownership_receipt"])
+    if not recipe["expiry"]:
+        return
+    # A rejected expiry owns no disposal. Its copied proof is unnecessary,
+    # including if a later, independent expiry retired the same target.
+    for identity, expected in recipe["expiry"].items() if row["state"] == "committed" else []:
         target = _row(handle, identity)
-        if target is None or target["state"] != "retired":
+        if target is None:
+            n._refuse("namespace-storage-recovery-required")
+        if target["state"] != "retired":
             continue
         directory = handle.root / "operations" / identity
         if not directory.exists():
+            # A prior failed sync or process death can leave visible absence.
+            # Establish its durability before discarding the ownership proof.
+            store._sync_dir(directory.parent)
             continue
         for name in ("request.json", "receipt.json"):
             file = directory / name
@@ -504,6 +513,17 @@ def cleanup_expired(handle: store.NamespaceHandle, row: dict[str, Any]) -> None:
             file.unlink()
         directory.rmdir()
         store._sync_dir(directory.parent)
+    # Keep the complete recipe through every disposal/sync failure. Only a
+    # durable SQL commit may forget it; an uncertain commit blocks admission
+    # and explicit recovery reconciles whichever version actually survived.
+    recipe["expiry"] = {}
+    handle.write_started = True
+    handle.db.execute("BEGIN IMMEDIATE")
+    handle.db.execute(
+        "UPDATE operations SET ownership_receipt=? WHERE operation_id=?",
+        (content_io.encode_recipe(recipe), row["operation_id"]),
+    )
+    store._commit(handle.db)
 
 
 def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult:

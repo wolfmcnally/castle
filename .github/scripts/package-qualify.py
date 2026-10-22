@@ -18,6 +18,8 @@ import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
+VERSION = "0.2.0"
+
 MODULES = frozenset(
     [
         "__init__",
@@ -79,7 +81,7 @@ SOURCE_FILES = frozenset(
 WHEEL_FILES = frozenset(
     {f"castle/{name}.py" for name in MODULES}
     | {
-        f"castle-0.1.1.dist-info/{name}"
+        f"castle-{VERSION}.dist-info/{name}"
         for name in (
             "METADATA",
             "WHEEL",
@@ -109,7 +111,7 @@ def safe_name(name: str) -> PurePosixPath:
 
 def metadata(raw: bytes) -> None:
     message = email.parser.BytesParser().parsebytes(raw)
-    if message.get("Name") != "castle" or message.get("Version") != "0.1.1":
+    if message.get("Name") != "castle" or message.get("Version") != VERSION:
         raise AssertionError("Archive name/version mismatch")
     if message.get("Requires-Python") != ">=3.12":
         raise AssertionError("Archive runtime metadata mismatch")
@@ -127,12 +129,12 @@ def inspect_wheel(file: Path) -> tuple[dict[str, bytes], str]:
             if stat.S_ISLNK(item.external_attr >> 16):
                 raise AssertionError("Wheel link refused")
         contents = {name: archive.read(name) for name in names}
-    metadata(contents["castle-0.1.1.dist-info/METADATA"])
-    license_bytes = contents["castle-0.1.1.dist-info/licenses/LICENSE"]
+    metadata(contents[f"castle-{VERSION}.dist-info/METADATA"])
+    license_bytes = contents[f"castle-{VERSION}.dist-info/licenses/LICENSE"]
     if b"MIT License" not in license_bytes or b"Wolf McNally" not in license_bytes:
         raise AssertionError("MIT authorship/license missing")
     wheel_metadata = email.parser.BytesParser().parsebytes(
-        contents["castle-0.1.1.dist-info/WHEEL"]
+        contents[f"castle-{VERSION}.dist-info/WHEEL"]
     )
     generator = wheel_metadata.get("Generator", "")
     if "1.32.0" not in generator:
@@ -146,7 +148,7 @@ def unpack_source(file: Path, destination: Path) -> dict[str, bytes]:
         seen = set()
         for item in archive:
             path = safe_name(item.name)
-            if path.parts[0] != "castle-0.1.1" or item.name in seen:
+            if path.parts[0] != f"castle-{VERSION}" or item.name in seen:
                 raise AssertionError("Source archive root/duplicate mismatch")
             seen.add(item.name)
             relative = PurePosixPath(*path.parts[1:])
@@ -215,8 +217,8 @@ def main() -> None:
         "--out-dir",
         output / "dist",
     )
-    wheel = output / "dist/castle-0.1.1-py3-none-any.whl"
-    source = output / "dist/castle-0.1.1.tar.gz"
+    wheel = output / f"dist/castle-{VERSION}-py3-none-any.whl"
+    source = output / f"dist/castle-{VERSION}.tar.gz"
     ignore = output / "dist/.gitignore"
     # uv 0.9.26 creates this exact non-artifact sidecar in its output directory.
     if ignore.read_bytes() != b"*" or set((output / "dist").iterdir()) != {
@@ -242,7 +244,7 @@ def main() -> None:
         "--out-dir",
         output / "rebuilt",
     )
-    rebuilt = output / "rebuilt/castle-0.1.1-py3-none-any.whl"
+    rebuilt = output / f"rebuilt/castle-{VERSION}-py3-none-any.whl"
     rebuilt_contents, rebuilt_generator = inspect_wheel(rebuilt)
     for name in (f"castle/{module}.py" for module in MODULES):
         if rebuilt_contents[name] != source_contents[name]:

@@ -1236,3 +1236,163 @@ Delivery: restricted — “Local commits only for now.” No push/publication/l
 
 Lessons:
 - `jumping-tench` filed; no graduation. Other findings strengthen actual observable retained proof families without new rules or budget reset.
+
+## 2026-10-22 15:56 — START
+Phase8 — Version0.2.0 release preparation
+
+Execution trace: 959fb557d69a46b0abf6635a867edc35
+Time basis: UTC, preserving the current log chronology.
+Baseline:20ae9a8006e5fa08a62429d956d1a8b9e21ef5f8 — clean qualified Phase7 local delivery.
+
+Planned work:
+- Update package version owners, lock metadata, exact-version artifact/smoke inventories and current release documentation consistently; preserve historical 0.1.1 release notes and bytes.
+- State the namespace library/CLI capability scope and plain privacy limits, including retained names/history/IDs, guessable/linkable hashes, logical deletion versus erasure and unprotected session limitations.
+- Inspect current tracked source and reachable source history for consumer disclosures, private inputs, credentials and store artifacts; separate public repository history from the package allowlists. Preserve concerns for owner disposition without rewriting history.
+- Build, inspect and hash the exact wheel, source archive and source-rebuilt wheel; qualify fresh external installations and required native/Linux gates against the resulting candidate.
+- Deliver a local-only commit and verified ready-for-decision bundle naming exact source/artifact identities, scope, disclosure findings, platform limits and the proposed existing public GitHub destination. No tag, push, upload, release creation, package-registry publication, consumer adoption or live-store operation.
+
+Authorization: attributable operator Y2026-10-22T15:51:03Z approves bounded0.2.0 preparation only. Same retained sole owner and exclusive claim; fresh real-read/usage preflight passed Sol primary and latest Opus/high independent targets. Synthetic local stores only. Preserve published0.1.1 and prior namespace evidence. No tag, push, upload, publication, package registry, adoption, live stores, access or credential change. Delivery restriction: local commits only.
+
+## 2026-10-22 16:21 — PARK
+Phase 8 — Version0.2.0 preparation: verified expiry privacy mismatch
+
+Execution trace: 959fb557d69a46b0abf6635a867edc35
+Time basis: UTC. Baseline:20ae9a8006e5fa08a62429d956d1a8b9e21ef5f8. Current product:kickoff-evidence: candidate advanced to 17e30b8190f3… (dispatch)
+17e30b8190f3b51662b73ed44603db9eca26708a0b1158635d7ffca9a3f94cae; full tree:7195a0ebe60c02e377fc7b26889bc60134ea2ce3d7666d9ccfa7726e90d01bca. Uncommitted owned preparation remains preserved; no restoration or history rewrite is appropriate.
+
+Actual work: version owners/lock/strict independent artifact inventories and current docs updated to0.2.0, historical0.1.1 retained. Focused CLI11 passed15.44s, lint/95-file format and plan delivery passed. Initial exact native/Linux wheel/sdist/rebuilt hashes matched and four installed workflows passed; Linux full gate190 passed/six expected Darwin-only skips164.72s. Packaged wording was subsequently corrected to remain true before/after publication, so those prior artifact hashes are preserved evidence and no longer final candidates. Both final native gates/local commit/decision bundle remain unrun.
+
+Full primary advisory: one substantive PLAN report10findings; original absolute affected_paths ingestion refusal preserved and path-only re-emission verified substantively identical, consuming second PLAN allowance. CODE1 completed with8findings. All allowances/evidence preserved; no new writer, provider, grant or safeguard change. Safe source/history audit covers16baseline commits/452blobs, separate295already-public/157candidate-only objects, recorded actual public remote refs and annotated tags/identities, structured secret positive controls, known-name substring controls and path controls. No matching credential/known-consumer/store-path leads. Large objects are existing chart/proof-ledger histories; addresses are maintainer/example.invalid and generic absolute paths are policy/negative examples. These are bounded screen observations, not universal proof that arbitrary unknown private prose cannot exist. Final committed delta screening still pending.
+
+Exact blocker: CODE-F002 independently reproduced on disposable stores. Expire-results clears the original operation fingerprint/request columns and removes its directory, but the expiry operation's live SQL ownership_receipt retains the original request fingerprint and canonical-request SHA-256. Namespace contract§14.3 promises only reserved operation UUID/retired state and no logically retained fingerprint after expiry. This is live logical retention, not merely forensic free pages. Publication privacy cannot be represented as conforming while this is unresolved. Probe and original diagnostic tuple-decoding correction retained externally; no runtime source changed.
+
+Failed operation: release privacy qualification. Boundary: durable terminal expiry cleanup recipe. Cause: the expiry operation copies the target ownership receipt/request hash before disposal and retains it after cleanup. Affected contract: namespace§14.3/16 retry expiry privacy and truthful release disclosure. Novel Phase8 product finding. Current approval names version preparation; scope for durable cleanup/recovery correction needs coordinator reconciliation against existing approved namespace authority. No personal operator-only contract gate is inferred. Preferred correction preserves the existing privacy contract and crash/retry/refusal guarantees; do not silently weaken it. Self-resume not consumed; remaining configured budget3 does not authorize a write-set/scope expansion.
+
+Processes/resources: PLAN/re-emission/CODE/Linux and every native child terminal; synthetic handles closed; no detached process or live-store operation. Same managed writer and task custody retained pending prompt coordination; no competing writer or new launch. No acceptance, publication, tag, push, upload, registry, consumer adoption, new access or live data claim.
+
+Remaining: reconcile authority for the bounded expiry privacy correction; carry the actual reports/counters into a truthful fresh run if needed; implement only authorized correction with direct retained-digest and interruption/retry proofs. Complete publication-neutral docs and final expanded disclosure scan, regenerate exact0.2.0 artifacts plus inspected SHA256SUMS, rebind43source inputs/final commit, final native/Linux/installed qualifications and both gates, then local delivery and publication decision bundle. No automatic publication.
+
+Lessons:
+- None filed: existing verification-discipline and anti-mirror rules already require checking the full retained authority rather than only the target row. The new independent probe checks both retired target and live cleanup owner. Original plan-schema and probe-instrument failures are retained and corrected without altering product policy or counters.
+
+## 2026-10-22 18:29 — START (resumed)
+Phase8 — Scoped expiry privacy correction and0.2.0 qualification
+
+Execution trace: c92462b9b408463882c433e6bd79eb58
+Time basis: UTC. Baseline:20ae9a8006e5fa08a62429d956d1a8b9e21ef5f8; original interrupted preparation preserved, not accepted.
+
+Planned work:
+- Update package version owners, lock metadata, exact-version artifact/smoke inventories and current release documentation consistently; preserve historical 0.1.1 release notes and bytes.
+- State the namespace library/CLI capability scope and plain privacy limits, including retained names/history/IDs, guessable/linkable hashes, logical deletion versus erasure and unprotected session limitations.
+- Inspect current tracked source and reachable source history for consumer disclosures, private inputs, credentials and store artifacts; separate public repository history from the package allowlists. Preserve concerns for owner disposition without rewriting history.
+- Build, inspect and hash the exact wheel, source archive and source-rebuilt wheel; qualify fresh external installations and required native/Linux gates against the resulting candidate.
+- Deliver a local-only commit and verified ready-for-decision bundle naming exact source/artifact identities, scope, disclosure findings, platform limits and the proposed existing public GitHub destination. No tag, push, upload, release creation, package-registry publication, consumer adoption or live-store operation.
+
+Exact continuation authority: attributable operator Y2026-10-22T18:24:07Z approves removing leftover request fingerprints after recovery cleanup is safely complete, interrupted-cleanup/retry proofs and release rebuild/revalidation. Preserve namespace§14.3 rather than weakening retention. Fresh full-cycle correction carries original plan/advice and phase-wide allowances: PLAN0/CODE1 remaining. Primary Sol inline; latest opposite-harness Opus/high remaining comprehensive code advice. Same retained sole owner, exact task claim and fresh real-read/usage preflight. No unrelated API/schema/storage expansion, tag, push, upload, publication, registry, consumer adoption, live stores, credentials/grants or identity change. Delivery restriction: local commits only.
+
+## 2026-10-22 19:07 — END
+Phase 8 — Version 0.2.0 preparation and logical-expiry privacy correction
+
+Castle0.2.0 is prepared with the existing namespace capabilities and the approved privacy repair. Completed expiry removes copied request fingerprints and request-file hashes after cleanup is durably complete; interrupted cleanup and uncertain maintenance commits retain proof and require explicit recovery. Exact rebuilt packages and available native/Linux checks qualify this implementation. The separate post-bookkeeping gate and clean local delivery are still pending at this record. Publication needs the operator's exact source/artifact/disclosure decision; nothing is uploaded.
+
+Execution trace: c92462b9b408463882c433e6bd79eb58
+Time basis: UTC. Baseline:20ae9a8006e5fa08a62429d956d1a8b9e21ef5f8. Original failed probe, interrupted preparation, rejected drafts/advisory artifacts, source snapshots, prefinal packages and counters are preserved.
+
+Files changed:
+- Package version/export/lock and independent artifact/smoke inventories agree on0.2.0; dependencies, strict allowlists, prior published0.1.1 bytes and historical changelog entries are preserved.
+- Two private runtime owners, namespace_transactions and namespace_store, retain exact pending cleanup proof through disposal/parent synchronization, durably prune it before acknowledgment and refuse ordinary reopening with terminal pending proof. Rejected expiry owns no disposal. No schema, public API, CAS format or section14.3 relaxation.
+- Existing namespace restart/storage-fault proof family scans every logical operation row and surviving owned file, exercises actual process death before/after parent sync and pruning commit, failed unlink/fsync and uncertain SQL commit, durable-ready pending proof, rejected/early expiry, repeated recover/reopen/status/retry and same-token/equal-revision races. No new collected proof family/leaf or budget reset.
+- Current packaged capability/privacy/release docs use publication-neutral language. Root preparation status, phase bookkeeping, factual release/user-action pins, one local candidate lesson and execution projection complete after accepted close; no completed phase1–7 file is rewritten.
+
+Build status:
+- Final affected namespace/CLI13 tests passed113.35s; the first crash-hook instrument failure and later two-line lint failure are retained. Exact hook routing and syntax-preserving wrapping were corrected, then lint/95-file format and frozen163families/218leaves passed. The final Linux run executes the final cleanup-scoped observer, actual mixed-target interruption and all-table/file logical oracle. Deliberately removing absent-target sync in memory fails the actual helper at assert observed.
+- Exact preparation-contract check and native full implementation gate passed with reviewed diagnostics; both recorded final gate executions bind the unchanged product/full-tree identities. The separate bare full handoff gate remains pending.
+- Linux full repository gate:190 passed, six expected skipped Darwin-only parameter leaves across five functions,166.52s. Deliberate unsupported-platform refusals are independently asserted. aarch64/kernel7.0.14-linuxkit/Python3.12.12/SQLite3.50.4; actual test temp overlay, checkout fakeowner. Native arm64/Python3.12.12/SQLite3.50.4 checkout and test temp share observed APFS data device.
+- macOS/Linux wheel, source archive and source-rebuilt wheel hashes match; both exact wheels pass four fresh external installed smokes. Observed hatchling1.32.0/uv0.9.26; SOURCE_DATE_EPOCH unset, wheel timestamp2020-02-02 and source mtime1580601600 recorded as observations. All43 package source inputs are frozen; final commit comparison remains pending.
+- Artifact SHA256: {"castle-0.2.0-py3-none-any.whl": "e3788ee5178ab8239c4ae5cb5662faf132a6f4b3e180e58bb9ff277a3f06de76", "castle-0.2.0.tar.gz": "99ff2ee807a47b4baa4af0c5196db55b54ca54200a01c800432c6d3b30906b55", "sdist-rebuilt-wheel": "e3788ee5178ab8239c4ae5cb5662faf132a6f4b3e180e58bb9ff277a3f06de76"}. Exact SHA256SUMS bytes/hash are generated and verified outside package inputs, not authored after approval.
+
+Review lane: full primary advisory.
+Evidence lane: full.
+Follow-up route: full cycle — explicit operator-approved privacy runtime correction after witnessed original CODE-F002. No new planning pass or allowance reset.
+
+Role model/venue — orchestrated by Codex:
+- Retained primary planner/coder: requested Sol/high inline; observed harness/model/effort unreported. Current real-read preflight uses existing provider/credentials; no venue or identity substitution.
+- Original PLAN advice10 findings carried; two phase-wide PLAN invocations consumed, second artifact-only path re-emission with otherwise identical report verified. Original CODE1 eight findings carried. Remaining CODE2 comprehensive privacy/order/recovery rebase and full preparation advice consumed; findings per report are [10, 8, 6]. Primary dispositions decide every actual finding against the final candidate. No further review allowance remains or is requested.
+- Requested latest opposite-harness Opus/high. Actual CODE2 init reports claude-opus-5-5 and Claude Code2.1.308; observed effort unreported. Original PLAN/CODE init observations remain recorded in their immutable watcher artifacts, never inferred from requested settings. The original readiness/PARK/failed probe remains evidence, not retroactively successful work.
+
+Candidate-bound evidence:
+- Approved product: 4798143db851facbeea67d14cb862d298ff9d63d5930eeeedf245b6dd7afd955
+- Unchanged implementation full tree: 956593df61e14a9df91d30a21f418ad6a27d624622dc33258bce24b8c54b6eab
+- Final gates:2 actual executions, separate diagnostic observations, validated manifest/venue/report/trace joins and primary decision. Disposition counts derive from advisory-reports.json; test/gate counts derive from complete diagnostics and gates.jsonl.
+
+Focused probes and external platform/artifact checks are included within implementation reconciliation but have no separately registered duration/failure spans. Their individual timings are unknown unless printed in diagnostics. Zero registered failed/retry span time does not mean no failed instrument or discarded work; those failures are explicitly preserved above.
+
+### Execution timing
+
+Execution trace: c92462b9b408463882c433e6bd79eb58
+- Outcome: `success`
+- Makespan: 2248658341166 ns (2248.658341166 s)
+- Intelligence: 416473514334 ns (416.473514334 s)
+- Gates: 274239467916 ns (274.239467916 s)
+- Orchestration: 2248285465582 ns (2248.285465582 s)
+- Wait: 416007800000 ns (416.007800000 s)
+- Retry/rework: 0 ns (0.000000000 s)
+- Failed work: 0 ns (0.000000000 s)
+- Unattributed: 372875584 ns (0.372875584 s)
+- Category totals are interval unions and may overlap.
+
+#### Slowest material spans
+
+- `orchestration.implementation` — category `reconciliation`, attempt 1, outcome `success`: 1898869882666 ns (1898.869882666 s)
+- `role.code-review` — category `intelligence`, attempt 1, outcome `success`: 416473514334 ns (416.473514334 s)
+- `role.code-review` — category `wait`, attempt 1, outcome `success`: 416007800000 ns (416.007800000 s)
+- `orchestration.acceptance` — category `reconciliation`, attempt 1, outcome `success`: 347531010959 ns (347.531010959 s)
+- `gate.full` — category `gate`, attempt 1, outcome `success`: 273823729458 ns (273.823729458 s)
+
+Disclosure and publication consequence:
+- Source/history audit covers16 reachable baseline commits,452 unique blobs and all historical paths/tag/commit identity metadata;295 blobs are already-public and157 candidate-only under raw read-only public refs observed2026-10-22T18:44:08Z. Current working delta is screened; final bookkeeping/commit resweep remains pending. Audit SHA256:4deae36b44fc8c3904dc31870564323649b892288b7abb8c4817c9f6e02d5931. Exact external receipt and covered refs remain in the decision bundle.
+- No known consumer-name, recognizable credential/private-key or runtime-store/private-input path leads were found. Structured positive controls, hash/UUID negative control and name-substring/path controls were exercised outside the repository. Generic forbidden-path examples and an intentional refusal fixture explain two historical absolute-path leads; public maintainer attribution and example.invalid fixtures explain emails. Public dependency/docs/research URLs and generated proof-estate assets are not user stores. This is bounded screening, not proof of arbitrary unknown private prose absence.
+- Public source publication exposes every unpushed ancestor plus governance/log/report source; package allowlists exclude that evidence and user stores/private inputs/credentials. No history rewrite, tag, push, upload or publication occurred. Exact final source/artifacts/checksums must be approved together for the existing public GitHub destination; no package registry.
+- User stores still retain names/metadata/history/stable IDs, content identities, relationships, revisions and active retry tokens/results. Unsalted content/request/path hashes permit guessing/linkage. Logical deletion and expiry are not forensic erasure; SQLite free pages/device residue/backups/external copies remain. The reference session is neither authentication nor encryption. No protected adapter, native VFS/device hardware power-loss or physical-erasure qualification is claimed. Pre-correction synthetic stores that performed expiry can refuse ordinary open until one explicit recover_namespace clears their retained proof; there is no migration/fallback or live-store adoption.
+
+Acceptance:
+- Objective: consistent0.2.0 owners/inventories, exact scoped expiry privacy/recovery behavior, independent all-owner logical-remnant and interruption/concurrency proofs, bounded source/history and package disclosure inspection, matching rebuilt artifacts and isolated installations, actual available-platform proof estate and native implementation gate. Delivery is contingent on the separate bare handoff gate and final source-input/commit binding.
+- Parked for the operator: exact publication/source-history/artifact/disclosure approval, manual namespace naming/usability/demo judgment, consumer adoption and protected/live-store/external-copy custody. Synthetic fault/process-loss proof does not certify hardware power loss or physical erasure.
+
+Delivery: restricted — “Local commits only for now.” No tag, push, upload, publication, package-registry distribution, consumer adoption, live data, new grants or identity changes.
+
+Ripple:
+- AUTO pending: complete preparation row, restore the pending release arrow, supersede the stale0.1.1 release pin and append scoped user-action facts; no release action starts automatically.
+- DECIDE:none within approved preparation. Exact publication approval remains a separate existing owner decision.
+
+Lessons:
+- Pending local/test candidate onyx-manul: inventory copied semantic recovery proof when proving logical expiry; preserve through durable cleanup, then prune before acknowledgment. One observed defect, no graduation.
+- Existing verification/instrument/append-only rules cover the corrected test hook and line wrapping. Original failures remain; no policy, gate, guard, model, budget, schema or permission change.
+- Timeout recalibration:536 historical incomplete/malformed schema3 recommendation diagnostics were preserved; no group has30 successful samples. Current per-group count unreported; no automatic configuration change.
+
+User Demo: N/A — preparation changes version/release material and qualifies the existing workflow; the Phase 7 manual namespace demo remains available and unaccepted.
+
+Test protocol: skipped (reason: version/preparation and internal expiry invariant correction are covered by existing executable workflows and logical-remnant/fault proofs; the Phase7 manual synthetic namespace demo remains available and unaccepted).
+
+Remaining:
+- Apply accepted status and factual AUTO/lesson/report records, rescreen final bookkeeping, run the separate bare handoff gate, deliver local commit and bind every frozen project input to it.
+- Return exact immutable source/artifact/checksum identities and disclosure/qualification limits for the separate publication decision. No additional implementation scope, release, live store or consumer action is authorized.
+
+## 2026-10-22 19:09 — END (bookkeeping)
+Phase 8 — Applied version 0.2.0 preparation records
+
+Execution trace: c92462b9b408463882c433e6bd79eb58
+Time basis: UTC. Supported major-phase accepted close preceded status and factual AUTO records; final catalog validation verifies completion and the sole pending release arrow. Preparation is complete for the approved implementation; exact release publication remains a separate owner decision. The release arrow is restored, the stale0.1.1 candidate pin superseded and scoped user-action facts retained. No tag, push, upload, registry, consumer adoption or live-store action occurred.
+
+The local/test candidate lesson onyx-manul is filed from the witnessed copied-expiry-proof defect. Lessons validate and none is graduation-ready. Existing verification/instrument/append-only rules cover the preserved crash-hook, external temporary-path instrument, line-wrap and denied stale-helper errors. A prospective ledger request was refused before mutation because its next-row name was nonnumeric. The documented monolithic major close path accepts unchanged live authority before normal Step9 status/arrow updates; no validator or requirement changed. The stale prior-run ingestion command was rejected before execution and abandoned; separately reviewed current-run accepted-span ingestion succeeded without modifying the original evidence or resetting counters. No policy, gate, guard, provider, permission or schema changed.
+
+All24 actual advisory findings have current primary dispositions. Final affected13 tests and an actual missing-sync mutation negative pass; final macOS/Linux archives and four isolated installed smokes match. The required native implementation-candidate sequence passed with reviewed diagnostics, as did Linux190 tests with six expected native-only parameter skips. The separate bare handoff gate, exact clean local commit and final source-input comparison remain pending.
+
+Acceptance:
+- Objective: accepted implementation plus applied factual status/ripple/lesson records; final report/handoff gate and final commit binding pending.
+- Parked for the operator: exact publication/source-history/artifact/disclosure approval, existing manual namespace usability/demo and protected/live-data/external-copy custody. Native VFS/device hardware power loss and physical erasure remain unqualified. Older synthetic expiry workspaces can require one explicit recovery before ordinary open.
+
+Delivery: restricted — “Local commits only for now.” No publication or adoption follows automatically.
+
+Lessons:
+- onyx-manul filed, one observed defect, no graduation. Other corrected instruments follow existing verification requirements; original failures and all counters remain intact.

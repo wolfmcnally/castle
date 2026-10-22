@@ -265,9 +265,9 @@ From the repository root:
 
 This runs lint, format validation and every retained package test. See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidance and [SECURITY.md](../SECURITY.md) for private vulnerability reporting.
 
-## Release candidate
+## Release
 
-Version 0.1.1 is a patch release under the [MIT license](LICENSE). GitHub Releases records publication status. The [changelog](CHANGELOG.md) states the release scope, and the [release procedure](RELEASE.md) covers local artifact creation and a disposable clean-install smoke check. Tagging and publication require the maintainer’s approval of the exact artifacts and supported capability scope.
+Version 0.2.0 adds the namespace capabilities under the [MIT license](LICENSE). GitHub Releases records publication status. The [changelog](CHANGELOG.md) states the release scope, and the [release procedure](RELEASE.md) covers local artifact creation and a disposable clean-install smoke check. Tagging and publication require the maintainer’s approval of the exact artifacts and supported capability scope.
 # Namespaces
 
 The Python namespace library provides an explicitly initialized, single-coordinator tree over immutable CAS content. It supports directory creation, existing-content binding, new-byte file creation and replacement, read/list/resolve/status, file and directory rename/move, atomic subtree duplication and logical deletion. Copies share immutable content; deleting a namespace entry does not delete CAS bytes, retained snapshots or history. No mounted filesystem is provided.
@@ -346,7 +346,7 @@ Dependency classification follows semantic ownership. Equal innocent names/metad
 
 ## Namespace commands and local environment
 
-As of 2026-10-22, the namespace additions are an unreleased candidate; the existing package version remains 0.1.1. The library and `castle namespace` share the same typed requests, transaction authority and refusal/recovery behavior. See [environment conformance](NAMESPACE_ENVIRONMENT.md) for admission, backup, plaintext/key lifetime, export, resource and qualification obligations.
+Version 0.2.0 includes the namespace capabilities. The library and `castle namespace` share the same typed requests, transaction authority and refusal/recovery behavior. See [environment conformance](NAMESPACE_ENVIRONMENT.md) for admission, backup, plaintext/key lifetime, export, resource and qualification obligations.
 
 The CLI takes `castle namespace --root CAS --namespace-root NS --domain-lock LOCK VERB`. `identity` requires only an existing active CAS root and returns its full StoreIdentity without initializing namespace state. All other verbs require the separate namespace root and external domain lock. For a new empty CAS, run ordinary `init` then `rebuild-index` before namespace initialization, while no namespace owner is active. `namespace init --request-file FILE` consumes the exact InitializeRequest JSON, including schema castle.namespace_initialize.v1, lowercase UUIDv4 namespace_id/root_id, expected_cas, the current policy_version/unicode_data_version and protection={kind:unprotected}. The reference environment provides trusted unprotected Unix custody, not authentication or encryption. Protected mode refuses instead of falling back.
 

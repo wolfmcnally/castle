@@ -729,7 +729,11 @@ class NamespaceHandle:
             )
             if {**receipt, "state": "prepared"} != expected:
                 n._refuse("namespace-storage-recovery-required")
-            incomplete |= receipt["state"] != "durable" or content_io.has_payload(self, row)
+            incomplete |= (
+                receipt["state"] != "durable"
+                or content_io.has_payload(self, row)
+                or bool(content_io.decode_recipe(row["ownership_receipt"]).get("expiry"))
+            )
         # Conservative restart rule: never infer an interrupted durability
         # boundary from visibility alone. Explicit recovery owns all repair and
         # cleanup; ordinary open has made no evidence-file changes at this point.

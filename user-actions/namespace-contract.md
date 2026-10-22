@@ -40,3 +40,8 @@ The approved local sequence now qualifies coordinated namespace excision and fre
 ## Qualified local consumer candidate
 
 The approved synthetic/local sequence now includes namespace CLI/API agreement, a caller-owned unprotected session and explicit directory-handle export, real request/retry/concurrency/refusal and response-loss proofs, a runnable retained-workspace demo, actual macOS/APFS and standing Linux execution and exact isolated wheel/sdist-chain installation. Namespace additions remain an unpublished candidate under the existing package version. The local code outcome needs no renewed implementation approval; it does not close manual naming/errors/retry-window judgment, the existing release version/scope/disclosure/destination decision, protected custody or real-data adoption. No new blanket contract ratification, encrypted environment, live seed/purge, external-copy deletion or consumer repository change is inferred.
+
+
+## Prepared version 0.2.0 and remaining decision
+
+The operator approved bounded version0.2.0 preparation and the exact expiry-privacy runtime correction on2026-10-22. Explicit expiry now removes logically retained copied target fingerprints/request-file digests only after durable cleanup, with interrupted cleanup, uncertain commit, reopen/retry and concurrent-request proofs. The unchanged privacy promise does not imply forensic erasure, authenticated/encrypted reference sessions, protected custody or removal of external copies. Exact rebuilt/installed native/Linux artifacts and final source identity are prepared for a separate informed publication decision. This scoped approval closes no manual usability, protected/live-store or external-copy action and grants no consumer adoption or publication authority.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import runpy
@@ -598,7 +599,7 @@ with n.open_namespace(Path({str(case.root)!r}),Path({str(case.cas_root)!r}),sess
    if {boundary!r}=='receipt-temporary' and path.name=='receipt.tmp': os._exit(61)
   return result
  os.open=interrupted_open
- if {boundary!r} in ('expiry-request','expiry-receipt'):
+ if {boundary!r}.startswith('expiry-'):
   from datetime import datetime,UTC,timedelta
   tx._now=lambda: datetime.now(UTC)+timedelta(days=8)
   unlink=Path.unlink
@@ -606,9 +607,32 @@ with n.open_namespace(Path({str(case.root)!r}),Path({str(case.cas_root)!r}),sess
    result=unlink(self,*args,**kwargs)
    target=request.args['operation_ids'][0]
    name='request.json' if {boundary!r}=='expiry-request' else 'receipt.json'
-   if self.parent.name==target and self.name==name: os._exit(61)
+   if ({boundary!r} in ('expiry-request','expiry-receipt')
+       and self.parent.name==target and self.name==name): os._exit(61)
    return result
   Path.unlink=interrupted_unlink
+  removed=Path.rmdir
+  def interrupted_rmdir(self,*args,**kwargs):
+   result=removed(self,*args,**kwargs)
+   if {boundary!r}=='expiry-directory' and self.name==request.args['operation_ids'][0]: os._exit(61)
+   return result
+  Path.rmdir=interrupted_rmdir
+  synced=store._sync_dir
+  def interrupted_sync(directory):
+   synced(directory)
+   if ({boundary!r}=='expiry-parent-sync' and directory==handle.root/'operations'
+       and not (directory/request.args['operation_ids'][0]).exists()): os._exit(61)
+  store._sync_dir=interrupted_sync
+  saved_commit=store._commit
+  def prune_commit(connection):
+   row=connection.execute(
+    'SELECT state,ownership_receipt FROM operations WHERE operation_id=?',
+    (request.operation_id,)).fetchone()
+   pruning=row is not None and row[0]=='committed' and not json.loads(row[1])['expiry']
+   if pruning and {boundary!r}=='expiry-prune-before': os._exit(61)
+   saved_commit(connection)
+   if pruning and {boundary!r}=='expiry-prune-after': os._exit(61)
+  store._commit=prune_commit
  if {boundary!r}=='fork-finalization':
   write=handle.write_entry
   def fork_write(entry,**kwargs):
@@ -645,9 +669,292 @@ with n.open_namespace(Path({str(case.root)!r}),Path({str(case.cas_root)!r}),sess
     )
 
 
+def _expiry_privacy_contract(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def prepare(name):
+        case = Case(tmp_path / name)
+        with case.open() as handle:
+            original = case.directory_request(handle, "unique retained-privacy fixture")
+            result = n.execute_namespace(handle, original, {})
+            raw = (case.root / "operations" / original.operation_id / "request.json").read_bytes()
+            request = case.request(
+                handle, "expire-results", {"operation_ids": [original.operation_id]}
+            )
+        return case, original, request, result.request_fingerprint, hashlib.sha256(raw).hexdigest()
+
+    def proof_remains(handle, request, fingerprint, request_digest):
+        row = handle.db.execute(
+            "SELECT ownership_receipt FROM operations WHERE operation_id=?", (request.operation_id,)
+        ).fetchone()
+        assert row and fingerprint in row[0] and request_digest in row[0]
+
+    def check(case, original, request, fingerprint, request_digest):
+        with case.open() as handle:
+            assert n.namespace_operation(handle, original.operation_id).state == "retired"
+            expected = n.namespace_operation(handle, request.operation_id).result
+            assert n.execute_namespace(handle, request, {}) == expected
+            assert handle.info().revision == expected.revision_after
+            # Inspect every logical operation owner and surviving evidence file,
+            # not just the NULL fields of the expired target. Free pages are
+            # intentionally outside this logical-expiry privacy assertion.
+            logical = b""
+            for (table,) in handle.db.execute("SELECT name FROM sqlite_master WHERE type='table'"):
+                quoted = table.replace('"', '""')
+                logical += repr(handle.db.execute(f'SELECT * FROM "{quoted}"').fetchall()).encode()
+            database_files = {
+                case.root / ("namespace.sqlite" + suffix)
+                for suffix in ("", "-wal", "-shm", "-journal")
+            }
+            logical += b"".join(
+                file.read_bytes()
+                for file in case.root.rglob("*")
+                if file.is_file() and file not in database_files
+            )
+            assert fingerprint.encode() not in logical and request_digest.encode() not in logical
+            assert not (case.root / "operations" / original.operation_id).exists()
+        first = n.recover_namespace(case.root, case.cas_root, case.session, None)
+        second = n.recover_namespace(case.root, case.cas_root, case.session, None)
+        assert first.revision == second.revision == expected.revision_after
+
+    for boundary in (
+        "expiry-directory",
+        "expiry-parent-sync",
+        "expiry-prune-before",
+        "expiry-prune-after",
+    ):
+        case, original, request, fingerprint, request_digest = prepare(boundary)
+        child = _child(case, request, boundary)
+        assert child.returncode == 61, child.stdout + child.stderr
+        with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+            case.open()
+        # Proof remains through disposal and until a successful pruning commit.
+        with sqlite3.connect(case.root / "namespace.sqlite") as connection:
+            saved = connection.execute(
+                "SELECT ownership_receipt FROM operations WHERE operation_id=?",
+                (request.operation_id,),
+            ).fetchone()[0]
+            assert (fingerprint in saved) == (boundary != "expiry-prune-after")
+            assert (request_digest in saved) == (boundary != "expiry-prune-after")
+        n.recover_namespace(case.root, case.cas_root, case.session, None)
+        check(case, original, request, fingerprint, request_digest)
+
+    for fault in ("sync", "prune-before", "prune-after", "unlink"):
+        case, original, request, fingerprint, request_digest = prepare(fault)
+        fired = []
+        sync, commit, unlink = store._sync_dir, store._commit, Path.unlink
+
+        def fail_sync(directory):
+            if (
+                fault == "sync"
+                and directory == case.root / "operations"
+                and not (directory / original.operation_id).exists()
+                and not fired
+            ):
+                fired.append(True)
+                raise OSError("synthetic cleanup directory sync failure")
+            return sync(directory)
+
+        def fail_commit(connection):
+            row = connection.execute(
+                "SELECT state,ownership_receipt FROM operations WHERE operation_id=?",
+                (request.operation_id,),
+            ).fetchone()
+            pruning = row is not None and row[0] == "committed" and not json.loads(row[1])["expiry"]
+            if fault in {"prune-before", "prune-after"} and pruning and not fired:
+                fired.append(True)
+                if fault == "prune-after":
+                    commit(connection)
+                raise sqlite3.OperationalError("synthetic uncertain cleanup commit")
+            commit(connection)
+
+        def fail_unlink(file, *args, **kwargs):
+            if (
+                fault == "unlink"
+                and file.parent.name == original.operation_id
+                and file.name == "receipt.json"
+                and not fired
+            ):
+                fired.append(True)
+                raise OSError("synthetic cleanup unlink failure")
+            return unlink(file, *args, **kwargs)
+
+        with case.open() as handle, monkeypatch.context() as patch:
+            patch.setattr(tx, "_now", lambda: datetime.now(UTC) + timedelta(days=8))
+            patch.setattr(store, "_sync_dir", fail_sync)
+            patch.setattr(store, "_commit", fail_commit)
+            patch.setattr(Path, "unlink", fail_unlink)
+            with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+                n.execute_namespace(handle, request, {})
+            assert fired == [True]
+            if fault != "prune-after":
+                proof_remains(handle, request, fingerprint, request_digest)
+            with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+                handle.info()
+        with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+            case.open()
+        # Missing targets still require a new durable parent sync on recovery.
+        observed, inside_cleanup = [], []
+        cleanup = tx.cleanup_expired
+
+        def observe_cleanup(handle, row):
+            inside_cleanup.append(True)
+            try:
+                return cleanup(handle, row)
+            finally:
+                inside_cleanup.pop()
+
+        def observe_sync(directory):
+            if (
+                inside_cleanup
+                and directory == case.root / "operations"
+                and not (directory / original.operation_id).exists()
+            ):
+                observed.append(True)
+            sync(directory)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(tx, "cleanup_expired", observe_cleanup)
+            patch.setattr(store, "_sync_dir", observe_sync)
+            n.recover_namespace(case.root, case.cas_root, case.session, None)
+        if fault != "prune-after":
+            assert observed
+        check(case, original, request, fingerprint, request_digest)
+
+    # Early and rejected expiry attempts must not keep copied proof after a
+    # later expiry actually retires the target. Same-token callers serialize.
+    case, original, request, fingerprint, request_digest = prepare("early-rejected-races")
+    with case.open() as handle:
+        early = n.execute_namespace(handle, request, {})
+        rejected = replace(
+            case.request(handle, "expire-results", request.args), expected_revision=0
+        )
+        with pytest.raises(n.NamespaceError, match="namespace-revision-conflict"):
+            n.execute_namespace(handle, rejected, {})
+        final = case.request(handle, "expire-results", request.args)
+        with monkeypatch.context() as patch:
+            patch.setattr(tx, "_now", lambda: datetime.now(UTC) + timedelta(days=8))
+            barrier = threading.Barrier(4)
+
+            def retry():
+                barrier.wait(timeout=10)
+                return n.execute_namespace(handle, final, {})
+
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                results = list(pool.map(lambda _: retry(), range(4)))
+        assert all(result == results[0] for result in results)
+        assert results[0].revision_after == early.revision_after + 1
+    check(case, original, final, fingerprint, request_digest)
+
+    case, original, request, fingerprint, request_digest = prepare("equal-revision-expiry")
+    competing = replace(request, operation_id=_id())
+    with case.open() as handle, monkeypatch.context() as patch:
+        patch.setattr(tx, "_now", lambda: datetime.now(UTC) + timedelta(days=8))
+        barrier = threading.Barrier(2)
+
+        def race(command):
+            barrier.wait(timeout=10)
+            try:
+                return n.execute_namespace(handle, command, {})
+            except n.NamespaceError as error:
+                return error.code
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outcomes = list(pool.map(race, (request, competing)))
+        assert outcomes.count("namespace-revision-conflict") == 1
+        winner = next(outcome for outcome in outcomes if isinstance(outcome, n.MutationResult))
+        request = request if winner.operation_id == request.operation_id else competing
+    check(case, original, request, fingerprint, request_digest)
+
+    # Reproduce the witnessed former producer: target files are durably gone,
+    # the expiry receipt is durable/ready, but its SQL recipe still retains
+    # proof. This is a deliberate producer-fault fixture, not SQL-seeded work.
+    case, original, request, fingerprint, request_digest = prepare("durable-pending-proof")
+
+    def leave_proof(handle, row):
+        target = case.root / "operations" / original.operation_id
+        for name in ("request.json", "receipt.json"):
+            (target / name).unlink()
+        target.rmdir()
+        store._sync_dir(target.parent)
+
+    with case.open() as handle, monkeypatch.context() as patch:
+        patch.setattr(tx, "_now", lambda: datetime.now(UTC) + timedelta(days=8))
+        patch.setattr(tx, "cleanup_expired", leave_proof)
+        n.execute_namespace(handle, request, {})
+        proof_remains(handle, request, fingerprint, request_digest)
+        assert (
+            json.loads(
+                (case.root / "operations" / request.operation_id / "receipt.json").read_text()
+            )["state"]
+            == "durable"
+        )
+        assert handle.db.execute("SELECT service_state FROM namespace").fetchone() == ("ready",)
+    with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+        case.open()
+    n.recover_namespace(case.root, case.cas_root, case.session, None)
+    check(case, original, request, fingerprint, request_digest)
+
+    # One committed expiry has an absent eligible target, an early target,
+    # then another eligible target still awaiting disposal. Sorted UUIDs make
+    # the recipe's canonical iteration order independently explicit.
+    case = Case(tmp_path / "mixed-targets")
+    targets = []
+    with case.open() as handle:
+        for index in (1, 3, 2):
+            command = replace(
+                case.directory_request(handle, f"mixed-{index}"),
+                operation_id=f"{index}0000000-0000-4000-8000-000000000001",
+            )
+            with monkeypatch.context() as patch:
+                if index == 2:
+                    patch.setattr(tx, "_now", lambda: datetime.now(UTC) + timedelta(days=4))
+                result = n.execute_namespace(handle, command, {})
+            raw = (case.root / "operations" / command.operation_id / "request.json").read_bytes()
+            targets.append((command, result.request_fingerprint, hashlib.sha256(raw).hexdigest()))
+        targets.sort(key=lambda item: item[0].operation_id)
+        request = case.request(
+            handle, "expire-results", {"operation_ids": [item[0].operation_id for item in targets]}
+        )
+    child = _child(case, request, "expiry-directory")
+    assert child.returncode == 61, child.stdout + child.stderr
+    assert not (case.root / "operations" / targets[0][0].operation_id).exists()
+    assert (case.root / "operations" / targets[2][0].operation_id).exists()
+    with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+        case.open()
+    n.recover_namespace(case.root, case.cas_root, case.session, None)
+    for command, fingerprint, request_digest in (targets[0], targets[2]):
+        check(case, command, request, fingerprint, request_digest)
+    with case.open() as handle:
+        assert n.namespace_operation(handle, targets[1][0].operation_id).state == "committed"
+    assert (case.root / "operations" / targets[1][0].operation_id / "request.json").exists()
+
+    case, original, request, fingerprint, request_digest = prepare("unknown-residue")
+    extra = case.root / "operations" / original.operation_id / "unowned"
+    unlink = Path.unlink
+
+    def plant_residue(file, *args, **kwargs):
+        result = unlink(file, *args, **kwargs)
+        if file.parent.name == original.operation_id and file.name == "request.json":
+            extra.write_bytes(b"unowned synthetic residue")
+        return result
+
+    with case.open() as handle, monkeypatch.context() as patch:
+        patch.setattr(tx, "_now", lambda: datetime.now(UTC) + timedelta(days=8))
+        patch.setattr(Path, "unlink", plant_residue)
+        with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+            n.execute_namespace(handle, request, {})
+        proof_remains(handle, request, fingerprint, request_digest)
+    assert extra.read_bytes() == b"unowned synthetic residue"
+    with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+        n.recover_namespace(case.root, case.cas_root, case.session, None)
+    extra.unlink()  # Only the test's independently known planted fixture.
+    n.recover_namespace(case.root, case.cas_root, case.session, None)
+    check(case, original, request, fingerprint, request_digest)
+
+
 def test_namespace_restart_and_storage_faults(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    _expiry_privacy_contract(tmp_path, monkeypatch)
     for boundary in (
         "before-prepare",
         "prepared",

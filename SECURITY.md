@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-The 0.1.x series is pre-1.0. Maintainers assess reports against the current default branch and the latest published release listed on GitHub Releases.
+The 0.x series is pre-1.0. Maintainers assess reports against the current default branch and the latest published release listed on GitHub Releases.
 
 ## Reporting a vulnerability
 
