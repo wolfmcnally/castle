@@ -1010,7 +1010,10 @@ class NamespaceHandle:
                         n._refuse("namespace-storage-recovery-required")
                     if result.cas_binding != info.cas:
                         historical = snapshots.decode(
-                            self, saved, expected_binding=result.cas_binding
+                            self,
+                            saved,
+                            check_content=check_content,
+                            expected_binding=result.cas_binding,
                         )
                         snapshots.validate_provenance(self, historical, result.cas_binding)
                 elif result.snapshot is not None:

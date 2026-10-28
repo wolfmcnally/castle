@@ -46,7 +46,7 @@ def normalize(args: dict[str, Any]) -> dict[str, Any]:
     selected = {
         key: _identities(value, content=key == "content_ids") for key, value in selection.items()
     }
-    if not selected["content_ids"]:
+    if not any(selected.values()):
         n._refuse()
     actions = args["snapshot_actions"]
     if not isinstance(actions, list):
@@ -118,16 +118,16 @@ def root_commitment(root: Path) -> str:
 
 
 def entry_closure(
-    entries: dict[str, n.EntryRecord], identities: list[str], root_id: str, live_ids: set[str]
+    entries: dict[str, n.EntryRecord], identities: list[str], root_id: str
 ) -> set[str]:
-    """Expand live directories; historical payload owners stay explicit."""
+    """Expand retained directories, including their deleted descendants."""
     if root_id in identities:
         n._refuse("namespace-root-immutable")
     if set(identities) - set(entries):
         n._refuse("namespace-entry-missing")
     children: dict[str, list[str]] = {}
     for entry in entries.values():
-        if entry.parent_id is not None and entry.entry_id in live_ids:
+        if entry.parent_id is not None:
             children.setdefault(entry.parent_id, []).append(entry.entry_id)
     selected = set()
     pending = list(identities)
@@ -136,7 +136,7 @@ def entry_closure(
         if identity in selected:
             continue
         selected.add(identity)
-        if identity in live_ids and entries[identity].kind == "directory":
+        if entries[identity].kind == "directory":
             pending.extend(children.get(identity, []))
         if len(selected) > n.MAX_ENTRIES:
             n._refuse("namespace-limit-exceeded")
@@ -183,7 +183,7 @@ def snapshot_recipes(
         if action["action"] == "drop":
             dropped.append(record.snapshot_id)
             continue
-        removals = entry_closure(entries, action["remove_entry_ids"], info.root_id, set(entries))
+        removals = entry_closure(entries, action["remove_entry_ids"], info.root_id)
         metadata = set(action["clear_metadata_entry_ids"])
         if info.root_id in metadata:
             n._refuse("namespace-root-immutable")
@@ -227,18 +227,19 @@ def snapshot_recipes(
     return recipes, dropped, pairs
 
 
-def _strings(value: object, *, include_keys: bool = True) -> Iterator[str]:
+def _strings(value: object, *, scalar_values: bool = False) -> Iterator[str]:
     pending = [value]
     while pending:
         item = pending.pop()
         if isinstance(item, str):
             yield item
         elif isinstance(item, dict):
-            if include_keys:
-                pending.extend(item)
+            pending.extend(item)
             pending.extend(item.values())
         elif isinstance(item, list):
             pending.extend(item)
+        elif scalar_values:
+            yield n.canonical_bytes(item).decode().removesuffix("\n")
 
 
 def operation_disclosures(
@@ -291,6 +292,22 @@ def operation_disclosures(
         ):
             disclosing.add(identity)
         kind, args = request["kind"], request["args"]
+        # These are schema-owned relationships, not UUID-shaped strings in
+        # arbitrary content. Logical Delete logs also disclose a removed
+        # entry's identity/history, so excision must retire their payloads.
+        references = {args[key] for key in ("entry_id", "parent_id") if key in args}
+        if kind == "duplicate":
+            references.update(identity for pair in args["identities"] for identity in pair.values())
+        elif kind == "import-folder":
+            references.update(
+                identity
+                for entry in args["entries"]
+                for identity in (entry["entry_id"], entry["parent_id"])
+            )
+        if references & removed or (
+            result is not None and set(result["affected_entry_ids"]) & removed
+        ):
+            disclosing.add(identity)
         fields = []
         if kind in {"create-file", "create-directory", "replace-content", "relocate"}:
             fields.append((args["entry_id"], set(args) & {"name", "metadata", "content"}))
@@ -339,10 +356,10 @@ def operation_disclosures(
             return disclosing
 
 
-def _source_disclosures(
+def _source_conflicts(
     handle: NamespaceHandle, request: dict[str, Any], removed: set[str], cleared: set[str]
-) -> None:
-    """Refuse retained immutable history whose exact fields disclose selection.
+) -> set[str]:
+    """Identify conservatively disclosing retained content, never select it.
 
     Equal journal components can be innocent; the outcome is explicit dependency
     refusal, never implicit selection. Names in unrelated namespace owner fields
@@ -351,12 +368,13 @@ def _source_disclosures(
     from castle import namespace_snapshots as snapshots
 
     names, metadata = set(), set()
+    live_ids = set(handle.entries())
 
     def include(entry: n.EntryRecord, remove: bool, clear: bool) -> None:
         if remove and entry.name:
             names.add(entry.name)
         if remove or clear:
-            metadata.update(text for text in _strings(entry.metadata, include_keys=False) if text)
+            metadata.update(text for text in _strings(entry.metadata, scalar_values=True) if text)
 
     for entry in handle.entries(live=False).values():
         include(entry, entry.entry_id in removed, entry.entry_id in cleared)
@@ -365,7 +383,7 @@ def _source_disclosures(
         value = snapshots.catalog_view(handle, record)
         entries = {item["entry_id"]: n.EntryRecord(**item) for item in value["entries"]}
         extra_removed = (
-            entry_closure(entries, action["remove_entry_ids"], value["root_id"], set(entries))
+            entry_closure(entries, action["remove_entry_ids"], value["root_id"])
             if action["action"] == "replace"
             else set()
         )
@@ -374,7 +392,7 @@ def _source_disclosures(
             include(
                 entry,
                 entry.entry_id in removed
-                or (entry.entry_id in extra_removed and entry.entry_id not in handle.entries()),
+                or (entry.entry_id in extra_removed and entry.entry_id not in live_ids),
                 entry.entry_id in cleared | extra_cleared,
             )
     forbidden = names | metadata
@@ -382,20 +400,23 @@ def _source_disclosures(
 
     def matches(text: str | None) -> bool:
         return isinstance(text, str) and (
-            text in forbidden or bool(set(text.split("/")) & forbidden)
+            text in forbidden
+            or bool(set(text.split("/")) & forbidden)
+            or any(match.group() in selected for match in n._CAS.finditer(text))
         )
 
+    conflicts = set()
     for event in journal._read_authority_journal(handle.cas_root):
         if event["cas_id"] not in selected and any(
             matches(event[key]) for key in ("source_root_id", "original_relpath", "batch")
         ):
-            n._refuse("namespace-dependency-conflict")
+            conflicts.add(event["cas_id"])
     for row in cas._snapshot_remotes(handle.cas_root):
         if row[0] not in selected and any(matches(value) for value in row[1:]):
-            n._refuse("namespace-dependency-conflict")
+            conflicts.add(row[0])
     # Unique literal CasID references are checked before retirement as well as
     # at cleanup. The scanner does not classify arbitrary names in documents.
-    for identity in set(handle.objects) - selected:
+    for identity in (set(handle.objects) - selected) if selected else ():
         n._authorize(handle.session, "excision-inventory")
         file = cas.object_path(handle.cas_root, identity)
         carry = ""
@@ -404,14 +425,16 @@ def _source_disclosures(
                 n._authorize(handle.session, "excision-inventory")
                 text = carry + chunk.decode("latin1")
                 if any(match.group() in selected for match in n._CAS.finditer(text)):
-                    n._refuse("namespace-dependency-conflict")
+                    conflicts.add(identity)
+                    break
                 carry = text[-70:]
+    return conflicts
 
 
-def selection_plan(
+def _selection_plan(
     handle: NamespaceHandle, request: dict[str, Any]
-) -> tuple[dict[str, Any], list[tuple[n.SnapshotRecord, int, bytes]]]:
-    """Complete the bounded private closure before any durable cutover intent."""
+) -> tuple[dict[str, Any], list[tuple[n.SnapshotRecord, int, bytes]], set[str]]:
+    """Compute one closure for strict execution and authorized proposals."""
     from castle import namespace_transactions as transactions
 
     n._authorize(handle.session, "excision-inventory")
@@ -419,10 +442,10 @@ def selection_plan(
     info = handle.load_info()
     selection = request["args"]["selection"]
     selected_content = set(selection["content_ids"])
-    if not selected_content or selected_content - set(handle.objects):
+    if selected_content - set(handle.objects):
         n._refuse("namespace-content-mismatch")
     entries = handle.entries(live=False)
-    removed = entry_closure(entries, selection["entry_ids"], info.root_id, set(handle.entries()))
+    removed = entry_closure(entries, selection["entry_ids"], info.root_id)
     cleared = set(selection["metadata_entry_ids"])
     if info.root_id in cleared:
         n._refuse("namespace-root-immutable")
@@ -442,9 +465,6 @@ def selection_plan(
     if selected_operations - {row["operation_id"] for row in rows} - {request["operation_id"]}:
         n._refuse()
     recipes, dropped, pairs = snapshot_recipes(handle, request, removed, cleared)
-    count = len(removed | cleared) + len(selected_operations) + len(selected_content) + pairs
-    if count > n.MAX_ENTRIES:
-        n._refuse("namespace-limit-exceeded")
     disclosed = operation_disclosures(
         rows,
         removed,
@@ -454,16 +474,175 @@ def selection_plan(
         selected_operations,
         set(handle.db.execute("SELECT * FROM dependencies")),
     )
-    if disclosed - selected_operations - {request["operation_id"]}:
-        n._refuse("namespace-dependency-conflict")
-    _source_disclosures(handle, request, removed, cleared)
+    selected_operations |= disclosed - {request["operation_id"]}
+    count = len(removed | cleared) + len(selected_operations) + len(selected_content) + pairs
+    if count > n.MAX_ENTRIES:
+        n._refuse("namespace-limit-exceeded")
+    # Cleanup scans the retained SQL image and successor manifests as well as
+    # CAS objects. Refuse their selected literals before irreversible retirement;
+    # retiring a disclosing operation does not clear the entry it once wrote.
+    if selected_content:
+
+        def retained_texts() -> Iterator[str]:
+            for identity, entry in entries.items():
+                if identity not in removed:
+                    yield entry.name or ""
+                    if entry.name is not None:
+                        yield n._key(entry.name)
+                    if identity not in cleared:
+                        yield from _strings(entry.metadata)
+            for _, _, raw in recipes:
+                yield raw.decode("utf-8")
+
+        if any(
+            match.group() in selected_content
+            for text in retained_texts()
+            for match in n._CAS.finditer(text)
+        ):
+            n._refuse("namespace-dependency-conflict")
+    conflicts = _source_conflicts(handle, request, removed, cleared)
     n._authorize(handle.session, "excision-inventory-result")
-    return {
-        "entry_ids": sorted(removed),
-        "metadata_entry_ids": sorted(cleared - removed),
-        "operation_ids": sorted(selected_operations),
-        "drop_snapshot_ids": dropped,
-    }, recipes
+    return (
+        {
+            "entry_ids": sorted(removed),
+            "metadata_entry_ids": sorted(cleared - removed),
+            "operation_ids": sorted(selected_operations),
+            "drop_snapshot_ids": dropped,
+        },
+        recipes,
+        conflicts,
+    )
+
+
+def selection_plan(
+    handle: NamespaceHandle, request: dict[str, Any]
+) -> tuple[dict[str, Any], list[tuple[n.SnapshotRecord, int, bytes]]]:
+    """Validate complete explicit closure before any durable cutover intent."""
+    closure, recipes, conflicts = _selection_plan(handle, request)
+    if conflicts or set(closure["operation_ids"]) - set(
+        request["args"]["selection"]["operation_ids"]
+    ) - {request["operation_id"]}:
+        n._refuse("namespace-dependency-conflict")
+    return closure, recipes
+
+
+def operation_available(handle: NamespaceHandle, identity: str) -> None:
+    """Apply the same token/reservation refusal to preview and fresh execution."""
+    from castle import namespace_transactions as transactions
+
+    row = transactions._row(handle, identity)
+    if row is not None:
+        n._refuse(
+            "namespace-operation-retired"
+            if row["state"] == "retired"
+            else "namespace-operation-conflict"
+        )
+    if (
+        identity in handle.load_info().cas.to_dict().values()
+        or identity in handle.authority_ids()
+        or handle.db.execute(
+            "SELECT 1 FROM entry_reservations WHERE entry_id=? UNION ALL "
+            "SELECT 1 FROM snapshot_reservations WHERE snapshot_id=?",
+            (identity, identity),
+        ).fetchone()
+    ):
+        n._refuse()
+
+
+def inventory(handle: NamespaceHandle) -> n.ExcisionInventory:
+    """Return complete bounded payload ownership without raw operation bodies."""
+    from castle import namespace_snapshots as snapshots
+    from castle import namespace_store as store
+
+    n._authorize(handle.session, "excision-inventory")
+    handle._cas_check()
+    info = handle.load_info()
+    total_bytes = 0
+
+    def append(collection: list, item: Any) -> None:
+        nonlocal total_bytes
+        if len(collection) >= n.MAX_ENTRIES:
+            n._refuse("namespace-limit-exceeded")
+        # Member encodings are a lower bound on the enclosing object, so this
+        # rejects only certain overflow while keeping collection memory bounded.
+        total_bytes += len(n.canonical_bytes(n._plain(item), limit=n.MAX_MANIFEST_BYTES))
+        if total_bytes > n.MAX_MANIFEST_BYTES:
+            n._refuse("namespace-limit-exceeded")
+        collection.append(item)
+
+    entries = []
+    for row in handle.db.execute("SELECT * FROM entries ORDER BY entry_id"):
+        identity, kind, parent, name, metadata, cas_id, size, changed, live, key = row
+        entry = n.EntryRecord(
+            identity, kind, parent, name, n._decode(metadata), cas_id, size, changed
+        )
+        store._validate_entry(entry, info.revision)
+        if live not in (0, 1) or key != (n._key(name) if name is not None else None):
+            n._refuse("namespace-format-unsupported")
+        append(entries, n.HistoricalEntry(entry, bool(live)))
+    views, pairs = [], 0
+    for row in handle.db.execute(
+        "SELECT snapshot_id,cas_id,size,captured_revision,live FROM snapshots ORDER BY snapshot_id"
+    ):
+        if row[4] not in (0, 1):
+            n._refuse("namespace-format-unsupported")
+        record = n.SnapshotRecord(*row[:4])
+        manifest = snapshots.catalog_view(handle, record)
+        pairs += len(manifest["entries"])
+        if pairs > n.MAX_ENTRIES:
+            n._refuse("namespace-limit-exceeded")
+        append(views, n.HistoricalSnapshot(n.SnapshotView(record, manifest), bool(row[4])))
+    operations = []
+    for identity, state in handle.db.execute(
+        "SELECT operation_id,state FROM operations WHERE canonical_request IS NOT NULL "
+        "ORDER BY operation_id"
+    ):
+        append(operations, n.HistoricalOperation(identity, state))
+    dependencies = []
+    for row in handle.db.execute("SELECT * FROM dependencies ORDER BY 1,2,3,4"):
+        append(dependencies, n.ContentDependency(*row))
+    content_ids = []
+    for identity in sorted(handle.objects):
+        append(content_ids, identity)
+    result = n.ExcisionInventory(entries, views, operations, dependencies, content_ids)
+    n.canonical_bytes(asdict(result), limit=n.MAX_MANIFEST_BYTES)
+    n._authorize(handle.session, "excision-inventory-result")
+    return result
+
+
+def preview(
+    handle: NamespaceHandle, info: n.NamespaceInfo, args: dict[str, Any]
+) -> n.ExcisionPreview:
+    """Propose explicit cleanup owners without reserving or changing authority."""
+    from castle import namespace_transactions as transactions
+
+    n._authorize(handle.session, "excision-inventory")
+    request = n.MutationRequest(
+        info.namespace_id,
+        info.cas,
+        info.revision,
+        args["operation_id"],
+        "excise",
+        {"selection": args["selection"], "snapshot_actions": args["snapshot_actions"]},
+    )
+    value = transactions.normalize(request)
+    operation_available(handle, value["operation_id"])
+    if info.revision == n.MAX_INTEGER:
+        n._refuse("namespace-revision-exhausted")
+    closure, recipes, conflicts = _selection_plan(handle, value)
+    proposed = None
+    if not conflicts:
+        selection = value["args"]["selection"]
+        for field in ("entry_ids", "metadata_entry_ids", "operation_ids"):
+            selection[field] = closure[field]
+        proposed = replace(request, args=value["args"])
+        strict, strict_recipes = selection_plan(handle, transactions.normalize(proposed))
+        if strict != closure or strict_recipes != recipes:
+            n._refuse("namespace-storage-recovery-required")
+    n._authorize(handle.session, "excision-inventory-result")
+    return n.ExcisionPreview(
+        proposed, closure["entry_ids"], closure["metadata_entry_ids"], sorted(conflicts)
+    )
 
 
 _INTENT_KEYS = {
@@ -940,6 +1119,16 @@ def execute(
     value = tx.normalize(request)
     started = False
     with handle.mutex:
+        if handle.closed:
+            # This invocation acquired no authority and started no effects.
+            # The caller must use the explicit successor/recovery boundary to
+            # learn the original token's outcome, rather than reuse this handle.
+            raise n.NamespaceError(
+                "namespace-storage-recovery-required",
+                request.namespace_id,
+                request.operation_id,
+                effect="none",
+            )
         try:
             with handle.admitted():
                 predecessor, successor = roots(handle.root, handle.cas_root, explicit_roots)
@@ -960,15 +1149,7 @@ def execute(
                 if info.revision == n.MAX_INTEGER:
                     n._refuse("namespace-revision-exhausted")
                 identity = value["operation_id"]
-                if (
-                    identity in handle.authority_ids()
-                    or handle.db.execute(
-                        "SELECT 1 FROM entry_reservations WHERE entry_id=? UNION ALL "
-                        "SELECT 1 FROM snapshot_reservations WHERE snapshot_id=?",
-                        (identity, identity),
-                    ).fetchone()
-                ):
-                    n._refuse()
+                operation_available(handle, identity)
                 if successor.exists():
                     n._refuse("namespace-root-unsafe")
                 intent = prepare_intent(handle, value, predecessor, successor)
@@ -980,7 +1161,7 @@ def execute(
         except BaseException as error:
             # A possibly committed intent is never reported as a no-effect
             # failure merely because the call did not observe COMMIT return.
-            if started or handle.write_started:
+            if started or (not handle.closed and handle.write_started):
                 handle.failed = True
                 if handle.connection is not None and handle.db.in_transaction:
                     handle.db.execute("ROLLBACK")

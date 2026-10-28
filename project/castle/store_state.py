@@ -167,7 +167,7 @@ def _validate_metadata(name: str, value: object) -> dict[str, Any]:
             _invalid()
         _binding(value["transition"])
         ids = value["cas_ids"]
-        if not isinstance(ids, list) or not ids:
+        if not isinstance(ids, list):
             _invalid()
         if any(not isinstance(item, str) or not _CAS_ID.fullmatch(item) for item in ids):
             _invalid()

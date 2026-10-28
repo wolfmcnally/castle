@@ -1393,7 +1393,7 @@ def test_excision_selection_refuses_atomically(
         assert vanished == [disappearing]
 
     cases = [
-        ("empty", "excision-request-invalid"),
+        ("mapping", "excision-request-invalid"),
         ("string", "excision-request-invalid"),
         ("bytes", "excision-request-invalid"),
         ("member", "excision-request-invalid"),
@@ -1420,8 +1420,8 @@ def test_excision_selection_refuses_atomically(
         )
         selected: Any = [removed]
         expected = identity
-        if kind == "empty":
-            selected = []
+        if kind == "mapping":
+            selected = {}
         elif kind == "string":
             selected = removed
         elif kind == "bytes":
@@ -1579,6 +1579,64 @@ def test_excision_reconstructs_exact_retained_authority(tmp_path: Path) -> None:
 
     from castle import excision, store_state
 
+    source, destination, first_id, second_id, binding, token = _excision_fixture(
+        tmp_path / "content-free"
+    )
+    original_objects = {
+        identity: cas.object_path(source, identity).read_bytes()
+        for identity in (first_id, second_id)
+    }
+    original_events = journal.read_journal(source)
+    remotes = [(first_id, "remote", "key", "at", "proof")] * 2
+    with closing(sqlite3.connect(source / "cas.sqlite")) as db:
+        db.executemany("INSERT INTO remotes VALUES (?,?,?,?,?)", remotes)
+        db.commit()
+        assert db.execute("SELECT * FROM remotes").fetchall() == remotes
+    receipt = excision.excise_store(
+        source, destination, cas_ids=[], operation_id=token, expected_source=binding
+    )
+    assert receipt.successor.generation == binding.generation + 1
+    assert receipt.successor.epoch_id != binding.epoch_id
+    assert journal.read_journal(destination) == original_events
+    assert {
+        identity: cas.require_object(destination, identity).read_bytes()
+        for identity in original_objects
+    } == original_objects
+    with closing(sqlite3.connect(destination / "cas.sqlite")) as db:
+        assert db.execute("SELECT * FROM remotes").fetchall() == remotes
+    assert {file.name for file in source.iterdir()} == {"retired.json", "journal.lock"}
+    for _ in range(2):
+        assert (
+            excision.recover_excision(
+                source, destination, operation_id=token, expected_source=binding
+            )
+            == receipt
+        )
+    with pytest.raises(excision.ExcisionError, match="excision-retirement-committed"):
+        excision.excise_store(
+            source, destination, cas_ids=[], operation_id=token, expected_source=binding
+        )
+    empty = tmp_path / "empty-cas"
+    journal.ensure_store(empty)
+    empty_binding = store_state.read_store_identity(empty)
+    empty_token = str(uuid.uuid4())
+    empty_successor = tmp_path / "empty-successor"
+    empty_receipt = excision.excise_store(
+        empty,
+        empty_successor,
+        cas_ids=[],
+        operation_id=empty_token,
+        expected_source=empty_binding,
+    )
+    assert journal.read_journal(empty_successor) == [] and cas.verify(empty_successor).ok
+    assert empty_receipt.successor.generation == 1
+    assert (
+        excision.recover_excision(
+            empty, empty_successor, operation_id=empty_token, expected_source=empty_binding
+        )
+        == empty_receipt
+    )
+
     for indexed, all_selected in ((True, False), (False, False), (True, True)):
         root = tmp_path / f"{indexed}-{all_selected}"
         source, destination, removed, retained, identity, operation = _excision_fixture(root)
@@ -1708,6 +1766,32 @@ def test_excision_pre_retirement_restart_is_bound(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from castle import excision, store_state
+
+    source, destination, first_id, second_id, binding, token = _excision_fixture(
+        tmp_path / "empty-selection-interruption"
+    )
+    before = _full_snapshot(source)
+    with monkeypatch.context() as controlled:
+        reached = _stop_publication(controlled, "store.json:prepared", "before")
+        with pytest.raises(excision.ExcisionError, match="excision-preparation-failed"):
+            excision.excise_store(
+                source, destination, cas_ids=[], operation_id=token, expected_source=binding
+            )
+    assert reached == ["store.json:prepared"] and _full_snapshot(source) == before
+    saved = json.loads((destination / "excision-selection.json").read_text())
+    assert saved["cas_ids"] == []
+    incomplete = _full_snapshot(destination)
+    with pytest.raises(excision.ExcisionError, match="excision-operation-mismatch"):
+        excision.excise_store(
+            source, destination, cas_ids=[first_id], operation_id=token, expected_source=binding
+        )
+    assert _full_snapshot(destination) == incomplete
+    completed = excision.excise_store(
+        source, destination, cas_ids=[], operation_id=token, expected_source=binding
+    )
+    assert completed.successor.generation == 1
+    assert cas.require_object(destination, first_id).is_file()
+    assert cas.require_object(destination, second_id).is_file()
 
     _exercise_pre_retirement_faults(tmp_path / "durability", monkeypatch)
     for label in (

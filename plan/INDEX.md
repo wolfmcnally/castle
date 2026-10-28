@@ -13,6 +13,7 @@
 | [Phase 6](phase-6.md) | Namespace excision coordination and epoch fencing | ✅ |
 | [Phase 7](phase-7.md) | Consumer surface and namespace qualification | ✅ |
 | [Phase 8](phase-8.md) | Version 0.2.0 release preparation | ✅ |
+| [Phase 9](phase-9.md) | Delete and Excise correction and tagged release | ✅ |
 
 Private execution history is excluded. The public package contracts and methodology policies govern future work.
 

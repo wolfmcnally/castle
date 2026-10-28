@@ -320,6 +320,49 @@ class SnapshotView:
 
 
 @dataclass(frozen=True)
+class HistoricalEntry:
+    entry: EntryRecord
+    live: bool
+
+
+@dataclass(frozen=True)
+class HistoricalSnapshot:
+    view: SnapshotView
+    live: bool
+
+
+@dataclass(frozen=True)
+class HistoricalOperation:
+    operation_id: str
+    state: str
+
+
+@dataclass(frozen=True)
+class ContentDependency:
+    owner_kind: str
+    owner_id: str
+    cas_id: str
+    role: str
+
+
+@dataclass(frozen=True)
+class ExcisionInventory:
+    entries: list[HistoricalEntry]
+    snapshots: list[HistoricalSnapshot]
+    operations: list[HistoricalOperation]
+    dependencies: list[ContentDependency]
+    content_ids: list[str]
+
+
+@dataclass(frozen=True)
+class ExcisionPreview:
+    request: MutationRequest | None
+    entry_ids: list[str]
+    metadata_entry_ids: list[str]
+    conflicting_content_ids: list[str]
+
+
+@dataclass(frozen=True)
 class ExportReceipt:
     snapshot_id: str
     cas_id: str
@@ -369,7 +412,15 @@ class ReadResult:
     namespace_id: str
     revision: int
     cas_binding: StoreIdentity
-    value: NamespaceInfo | EntryRecord | list[EntryRecord] | SnapshotView | ExportReceipt
+    value: (
+        NamespaceInfo
+        | EntryRecord
+        | list[EntryRecord]
+        | SnapshotView
+        | ExportReceipt
+        | ExcisionInventory
+        | ExcisionPreview
+    )
     schema: str = field(default="castle.namespace_read.v1", init=False)
 
 

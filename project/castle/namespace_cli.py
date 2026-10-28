@@ -33,6 +33,8 @@ _READS = {
     "resolve": "resolve",
     "inspect-snapshot": "inspect-snapshot",
     "export-snapshot": "export-snapshot",
+    "inventory-excision": "inventory-excision",
+    "preview-excision": "preview-excision",
 }
 
 

@@ -679,6 +679,8 @@ def read(
     n._authorize(handle.session, "read")
     if type(request) is not n.ReadRequest or type(request.expected_cas) is not n.StoreIdentity:
         n._refuse()
+    if isinstance(request.kind, str) and request.kind in {"inventory-excision", "preview-excision"}:
+        n._authorize(handle.session, "excision-inventory")
     value = n._decode(n.canonical_bytes(asdict(request)))
     n._uuid(value["namespace_id"])
     if value["at_revision"] is not None:
@@ -691,6 +693,8 @@ def read(
         "resolve": {"components"},
         "inspect-snapshot": {"snapshot_id"},
         "export-snapshot": {"snapshot_id"},
+        "inventory-excision": set(),
+        "preview-excision": {"operation_id", "selection", "snapshot_actions"},
     }
     if (
         not isinstance(kind, str)
@@ -700,6 +704,8 @@ def read(
     ):
         n._refuse()
     if (kind == "export-snapshot") != (destination is not None):
+        n._refuse()
+    if kind == "preview-excision" and value["at_revision"] is None:
         n._refuse()
     if "snapshot_id" in args:
         n._uuid(args["snapshot_id"])
@@ -719,7 +725,15 @@ def read(
                 "namespace-revision-conflict", info.namespace_id, actual_revision=info.revision
             )
         entries = handle.entries()
-        if kind in {"inspect-snapshot", "export-snapshot"}:
+        if kind in {"inventory-excision", "preview-excision"}:
+            from castle import namespace_excision as cutover
+
+            result = (
+                cutover.inventory(handle)
+                if kind == "inventory-excision"
+                else cutover.preview(handle, info, args)
+            )
+        elif kind in {"inspect-snapshot", "export-snapshot"}:
             record = snapshots.catalog(handle, args["snapshot_id"])
             result = n.SnapshotView(record, snapshots.catalog_view(handle, record))
         elif kind == "info":

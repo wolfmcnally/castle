@@ -1396,3 +1396,412 @@ Delivery: restricted — “Local commits only for now.” No publication or ado
 
 Lessons:
 - onyx-manul filed, one observed defect, no graduation. Other corrected instruments follow existing verification requirements; original failures and all counters remain intact.
+
+## 2026-10-28 04:22 — PARK
+Phase 9 — Delete and Excise setup initialization
+
+Execution trace: 488f71454fa94729b0339f82b4da73b7
+Pause reason: Evidence initialization refused phase/trace operation mismatch before any role launch. The caller supplied a phase file path where the command requires the phase identifier. Source validation derives phase.<identifier>; the corrective invocation uses 9 and retains the phase file as an authority.
+
+The failed trace is finalized as error, the partial tool directory is preserved unchanged, and every command is terminal. No implementation/review process or live-store operation started. Baseline and prepared phase/contract lineage are preserved; no restoration or history rewrite is needed. This novel invocation signature consumes one configured self-resume unit for a fresh corrective trace; two remain. No review allowance is consumed or reset. The corrective trace was opened after failed-trace finalization; this record captures that transition before corrected initialization.
+
+Acceptance:
+- Objective: None; setup failed before candidate authority capture.
+- Parked for the operator: Existing manual/protected/live-data criteria remain unchanged; no new decision is required by the diagnosed within-scope resume.
+
+Delivery: None from the failed run. Full tagged release remains authorized only after normal required qualification.
+
+Lessons:
+- Already covered by existing definition-reading and verification rules: use the command's identifier contract rather than inferring it from a neighboring file argument. No new rule or graduation.
+
+Remaining:
+- Initialize a fresh run with the corrected phase identifier, obtain PLAN/CODE advice, implement, qualify and publish the bounded release.
+
+## 2026-10-28 04:25 — START (resumed)
+Phase 9 — Delete and Excise correction and tagged release
+
+Execution trace: 20848a610cf84894aac9f50aa64615ed
+Baseline: 3376c6163fe65873ef889df2d5ef7b25093e2101 — prior release preservation and pre-correction refusal/closure comparison
+
+Planned work:
+- Reproduce and correct empty-content admission and historical directory closure using the existing CAS epoch, namespace replacement and recovery mechanisms.
+- Provide typed, authorized historical excision inventory and a side-effect-free exact closure preview without silently widening execution selection.
+- Prove Delete retention versus Excise disposal, live/deleted and name-only/mixed selections, empty directories, preview/execution equality, concurrency and interrupted/repeated recovery on disposable stores.
+- Update owning API, schema and CLI documentation consistently and prepare version 0.2.1 with inspected native/Linux artifacts and isolated installed workflows.
+- Publish the qualified commit, tag and exact wheel, source archive and SHA256SUMS to the existing public GitHub destination; verify remote identities and downloaded bytes while preserving previous releases.
+
+## 2026-10-28 04:38 — PARK
+Phase 9 — Reviewed Delete and Excise contract preparation
+
+Execution trace: 20848a610cf84894aac9f50aa64615ed
+Pause reason: Intentional preparation boundary before final governing-authority reconciliation and fresh capture. Independent Opus/high plan advice completed successfully; all fourteen observations remain preserved with exact candidate and dispatch provenance. No runtime code, live store, publication or consumer action has started.
+
+The primary adopts source-backed empty-selection validator/demo fixes, exact authorization/reservation order, unchanged-revision dependency-conflict retry, all-catalog snapshot disclosure, complete native/Linux/source-input release binding and conservative conflict reporting. Inventory uses bounded complete payload-bearing collections and excludes payload-free retired operation reservations; finite read limits remain explicit and do not redefine execution capacity. Conservative journal/remotes equality remains a refusal proxy, not automatic authority to excise innocent matching bytes. Typed authorized preview will identify conflicting retained content IDs without returning paths or silently selecting them.
+
+This preparation is interrupted/not accepted. All watcher processes are terminal and the first PLAN allowance is retained; no counter or self-resume budget is reset. The fresh run carries this exact report and records the final delta assessment. Source and earlier rejected plan/probe evidence remain intact.
+
+Acceptance:
+- Objective: None; executable correction and required gates remain pending.
+- Parked for the operator: Existing manual/protected/live-data criteria only; no new approval gate is introduced for ordinary in-scope contract corrections.
+
+Delivery: No delivery from this preparation. The operator's full tagged-release approval remains scoped to the Delete/Excise improvement and existing public repository.
+
+Lessons:
+- Existing complete-contract inventory and verification rules cover the saved-selection validator and misleading demo. All independent validators, callers and fixtures are being reconciled before runtime changes; no new policy or graduation.
+- The incorrect definition citation and original diagnostic remain preserved; its bounded correction passed the same concreteness check. No rejected evidence was removed.
+
+Remaining:
+- Rebind final authorities with the preserved PLAN report, implement, obtain CODE advice and complete both full gates, platform/artifact qualification and the authorized release.
+
+## 2026-10-28 04:42 — START (resumed)
+Phase 9 — Final Delete and Excise authority and runtime correction
+
+Execution trace: 8ff6219ce25340bfa3ede5e3d42d9e35
+Baseline: 3376c6163fe65873ef889df2d5ef7b25093e2101 — prior release preservation and observed defect comparisons
+
+Planned work:
+- Reproduce and correct empty-content admission and historical directory closure using the existing CAS epoch, namespace replacement and recovery mechanisms.
+- Provide typed, authorized historical excision inventory and a side-effect-free exact closure preview without silently widening execution selection.
+- Prove Delete retention versus Excise disposal, live/deleted and name-only/mixed selections, empty directories, preview/execution equality, concurrency and interrupted/repeated recovery on disposable stores.
+- Update owning API, schema and CLI documentation consistently and prepare version 0.2.1 with inspected native/Linux artifacts and isolated installed workflows.
+- Publish the qualified commit, tag and exact wheel, source archive and SHA256SUMS to the existing public GitHub destination; verify remote identities and downloaded bytes while preserving previous releases.
+
+The final governing contract incorporates the primary's evidence-backed dispositions of the preserved first PLAN advice. Advice remains joined to its original candidate and report, not relabeled as an independent review of the updated prose. Primary mode permits this bounded delta assessment; comprehensive final CODE advice and objective gates remain required. No additional PLAN invocation or budget reset occurs. The interrupted preparation and rejected closure input remain intact; the single exact leading-LF bookkeeping repair passed byte verification and closure then completed without changing product identity.
+
+## 2026-10-28 05:47 — PARK
+Phase 9 — Final retained-image refusal and contract reconciliation
+
+Execution trace: 8ff6219ce25340bfa3ede5e3d42d9e35
+Pause reason: Both independent code reports are terminal. The first report's retained-name/metadata cleanup failure was reproduced on disposable stores and corrected before intent; seven affected regression families then passed. The second report identified the same coverage gap in a stored casefolded name key and exact owning-document mismatches. This candidate is interrupted, not accepted; final full gates and publication have not occurred.
+
+The remaining bounded work is to reproduce and cover derived comparison keys, align the documented early refusal versus typed retained-content conflict, state conservative key/scalar matching limits, and freeze the final authority for qualification. Preserve the reviewed source, original failing stores, all diagnostics and reports. The phase-wide allowance remains PLAN one used and CODE two used, with no remaining CODE pass and no reset. Primary-mode policy permits evidence-backed corrections and final delta assessment without an automatic third review. No policy, permission, actor, storage mechanism or release scope is expanded.
+
+Acceptance:
+- Objective: Focused implementation evidence exists, but no implementation acceptance or final gate is claimed.
+- Parked for the operator: Existing manual usability/protected/live-data criteria; no new decision is required for the within-scope correction.
+
+Delivery: None yet; the explicit full tagged-release authorization remains bounded to the same corrective release and public destination.
+
+Lessons:
+- Pending local candidate: compare every retained logical and derived field against the final cleanup oracle before the irreversible boundary. The existing proof family is being strengthened; rejected originals remain preserved.
+
+Remaining:
+- Complete the bounded correction and owning prose, rebind with all three original advice reports and exhausted counters, then run both full gates, platform/exact-artifact qualification and authorized publication verification.
+
+## 2026-10-28 05:49 — START (resumed)
+Phase 9 — Final Delete and Excise qualification
+
+Execution trace: 76ae74c912d1456bb4d2ed5cce498e1b
+Baseline: 3376c6163fe65873ef889df2d5ef7b25093e2101 — prior release preservation and observed defect comparisons
+
+Planned work:
+- Reproduce and correct empty-content admission and historical directory closure using the existing CAS epoch, namespace replacement and recovery mechanisms.
+- Provide typed, authorized historical excision inventory and a side-effect-free exact closure preview without silently widening execution selection.
+- Prove Delete retention versus Excise disposal, live/deleted and name-only/mixed selections, empty directories, preview/execution equality, concurrency and interrupted/repeated recovery on disposable stores.
+- Update owning API, schema and CLI documentation consistently and prepare version 0.2.1 with inspected native/Linux artifacts and isolated installed workflows.
+- Publish the qualified commit, tag and exact wheel, source archive and SHA256SUMS to the existing public GitHub destination; verify remote identities and downloaded bytes while preserving previous releases.
+
+The final governing contract records the exact retained-image refusal and conservative matching behavior after the three terminal advice reports. The original runtime candidate is parked/not accepted, its source and failed stores remain preserved, and the uppercase comparison-key probe independently reproduced the second report's finding before correction. PLAN1/CODE1/CODE2 keep their original candidates and dispatches. Both CODE allowances are exhausted: no new adviser is dispatched or budget reset. Primary-mode final delta assessment plus actual focused/full/platform/package gates qualify the bounded correction; no policy, actor, permission, persisted format, storage mechanism or release scope expands.
+
+## 2026-10-28 06:26 — END
+Phase 9 — Delete and Excise corrective implementation and release qualification
+
+Delete retains bytes and logging while removing live entries. Excise now supports content-free epoch moves and retained deleted descendants, with authorized historical inventory and closure preview. Unsafe retained names, derived comparison keys, metadata and snapshot recipes refuse before retirement. The implementation and exact native/Linux packages are qualified; publication and its remote checks remain required after delivery, and are not claimed complete in this record.
+
+Execution trace: 76ae74c912d1456bb4d2ed5cce498e1b
+
+Files changed:
+- .github/scripts/package-qualify.py
+- .github/scripts/package-smoke.py
+- EXECUTION_LOG.jsonl
+- LOG.md
+- README.md
+- briefs/content-excision.md
+- briefs/coordinated-namespace-crud.md
+- plan/INDEX.md
+- project/CHANGELOG.md
+- project/NAMESPACE_ENVIRONMENT.md
+- project/README.md
+- project/RELEASE.md
+- project/castle/__init__.py
+- project/castle/excision.py
+- project/castle/namespace.py
+- project/castle/namespace_cli.py
+- project/castle/namespace_excision.py
+- project/castle/namespace_store.py
+- project/castle/namespace_transactions.py
+- project/castle/store_state.py
+- project/pyproject.toml
+- project/tests/test_cas.py
+- project/tests/test_cli.py
+- project/tests/test_journal.py
+- project/tests/test_namespace.py
+- project/tests/test_namespace_consumers.py
+- project/tests/test_namespace_excision.py
+- project/uv.lock
+- plan/phase-9.md
+- Pending close bookkeeping: lessons/attractive-lemming.md and reports/execution/2026-10-28/phase-9/ plus the execution archive index. Phase completion and these writes have not landed yet.
+
+Build status:
+- Final affected semantic/restart/CAS/CLI selection: seven existing families passed. The independently missed canonical saved-selection fixture passed after its bounded repair on native and Linux; malformed mapping, ordering, duplicate and member-type refusals remain.
+- Native implementation gate: 196 passed, no skips/warnings/errors; all policy checks pass.
+- Linux implementation gate: 190 passed, six named Darwin-native skips; all policy checks pass, no warnings in the final full run. Actual unsupported-platform refusal assertions ran separately from the skipped native-success cases.
+- Native wheel/sdist/rebuilt-wheel and isolated installed workflows: pass. Exact native release bytes also installed/rebuilt on Linux; independent Linux builds yield the identical wheel, source archive and rebuilt-wheel hashes.
+- Warnings: four explained uv hardlink-to-copy performance warnings in successful Linux installs; separate cache/temporary-environment filesystems require copies, whose verified bytes are correct. One same warning belongs to the earlier failed Linux execution. No runtime or source-import fallback.
+- Preserved failed gates: runner supplied an older isolation variable and correctly refused before tests; its supported containment-checked caller correction is explicit. The next Linux run found one outdated independent empty-selection fixture, corrected at its owner with original source/diagnostics retained. No guard, policy, grant, history or budget was weakened.
+- Handoff gate: runs after all tracked close writes; completion is contingent on its ignored receipt from the final bare ./bin/check all.
+
+Review lane:
+- full, product primary mode. One independent PLAN and two CODE advisory reports; no further review invocation or allowance reset. Planning/coding stayed on the same primary writer.
+
+Evidence lane:
+- full.
+
+Follow-up route:
+- Initial approved correction; source-backed bounded corrections and truthful authority rebinds preserve all original advice/candidates. The independent saved-selection fixture repair is low risk and changes no runtime contract.
+
+Role model/venue — orchestrated by codex:
+- Preflight: recorded valid Sol/Opus targets; current host performs orchestration and gates.
+- Planner/Coder: primary Sol inline; individual model timing and observed host model/effort are unreported by the frozen workflow, not inferred from dormant pins.
+- Independent PLAN/CODE: requested opus/high through Claude; observed claude-opus-5-5, harness2.1.312; observed effort unreported. No fallback. Historical model records and phase-wide counters remain intact.
+
+Role timing:
+- role.plan-review attempt 1: 423.528785666s; success, exit0; first event and longest idle unreported in the retained sanitized span.
+- role.code-review attempt 1: 466.020669125s; success, exit0; first event and longest idle unreported in the retained sanitized span.
+- role.code-review attempt 2: 377.387258292s; success, exit0; first event and longest idle unreported in the retained sanitized span.
+- Reports retain original trace/candidate joins. The final qualification trace dispatched no new intelligence role.
+
+Candidate-bound evidence:
+- Accepted implementation candidate: a352b6847733106eb9c0b864834ea2ffed7b92b2c511414898bebf894378745a
+- Full implementation tree: 2eaa882b217187e7b944d11a9d1ec30f21a3834c55017ffcd0a0f272c1f37e45
+- Advice: 28 findings; 26 adopted with evidence, two declined with source-backed rationale. The declined normal-path expiry-owner premise conflicts with completed expiry-proof pruning/admission; the optional validation-cache shortcut was not introduced. No unresolved material primary disposition.
+- Managed gates: 7 recorded executions, including two preserved failures and four successful final-candidate sequence commands. Managed focused=0; external focused checks are retained separately, not miscounted as managed executions. Every required manifest conjunct and its diagnostic review was independently reconciled before close.
+- Final command manifest: 29591dcd846e7a7bbed865dd84526d83c0a4318506b2f07fe31b0711ead1d110
+- Acceptance evidence validation: passed against the exact current candidate and ./bin/check all before telemetry finalization. Timing validation: exact monotonic joins and overlap-safe unions pass; unavailable measurements stay unreported.
+- Current qualification trace makespan: 1905206514750ns; gate union 637822759292ns; reconciliation union 1904657880541ns; retry/rework 1386307016584ns; failed-work union 391170166041ns; unattributed 548634209ns. Categories may overlap. Complete inline peak concurrency/exclusive model work is unreported; the managed gate commands were serialized. Earlier role durations above are not relabeled as current-run intelligence.
+- Awaiting operator input: none; phase-summary reports no open interval and total0 with exact method none.
+
+Wall-clock observations:
+- Hoisted the live-entry SQL inventory once above the snapshot loop while preserving its predicate. Kept strict proposal revalidation; no new cache-witness protocol or qualification shortcut was added. Linux/native archive reproducibility and exact-input reuse preserve byte provenance.
+
+Acceptance:
+- Objective: valid content-free and mixed entry/metadata/content selections; Delete retention versus Excise disposal; deleted descendant and name-only closure; authorized complete inventory; nonmutating preview and exact execution closure; equal-revision/token races; pre-intent refusal including derived keys; interruption/fault/repeated-root recovery; actual CLI/library/installed-byte correspondence; native/Linux retained suites and exact artifacts.
+- Parked for the operator: manual naming/error/retry-window usability. Protected deployment, hardware power loss, physical-media erasure, live stores, external copies and downstream adoption remain unqualified and outside this task.
+- Post-delivery executable conditions still required: qualified clean commit and source-input equality, exact master CI, scoped annotated tag and tag CI, public three-asset release, downloaded byte equality and unchanged previous releases. These remain the worker's work, not an invented operator approval gate.
+
+Delivery:
+- Scoped operator authorization, verbatim: “I approve a full tagged release of Castle with the Delete/Excise improvements.” This authorizes v0.2.1 at the existing public wolfmcnally/castle GitHub destination after gates, including source/tag and only the inspected wheel, source archive and SHA256SUMS. No PyPI, live stores, new access or downstream adoption. No push/tag/upload has occurred yet.
+- A malformed-room TTL extension was rejected before execution. The original signed task address was observed and used as data for one corrected same-server renewal, which was granted; the rejection remains preserved. No alternate identity, route, grant or review bypass was used.
+
+Ripple:
+- AUTO: none — no downstream sketches. The prospective ledger completes only Phase9; the existing historical release/manual marker stays intact. No new implementation phase is selected.
+- DECIDE: none for this release scope.
+
+Lessons:
+- Pending local candidate attractive-lemming: compare the complete retained logical/derived image against the cleanup oracle before the irreversible boundary. Three distinct actual metadata/name/comparison-key probes are separate occurrence rows. No rule graduation is applied.
+- Already covered: independent fixture inventory and exact supported runtime-variable/identifier rules; the caller omissions were corrected without adding duplicate policy. All failed/rejected originals remain preserved.
+- Graduation candidate: attractive-lemming has three pending occurrences; the operator may review its proposed test principle later. This is no release gate and authorizes no rule edit.
+- Recalibration: no group reaches30 successful samples; per-group counts are unreported by the existing reader. It ignored536 non-schema3/unsupported rows with complete diagnostics retained. No timeout or budget changed.
+
+User demo:
+User Demo: N/A for automated release qualification; manual usability remains an operator judgment, not an asserted acceptance result.
+
+Testing protocol:
+- Inspect the package version and namespace help, then use the repository package-qualify driver with an absent temporary output directory to repeat only disposable installed workflows. The final offline report carries concrete commands. No destructive live-store demo is requested or authorized.
+
+Remaining:
+- Apply the recorded ledger, lesson and report bookkeeping, run the second bare full handoff gate, then commit and complete the authorized CI/tag/release/download verification. Task completion waits for those real outcomes. Retain original failed synthetic stores/reports as regression provenance; incremental runtime/build caches stay available for their named purpose.
+
+## 2026-10-28 06:29 — CLOSE BOOKKEEPING
+Phase 9 — Recorded implementation handoff
+
+The accepted status-only transition was applied and verified. Phase9 implementation is marked complete; the pre-existing historical release/manual marker is preserved. No downstream plan or new implementation phase was selected. The candidate lesson attractive-lemming was filed with three distinct actual probe occurrences; lessons validate passes and candidates reports it ready for optional operator review. No policy graduation or timeout change occurred. The offline report is generated next, followed by the mandatory bare full handoff gate. Source commit, CI, scoped tag/release and downloaded-byte verification remain pending worker delivery conditions, not accepted remote outcomes.
+
+Lessons:
+- attractive-lemming filed as a local test candidate, three occurrences. Existing inventory/identifier/runtime-contract rules cover the corrected caller omissions; no duplicate rule was added.
+
+## 2026-10-28 06:43 — PARK
+Phase 9 — Restore the exact baseline authorization before release
+
+Execution trace: 207021fed31340ffab79c332f54079ea
+Pause reason: A final exact-baseline comparison found that an existing shared excision result-permission check had been removed on an incorrect advice premise. The cached source cited by advice was not the exact baseline. The primary verified only the baseline function's initial admission and accepted that premise; this was a primary verification omission.
+
+The earlier implementation and bare handoff gates genuinely passed, but their candidate is withdrawn for delivery. The independent synthetic audit now demonstrates the missing property: execution committed without ever observing the denied excision-inventory-result kind. No commit, push, tag, upload, live store or new grant occurred. Original accepted close, source, passing/failed diagnostics, artifacts, all advice and exhausted CODE counters remain untouched. The completed phase marker remains historical under the completed-phase correction route; the correction will have a separate END (correction), not rewritten acceptance history.
+
+The causal correction is concrete: restore the exact baseline shared result check before returning private closure, restore execution and staging-recovery denial proofs, align owning documentation to the existing requirement, and qualify fresh source/artifacts through both full gates and publication checks. This novel diagnosed signature consumes one remaining self-resume unit, leaving one; no review or provider allowance resets and no third CODE pass is authorized or required by primary-mode correction policy.
+
+Acceptance:
+- Objective: The independent audit reproduced the authorization regression; no corrected candidate is accepted yet.
+- Parked for the operator: Existing manual/protected/live-data criteria only. Restoring an existing invariant stays within the approved corrective release and introduces no new permission or product decision.
+
+Lessons:
+- devious-cheetah filed as a local test candidate, one actual audit occurrence; exact baseline and negative authorization oracles are required. The original attractive-lemming candidate remains with its three distinct retained-image probes. Lessons validation passes; no graduation or policy change.
+
+Remaining:
+- Apply the diagnosed safety restoration, capture a fresh completed-phase correction run with all original advice, run actual refusal/affected/full/platform/artifact checks, then deliver the already-authorized release. Prior passing bytes must not be published.
+
+## 2026-10-28 06:51 — START (resumed)
+Phase 9 — Exact-baseline authorization correction before publication
+
+Execution trace: e54e447a983941d99502c0c2f31cdc24
+Baseline: 3376c6163fe65873ef889df2d5ef7b25093e2101 — both original shared planner permission checks, complete exact source preserved
+
+Planned work:
+- Reproduce and correct empty-content admission and historical directory closure using the existing CAS epoch, namespace replacement and recovery mechanisms.
+- Provide typed, authorized historical excision inventory and a side-effect-free exact closure preview without silently widening execution selection.
+- Prove Delete retention versus Excise disposal, live/deleted and name-only/mixed selections, empty directories, preview/execution equality, concurrency and interrupted/repeated recovery on disposable stores.
+- Update owning API, schema and CLI documentation consistently and prepare version 0.2.1 with inspected native/Linux artifacts and isolated installed workflows.
+- Publish the qualified commit, tag and exact wheel, source archive and SHA256SUMS to the existing public GitHub destination; verify remote identities and downloaded bytes while preserving previous releases.
+
+Completed-phase correction route: retain the historical completed marker and prior END, then append END (correction) after fresh qualification. The existing result permission is restored in source preparation, along with explicit pre-intent/staging/abort denial and post-private-plan query revocation proofs. The final owning prose states the preserved execution/recovery requirement. This fresh run captures those bytes and performs the real remaining validation and delivery; no independent report is relabeled as reviewing this later correction. PLAN1/CODE1/CODE2 remain carried with original candidates, and the primary rejects their disproved cached-baseline premise. CODE is exhausted, one self-resume unit remains, and no third pass, new writer, grant, provider or policy change occurs.
+
+## 2026-10-28 07:18 — PARK
+Phase 9 — Refresh historical report after finalized correction evidence
+
+Execution trace: e54e447a983941d99502c0c2f31cdc24
+Pause reason: The current Linux run passed all 190 applicable tests and six expected platform skips, then the execution-dashboard integrity gate rejected a stale report index. The focused native checker independently reproduces it. Finalized authorization-audit history changed the phase report source digest after its historical rendering. This run is failed, not accepted; no commit, push, tag or upload occurred.
+
+Preserve all failed diagnostics, current source, native assets, original advice and old report bytes. The bounded causal correction is normal report regeneration after this failed trace finalizes, explicitly stating that historical acceptance was withdrawn, followed by a fresh immutable candidate and complete gates. Runtime/package inputs do not change. The signature is novel and consumes the last self-resume unit; zero remain, and CODE remains exhausted. No budget reset, new reviewer, policy change or wider authority is used.
+
+Lessons:
+- Already covered by the existing deterministic report and candidate-bound gate rules: finalized evidence changes report inputs. Apply the existing normal regeneration before capturing a corrective candidate; preserve the old report and failed gate. No new policy or proof family is needed.
+
+Remaining:
+- Regenerate and prove report consistency, carry original advice into the last permitted corrective trace, qualify the final native/Linux assets and both full gates, then perform the authorized release verification. Historical completed status and old END remain untouched.
+
+## 2026-10-28 07:19 — START (resumed)
+Phase 9 — Final report-consistent authorization qualification
+
+Execution trace: 9a9bfe08d87c477f996fb1c6786ea05e
+Baseline: 3376c6163fe65873ef889df2d5ef7b25093e2101 — both original shared planner permission checks, complete exact source preserved
+
+Planned work:
+- Reproduce and correct empty-content admission and historical directory closure using the existing CAS epoch, namespace replacement and recovery mechanisms.
+- Provide typed, authorized historical excision inventory and a side-effect-free exact closure preview without silently widening execution selection.
+- Prove Delete retention versus Excise disposal, live/deleted and name-only/mixed selections, empty directories, preview/execution equality, concurrency and interrupted/repeated recovery on disposable stores.
+- Update owning API, schema and CLI documentation consistently and prepare version 0.2.1 with inspected native/Linux artifacts and isolated installed workflows.
+- Publish the qualified commit, tag and exact wheel, source archive and SHA256SUMS to the existing public GitHub destination; verify remote identities and downloaded bytes while preserving previous releases.
+
+Completed-phase correction route: retain the historical completed marker and prior END, then append END (correction) after fresh qualification. The failed Linux gate and finalized corrective history are preserved. Normal historical report regeneration now passes focused integrity and explicitly withdraws earlier qualification. The existing result permission is restored in source preparation, along with explicit pre-intent/staging/abort denial and post-private-plan query revocation proofs. The final owning prose states the preserved execution/recovery requirement. This fresh run captures those bytes and performs the real remaining validation and delivery; no independent report is relabeled as reviewing this later correction. PLAN1/CODE1/CODE2 remain carried with original candidates, and the primary rejects their disproved cached-baseline premise. CODE is exhausted, zero self-resume units remain, and no third pass, new writer, grant, provider or policy change occurs.
+
+## 2026-10-28 07:31 — END (correction)
+Phase 9 — Qualified Delete/Excise release candidate with original authorization restored
+
+Delete retains bytes and logs while removing live entries. Excise supports content-free epoch advance and deleted descendant cleanup, with authorized historical inventory and explicit closure preview. Both original private planner permissions are preserved. Fresh native/Linux packages and the implementation gates pass. The separate handoff gate and actual commit/CI/tag/release/download verification remain required before task completion.
+
+Execution trace: 9a9bfe08d87c477f996fb1c6786ea05e
+
+Files changed:
+- .github/scripts/package-qualify.py
+- .github/scripts/package-smoke.py
+- EXECUTION_LOG.jsonl
+- LOG.md
+- README.md
+- briefs/content-excision.md
+- briefs/coordinated-namespace-crud.md
+- lessons/attractive-lemming.md
+- lessons/devious-cheetah.md
+- plan/INDEX.md
+- plan/phase-9.md
+- project/CHANGELOG.md
+- project/NAMESPACE_ENVIRONMENT.md
+- project/README.md
+- project/RELEASE.md
+- project/castle/__init__.py
+- project/castle/excision.py
+- project/castle/namespace.py
+- project/castle/namespace_cli.py
+- project/castle/namespace_excision.py
+- project/castle/namespace_store.py
+- project/castle/namespace_transactions.py
+- project/castle/store_state.py
+- project/pyproject.toml
+- project/tests/test_cas.py
+- project/tests/test_cli.py
+- project/tests/test_journal.py
+- project/tests/test_namespace.py
+- project/tests/test_namespace_consumers.py
+- project/tests/test_namespace_excision.py
+- project/uv.lock
+- reports/execution/2026-10-28/phase-9/data.js
+- reports/execution/2026-10-28/phase-9/handoff.json
+- reports/execution/2026-10-28/phase-9/index.html
+- reports/execution/index-data.js
+
+Build status:
+- Corrected affected suite: eight existing families passed, including actual no-effect execution/staging/abort and late-query denial proofs. The exact baseline admission/result permission pair and order match current private planning.
+- Native implementation: 196 passed, no skips or warnings; every policy passes.
+- Linux implementation: 190 passed, six expected Darwin-only successful clone/merge cases skipped; every policy passes. Unsupported-platform refusal proofs execute.
+- Exact native wheel and validated-sdist rebuilt wheel install and run synthetic public workflows on native and Linux; independent Linux wheel, source archive and rebuilt-wheel hashes equal native.
+- Linux artifact warnings: four uv hardlink-to-copy performance warnings across cache/temporary-environment filesystems. Copied bytes, package modules and installed behavior are verified; no runtime/import fallback or suppressed diagnostic.
+- Earlier accepted implementation and handoff are withdrawn for delivery, not erased: an actual public audit proved the omitted existing result permission. Its original passing records and incorrect advice dispositions remain historical. The restored source has fresh refusal and full qualification evidence.
+- The next correction's Linux tests passed190 with six expected skips, then rejected a stale historical report digest. That failed trace is preserved; normal renderer regeneration with explicit withdrawal wording passed focused integrity before this fresh candidate capture. Prior runner-variable, independent fixture and rejected schema/identifier evidence is also preserved.
+- Handoff gate: pending the final bare ./bin/check all after accepted correction and report writes. No tracked write may follow its success.
+
+Review lane:
+- full, product primary mode. Original one PLAN and two CODE advisory reports retain their exact report/candidate/venue identities. No third pass or review-budget reset.
+
+Evidence lane:
+- full.
+
+Follow-up route:
+- full cycle — completed-phase correction under the primary route. Preserve the completed marker and original END; source-backed tests and a fresh primary delta decision qualify changed bytes without relabeling old advice as review of them.
+
+Role model/venue — orchestrated by codex:
+- Primary planning/coding: configured Sol inline; observed host model/effort and individual inline timing unreported by the frozen workflow, never inferred from dormant delegated pins.
+- Independent PLAN/CODE: requested opus/high through Claude; observed claude-opus-5-5, harness2.1.312; observed effort unreported. Valid retained preflight, no fallback or new role dispatch in this correction.
+
+Role timing:
+- role.plan-review attempt 1: 423528785666ns, success; first-event and longest-idle observations unreported.
+- role.code-review attempt 1: 466020669125ns, success; first-event and longest-idle observations unreported.
+- role.code-review attempt 2: 377387258292ns, success; first-event and longest-idle observations unreported.
+
+Candidate-bound evidence:
+- Accepted implementation candidate: 879bedebb38acf4418ed12a72ef44a4ba3683cd5de5977f265131be83cb70f2b
+- Full implementation tree: bb536a4c1c48794978e58d669a8519e3d03fb2f285b1eddbab14696fa1aa8775
+- Advice: 28 findings, 25 adopted and 3 declined with source-backed reasons. The cached-baseline claim that the result permission was new is disproved by the complete exact baseline and declined; normal retained-expiry and optional cache-shortcut premises remain declined. No unresolved primary material disposition.
+- Managed final gates: 4 successful exact manifest conjuncts, serialized and unchanged before/after full/product identities, with complete diagnostic review. External focused checks are retained separately, not counted as managed runs.
+- Acceptance evidence validation and exact monotonic timing joins pass before finalization. Current makespan 684517340708ns; gate union 462623562918ns; reconciliation union 684164737292ns; retry/rework 0ns; failed-work union 0ns; unattributed 352603416ns. Categories can overlap; inline intelligence attribution/peak concurrency remain unreported.
+- Awaiting operator input: none; phase summary has no intervals or open park, total0 by method none. Phase-wide CODE and self-resume allowances are exhausted, not reset.
+- Wheel SHA-256: 58b9b81641b12aae57479295a14ec1de175ff528837bf8ca9e1cc8ff5a434e97
+- Source archive SHA-256: 6c9f9ea6ef1aceb4088c764260a04f518f7d368507db7bb0a13b426056569162
+- Source-rebuilt wheel SHA-256: 58b9b81641b12aae57479295a14ec1de175ff528837bf8ca9e1cc8ff5a434e97
+
+Wall-clock observations:
+- Reused existing proof families and hoisted unchanged live-entry inventory out of the snapshot loop. Strict preview revalidation remains. Finalized failed history is rendered before immutable capture; final accepted report generation remains the last tracked close write. No new cache protocol, qualification shortcut or methodology adoption changed this active snapshot.
+
+Acceptance:
+- Objective: content-free and mixed selections, live/deleted/name-only closure, retained Delete bytes/logs, Excise payload disposal, complete finite authorized inventory, nonmutating preview/execution equality, same-token/equal-revision concurrency, pre-intent retained-image refusal, original execution/recovery authorization, interruption/sync/uncertain-commit and repeated recovery, exact library/CLI/package correspondence, native/Linux synthetic qualification.
+- Parked for the operator: manual naming/error/retry-window usability. Protected deployment, hardware power loss, physical-media erasure, live stores, external copies and downstream adoption remain unqualified and outside this task.
+- Post-delivery executable conditions remain the worker's work: bare handoff gate; clean qualified commit/package-input equality; exact master CI; annotated tag and tag-triggered CI; public release with only three assets; downloaded byte equality and unchanged prior releases. No new generic approval gate is created.
+
+Delivery:
+- Scoped operator authorization, verbatim: “I approve a full tagged release of Castle with the Delete/Excise improvements.” Publish v0.2.1 at the existing public wolfmcnally/castle GitHub destination after required gates, including source/tag and only the verified wheel, source archive and SHA256SUMS. No PyPI, live stores, new access or downstream adoption. No commit, push, tag or upload has occurred at this record.
+- Earlier malformed-room TTL renewal was rejected before execution. One evidence-bound corrected same-server renewal was granted; subsequent intentional TTL extension preserves sole ownership. Rejected evidence remains, with no alternate identity/route or permission bypass.
+
+Ripple:
+- AUTO: none — no downstream sketches. Completed-phase correction preserves the current historical completed marker and all prior END/PARK evidence; no ledger rewrite.
+- DECIDE: none for this approved release scope.
+
+Lessons:
+- Filed local test candidates: attractive-lemming, three distinct retained metadata/name/comparison-key reproductions; devious-cheetah, one exact-baseline authorization audit. Both already exist and validate; no occurrence invented, policy amendment or graduation performed.
+- Graduation candidate: attractive-lemming's proposed test principle may be considered later by the operator; no release gate or rule change follows.
+- Already covered: current report regeneration and closed JSON schema rules. Failed report gate and rejected extra-field draft remain preserved; causal correction changes no runtime bytes or gate safeguard.
+- Recalibration: retained reader reports no group reaches30successful samples, individual group counts unreported; 536 unsupported/legacy-row diagnostics retained. No timeout, provider or budget change.
+
+User demo:
+User Demo: N/A for automated release qualification; manual usability remains an operator judgment, not an asserted acceptance result.
+
+Testing protocol:
+- Inspect 0.2.1 and namespace help, then run the repository's package-qualify driver with an absent temporary output directory to repeat isolated installed workflows. The report carries concrete commands. No destructive live-store test is authorized.
+
+Remaining:
+- Materialize this accepted correction, append truthful bookkeeping outcome, regenerate its sanitized report, run the second bare handoff gate, and finish actual authorized delivery/publication verification. Preserve all original failed stores, reports and artifacts as regression provenance. Incremental runtime/build/dependency caches remain for their named current validation purpose. Starter methodology propagation waits for verified release closure, clean checkout and no active process; the actual transfer packet has not arrived.
+
+## 2026-10-28 07:31 — CLOSE BOOKKEEPING
+Phase 9 — Accepted correction handoff preparation
+
+The exact correction END was accepted after four current-candidate gates and complete diagnostic review. The completed phase marker and historical END/PARK records are preserved unchanged; no ledger transition or downstream edit is performed. Both local test lessons are already filed and validation passes; optional graduation remains an operator judgment, not a delivery gate. The earlier missing-authorization and stale-report candidates remain withdrawn and their full evidence is preserved. The sanitized report is generated next as the last tracked close write, followed by the separate bare full handoff gate. No commit, CI, tag or public release outcome is claimed yet.
+
+Lessons:
+- attractive-lemming has three distinct actual occurrences; devious-cheetah has one. Existing deterministic report and exact closed-schema rules cover the bookkeeping correction. No policy, permission, provider, timeout or review allowance changed.

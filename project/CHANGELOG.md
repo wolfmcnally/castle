@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+- Keep logical Delete distinct from managed-content/metadata Excise; support content-free directory/name/metadata excision with an epoch advance through the existing recovery mechanism.
+- Include deleted descendants and typed historical operation links in explicit cleanup closure. Add authorized typed historical inventory and side-effect-free closure preview, with conservative retained-content conflicts reported without automatic selection.
+- Preserve unaffected historical snapshot outcomes across reopen by respecting preliminary versus full backing-content validation. Keep subsequent complete integrity checks and all root/identity/refusal boundaries.
+- Qualify mixed/shared/deleted selections, unchanged-revision owner changes, content-free interruption/retry/concurrency and exact installed CLI/library workflows. No physical-media overwrite, external-copy erasure, new grants or live-store operation is implied.
+
+
 ## 0.2.0
 
 - Add an explicitly initialized, serialized ACID namespace with typed requests/results, durable original-token retry/status and fail-closed recovery. Support browsing, directories, file/directory rename, move, whole-subtree duplication and logical deletion with stable identities and empty-directory preservation.

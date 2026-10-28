@@ -18,7 +18,7 @@ import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 MODULES = frozenset(
     [

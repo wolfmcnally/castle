@@ -141,7 +141,7 @@ def _request(operation_id: str, expected_source: StoreIdentity) -> None:
 
 
 def _selection(cas_ids: Sequence[str]) -> list[str]:
-    if not isinstance(cas_ids, Sequence) or isinstance(cas_ids, (str, bytes)) or not cas_ids:
+    if not isinstance(cas_ids, Sequence) or isinstance(cas_ids, (str, bytes)):
         raise ExcisionError("excision-request-invalid")
     if any(not isinstance(item, str) or not state._CAS_ID.fullmatch(item) for item in cas_ids):
         raise ExcisionError("excision-request-invalid")

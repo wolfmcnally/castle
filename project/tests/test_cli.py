@@ -629,6 +629,8 @@ def _assert_namespace_parser_surface(parser: argparse.ArgumentParser) -> None:
         "snapshot",
         "inspect-snapshot",
         "export-snapshot",
+        "inventory-excision",
+        "preview-excision",
         "delete-snapshot",
         "expire-results",
         "read",

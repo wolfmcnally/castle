@@ -1,6 +1,6 @@
 # Preparing a release
 
-Version 0.2.0 adds the namespace capabilities. It adds the qualified namespace library/CLI, new-byte publication, frozen folders, explicit snapshots/export and coordinated library excision/recovery to the existing CAS core. The historical 0.1.1 release and artifacts remain unchanged. GitHub Releases records actual publication status; the changelog states capability scope, not authority to publish.
+Version 0.2.1 corrects Delete/Excise behavior on top of the namespace library/CLI, new-byte publication, frozen folders, snapshots/export and coordinated excision/recovery introduced in 0.2.0. The historical 0.1.1 and 0.2.0 releases and artifacts remain unchanged. GitHub Releases records actual publication status; the changelog states capability scope, not authority to publish.
 
 ## Build local artifacts
 
@@ -33,7 +33,7 @@ uv venv --managed-python --python 3.12 "$CASTLE_RELEASE_DIR/venv"
 Install the exact wheel without resolving runtime dependencies:
 
 ```bash
-uv pip install --python "$CASTLE_RELEASE_DIR/venv/bin/python" --no-deps "$CASTLE_RELEASE_DIR/dist/castle-0.2.0-py3-none-any.whl"
+uv pip install --python "$CASTLE_RELEASE_DIR/venv/bin/python" --no-deps "$CASTLE_RELEASE_DIR/dist/castle-0.2.1-py3-none-any.whl"
 ```
 
 ```bash
@@ -44,7 +44,7 @@ cd "$CASTLE_RELEASE_DIR"
 ./venv/bin/python -c 'import castle; print(castle.__version__, castle.__file__)'
 ```
 
-Expect version `0.2.0` and a module path inside this new environment. Inspect the actual command inventory:
+Expect version `0.2.1` and a module path inside this new environment. Inspect the actual command inventory:
 
 ```bash
 ./venv/bin/castle --help
@@ -99,13 +99,22 @@ Record the accepted commit, artifact hashes, build/runtime versions and macOS/Li
 
 ## Namespace release qualification
 
-Version 0.2.0 release qualification must retain exact artifact and disclosure approval before any tag or upload. The repository's `.github/scripts/package-qualify.py` is the shared local/CI qualification driver: provide the resolved installed uv via --uv and an absent external directory via --output. It builds and independently allowlists the wheel/sdist, checks metadata/license/backend, records exact hashes, safely unpacks the validated sdist and builds its wheel with the pinned backend. Each wheel is installed without runtime dependency resolution into its own external environment, then the existing installed smoke exercises CAS-only commands, namespace create/replace/retry, stable IDs, empty directories and snapshot export. The source archive itself is not claimed to be installed bytes; the rebuilt wheel's hash/generator records that chain.
+Version 0.2.1 release qualification must retain exact artifact and disclosure approval before any tag or upload. The repository's `.github/scripts/package-qualify.py` is the shared local/CI qualification driver: provide the resolved installed uv via --uv and an absent external directory via --output. It builds and independently allowlists the wheel/sdist, checks metadata/license/backend, records exact hashes, safely unpacks the validated sdist and builds its wheel with the pinned backend. Each wheel is installed without runtime dependency resolution into its own external environment, then the existing installed smoke exercises CAS-only commands, namespace create/replace/retry, stable IDs, empty directories, snapshot export, Delete retention, historical inventory/preview and explicit-root library Excise/recovery. The source archive itself is not claimed to be installed bytes; the rebuilt wheel's hash/generator records that chain.
 
 Record the native and Linux candidate/artifact/runtime/filesystem results and all Darwin-only cases unrun on Linux. Consult NAMESPACE_ENVIRONMENT.md for the complete host/protected qualification matrix. Local synthetic tests, process kills and injected sync failures do not certify hardware power loss, physical erasure, native VFS coverage, encrypted custody or external backups. Manual namespace error/naming/retry-window judgment and a qualified consumer release remain open owner criteria. No command here tags, publishes, uploads or operates on live data.
 
 
 ## Publication decision procedure
 
-The intended existing destination is the public wolfmcnally/castle GitHub repository and its GitHub Releases assets. For version 0.2.0 the tag is v0.2.0. For publication, obtain explicit approval of the accepted source commit, all unpushed source history, its inspected wheel and source archive plus a matching SHA256SUMS file, and the exact capability/platform/privacy disclosures. Publish only those approved identities to this destination. No package registry or PyPI publication is included. Preparation alone authorizes no tag, source push, release creation or upload; published 0.1.1 bytes must not be replaced. GitHub Releases records publication status.
+The intended existing destination is the public wolfmcnally/castle GitHub repository and its GitHub Releases assets. For version 0.2.1 the tag is v0.2.1. For publication, obtain explicit approval of the accepted source commit, all unpushed source history, its inspected wheel and source archive plus a matching SHA256SUMS file, and the exact capability/platform/privacy disclosures. Publish only those approved identities to this destination. No package registry or PyPI publication is included. Preparation alone authorizes no tag, source push, release creation or upload; all previously published release bytes must remain unchanged. GitHub Releases records publication status.
 
 Before deciding, review [plain privacy and publication limits](NAMESPACE_ENVIRONMENT.md#plain-privacy-and-publication-limits), the source/history disclosure findings, actual platform results/skips and the exact retained artifact hashes. Source history and release-package allowlists are separate scopes. Manual namespace usability remains an owner judgment; encrypted custody, native VFS/device hardware power loss, physical erasure, live-data adoption and external copies remain unqualified and outside the proposed claim.
+
+
+## Delete/Excise corrective release
+
+The operator's scoped instruction for version 0.2.1 is: “I approve a full tagged release of Castle with the Delete/Excise improvements.” It authorizes the qualified release at the existing public GitHub destination, including its commit/tag and inspected wheel, source archive and SHA256SUMS; it does not authorize PyPI, live stores, new access or downstream adoption. Preserve previous releases. Record this exact instruction in the phase END block rather than requesting the same permission again.
+
+Before tag/release publication, compare every qualified package/source input against the committed candidate, confirm clean checkout/current remote state, push master and observe actual required CI success for that exact commit. Then create/push the scoped tag, verify tag-triggered qualification, and create the release with only those three exact assets. On an uncertain external outcome, inspect remote refs/release/assets before any retry and never duplicate an upload blindly. Download all assets and compare bytes/hashes, verify remote master/tag identity and public release visibility. Record real warnings/skips and qualification limits; synthetic tests do not certify physical erasure or hardware power loss.
+
+Installed wheel and source-rebuilt-wheel smokes additionally exercise Delete retention, historical inventory, exact closure preview, library Excise of actual new/replaced bytes and file metadata, one epoch/revision advance, successor CLI agreement and repeated explicit-root recovery. This is the public workflow, not direct SQL seeding or a source import fallback.

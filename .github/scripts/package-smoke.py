@@ -13,7 +13,7 @@ from pathlib import Path
 
 import castle
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 
 def main() -> None:
@@ -203,6 +203,128 @@ def main() -> None:
         manifest = json.loads((output / "snapshot.json").read_bytes())
         if member not in {row["entry_id"] for row in manifest["entries"]}:
             raise AssertionError("Installed replacement lost stable entry identity")
+        # Delete is a namespace projection change, retaining bytes and logs.
+        deletion = {
+            "schema": "castle.namespace_request.v1",
+            "namespace_id": namespace_id,
+            "expected_cas": binding,
+            "expected_revision": revision,
+            "operation_id": str(uuid.uuid4()),
+            "kind": "delete-entry",
+            "args": {"entry_id": member},
+        }
+        deleted = request("delete", deletion)
+        if request("delete", deletion) != deleted:
+            raise AssertionError("Installed Delete retry changed outcome")
+        revision = deleted["revision_after"]
+        from castle import cas
+
+        selected = [
+            "sha256:" + hashlib.sha256(data).hexdigest()
+            for data in (first_bytes, last_bytes)
+        ]
+        if any(not cas.require_object(store, key).is_file() for key in selected):
+            raise AssertionError("Logical Delete removed content bytes")
+        inventory_read = {
+            "schema": "castle.namespace_read_request.v1",
+            "namespace_id": namespace_id,
+            "expected_cas": binding,
+            "at_revision": revision,
+            "kind": "inventory-excision",
+            "args": {},
+        }
+        inventory = request("inventory-excision", inventory_read)["value"]
+        if not any(
+            item["entry"]["entry_id"] == member and not item["live"]
+            for item in inventory["entries"]
+        ):
+            raise AssertionError(
+                "Installed historical inventory omitted a deleted entry"
+            )
+        preview_read = {
+            **inventory_read,
+            "kind": "preview-excision",
+            "args": {
+                "operation_id": str(uuid.uuid4()),
+                "selection": {
+                    "content_ids": [*selected, snap["cas_id"]],
+                    "entry_ids": [member],
+                    "operation_ids": [],
+                    "metadata_entry_ids": [],
+                },
+                "snapshot_actions": [{"snapshot_id": snapshot_id, "action": "drop"}],
+            },
+        }
+        proposal = request("preview-excision", preview_read)["value"]
+        if proposal["request"] is None or proposal["conflicting_content_ids"]:
+            raise AssertionError("Installed closure proposal is unexpectedly blocked")
+        proposed = proposal["request"]
+        typed = namespace.MutationRequest(
+            proposed["namespace_id"],
+            namespace.StoreIdentity(**proposed["expected_cas"]),
+            proposed["expected_revision"],
+            proposed["operation_id"],
+            proposed["kind"],
+            proposed["args"],
+        )
+        successor = scratch / "successor"
+        roots = {"predecessor_root": store, "successor_root": successor}
+        session = namespace_environment.LocalSession(namespace_root, store, domain)
+        with namespace.open_namespace(namespace_root, store, session) as handle:
+            result = namespace.execute_namespace(handle, typed, {}, roots)
+        if (
+            result.cas_binding.generation != binding["generation"] + 1
+            or result.revision_after != revision + 1
+        ):
+            raise AssertionError(
+                "Installed excision did not advance epoch/revision once"
+            )
+        if any(
+            cas.object_path(successor, key).exists()
+            for key in [*selected, snap["cas_id"]]
+        ):
+            raise AssertionError("Installed excision retained selected bytes")
+        new_base = [*base]
+        new_base[new_base.index("--root") + 1] = str(successor)
+        current = json.loads(run(*new_base, "info"))
+        if current["cas"] != result.cas_binding.to_dict():
+            raise AssertionError("Installed CLI/library successor identity differs")
+        inventory_read.update(
+            expected_cas=current["cas"], at_revision=current["revision"]
+        )
+        request_file.write_text(json.dumps(inventory_read))
+        retained_inventory = json.loads(
+            run(*new_base, "inventory-excision", "--request-file", str(request_file))
+        )["value"]
+        if member in {
+            item["entry"]["entry_id"] for item in retained_inventory["entries"]
+        }:
+            raise AssertionError("Installed excision retained file metadata")
+        recovery = {
+            **roots,
+            "operation_id": typed.operation_id,
+            "expected_predecessor": typed.expected_cas,
+            "action": "resume",
+        }
+        for _ in range(2):
+            completed = namespace.recover_namespace(
+                namespace_root,
+                store,
+                namespace_environment.LocalSession(namespace_root, store, domain),
+                recovery,
+            )
+            if (
+                completed.cas_binding != result.cas_binding
+                or completed.revision != result.revision_after
+            ):
+                raise AssertionError(
+                    "Installed repeated recovery changed the transition"
+                )
+        if not json.loads(run("verify", "--root", str(successor)))["ok"]:
+            raise AssertionError("Installed successor CAS integrity failed")
+        print(
+            "Installed Delete/Excise inventory, preview, bytes, epoch and recovery passed"
+        )
     print("Installed wheel import, version, CLI and journal.v2 smoke passed")
 
 

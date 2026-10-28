@@ -46,13 +46,15 @@ def _id() -> str:
 
 
 class Case:
-    def __init__(self, directory: Path, *, root_id: str | None = None) -> None:
+    def __init__(
+        self, directory: Path, *, root_id: str | None = None, source_id: str = "namespace-test"
+    ) -> None:
         directory.mkdir()
         self.directory = directory
         self.cas_root, self.root = directory / "cas", directory / "namespace"
         self.source = directory / "source"
         self.source.write_bytes(b"independently expected immutable bytes\n")
-        self.stored = cas.ingest_file(self.cas_root, self.source, "namespace-test")
+        self.stored = cas.ingest_file(self.cas_root, self.source, source_id)
         self.session = LocalSession(
             self.root, self.cas_root, directory / "domain.lock", create_domain_lock=True
         )
@@ -558,6 +560,9 @@ def test_namespace_transactions_and_admission(
     )
     runpy.run_path(str(Path(__file__).with_name("test_namespace_excision.py")))[
         "concurrency_proof"
+    ](tmp_path, monkeypatch, Case)
+    runpy.run_path(str(Path(__file__).with_name("test_namespace_excision.py")))[
+        "delete_excise_proof"
     ](tmp_path, monkeypatch, Case)
 
 

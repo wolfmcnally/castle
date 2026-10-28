@@ -307,6 +307,55 @@ def command_protocol(root: Path) -> None:
     change("delete", "delete-entry", {"entry_id": empty})
     change("set-metadata", "set-metadata", {"entry_id": member, "metadata": {"label": "allowed"}})
     change("delete-snapshot", "delete-snapshot", {"snapshot_id": snapshot_id})
+    revision = invoke([*base, "info"])["revision"]
+    historical = transport(
+        "inventory-excision",
+        n.ReadRequest(
+            info["namespace_id"],
+            n.StoreIdentity(**binding),
+            revision,
+            "inventory-excision",
+            {},
+        ),
+    )["value"]
+    assert any(
+        item["entry"]["entry_id"] == empty and not item["live"] for item in historical["entries"]
+    )
+    assert any(
+        item["view"]["snapshot"]["snapshot_id"] == snapshot_id and not item["live"]
+        for item in historical["snapshots"]
+    )
+    future_token = _id()
+    proposal = transport(
+        "preview-excision",
+        n.ReadRequest(
+            info["namespace_id"],
+            n.StoreIdentity(**binding),
+            revision,
+            "preview-excision",
+            {
+                "operation_id": future_token,
+                "selection": {
+                    "content_ids": [],
+                    "entry_ids": [],
+                    "operation_ids": [],
+                    "metadata_entry_ids": [member],
+                },
+                "snapshot_actions": [
+                    {
+                        "snapshot_id": snapshot_id,
+                        "action": "replace",
+                        "remove_entry_ids": [],
+                        "clear_metadata_entry_ids": [member],
+                    }
+                ],
+            },
+        ),
+    )["value"]
+    assert proposal["request"]["kind"] == "excise" and proposal["conflicting_content_ids"] == []
+    assert proposal["metadata_entry_ids"] == [member]
+    assert invoke([*base, "status", future_token])["state"] == "unknown"
+    assert invoke([*base, "info"])["revision"] == revision
     frozen, frozen_empty, frozen_file = _id(), _id(), _id()
     inventory = [
         {

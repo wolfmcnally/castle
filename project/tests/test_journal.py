@@ -1031,8 +1031,12 @@ def test_store_metadata_is_closed_and_canonical(tmp_path: Path) -> None:
         path.chmod(0o600)
         assert state._read_metadata(path) == value
         if name == "excision-selection.json":
+            empty = {**value, "cas_ids": []}
+            assert state._validate_metadata(name, empty) == empty
+            path.write_bytes(state._canonical(empty))
+            assert state._read_metadata(path) == empty
             for ids in (
-                [],
+                {},
                 ["sha256:" + "a" * 64] * 2,
                 ["sha256:" + "b" * 64, "sha256:" + "a" * 64],
                 [True],

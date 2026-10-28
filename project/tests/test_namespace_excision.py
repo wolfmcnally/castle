@@ -848,6 +848,812 @@ with n.open_namespace(root, source, session) as handle:
 """
 
 
+def delete_excise_proof(tmp_path, monkeypatch, Case):
+    """Independent Delete/history/preview oracle through the public workflow."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from castle import cas, journal
+    from castle.namespace_environment import LocalSession
+
+    def read(handle, kind, args, *, revision=True):
+        info = handle.info()
+        return n.read_namespace(
+            handle,
+            n.ReadRequest(
+                info.namespace_id, info.cas, info.revision if revision else None, kind, args
+            ),
+        ).value
+
+    def image(*roots):
+        return {
+            (number, file.relative_to(root).as_posix()): (file.stat().st_mode, file.read_bytes())
+            for number, root in enumerate(roots)
+            for file in root.rglob("*")
+            if file.is_file()
+        }
+
+    def selection(*, content=(), entries=(), metadata=()):
+        return {
+            "selection": {
+                "content_ids": list(content),
+                "entry_ids": list(entries),
+                "operation_ids": [],
+                "metadata_entry_ids": list(metadata),
+            },
+            "snapshot_actions": [],
+        }
+
+    def propose(handle, spec, token=None):
+        return read(
+            handle, "preview-excision", {"operation_id": token or str(uuid.uuid4()), **spec}
+        )
+
+    case = Case(tmp_path / "delete-excise-history")
+    with case.open() as handle:
+        clear_id = str(uuid.uuid4())
+        cleared_owner = case.apply(
+            handle,
+            "create-file",
+            {
+                "entry_id": clear_id,
+                "parent_id": case.initial.root_id,
+                "name": "retained metadata target",
+                "metadata": {"tag": "removed metadata-only sentinel"},
+                "content": {"cas_id": case.stored.cas_id, "size": len(case.source.read_bytes())},
+            },
+        )
+        parent = case.directory_request(handle, "removed parent name sentinel")
+        created_parent = n.execute_namespace(handle, parent, {})
+        empty = case.directory_request(
+            handle, "removed empty child sentinel", parent=parent.args["entry_id"]
+        )
+        n.execute_namespace(handle, empty, {})
+        file_id, copy_id = str(uuid.uuid4()), str(uuid.uuid4())
+        payloads = [b"removed old content sentinel\n", b"removed replacement content sentinel\n"]
+        contents = ["sha256:" + hashlib.sha256(data).hexdigest() for data in payloads]
+        created_file = n.execute_namespace(
+            handle,
+            case.request(
+                handle,
+                "create-file",
+                {
+                    "entry_id": file_id,
+                    "parent_id": parent.args["entry_id"],
+                    "name": "removed file name sentinel",
+                    "metadata": {"private": "removed metadata sentinel"},
+                    "content": {"cas_id": contents[0], "size": len(payloads[0])},
+                },
+            ),
+            {contents[0]: payloads[0]},
+        )
+        replaced = n.execute_namespace(
+            handle,
+            case.request(
+                handle,
+                "replace-content",
+                {
+                    "entry_id": file_id,
+                    "content": {"cas_id": contents[1], "size": len(payloads[1])},
+                },
+            ),
+            {contents[1]: payloads[1]},
+        )
+        copied = case.apply(
+            handle,
+            "duplicate",
+            {
+                "entry_id": file_id,
+                "parent_id": case.initial.root_id,
+                "name": "removed copy sentinel",
+                "identities": [{"source_id": file_id, "new_id": copy_id}],
+            },
+        )
+        deleted = case.apply(handle, "delete-subtree", {"entry_id": parent.args["entry_id"]})
+        before = handle.info()
+        assert all(
+            cas.require_object(case.cas_root, key).read_bytes() == data
+            for key, data in zip(contents, payloads, strict=True)
+        )
+        assert n.namespace_operation(handle, created_file.operation_id).state == "committed"
+        assert n.namespace_operation(handle, deleted.operation_id).result == deleted
+        with pytest.raises(n.NamespaceError, match="namespace-entry-missing"):
+            read(handle, "get-entry", {"entry_id": file_id})
+        retained = read(handle, "inventory-excision", {})
+        assert type(retained) is n.ExcisionInventory
+        removed = {parent.args["entry_id"], empty.args["entry_id"], file_id}
+        assert {item.entry.entry_id for item in retained.entries if not item.live} == removed
+        assert {item.cas_id for item in retained.dependencies} >= set(contents)
+        assert set(contents) <= set(retained.content_ids)
+        assert deleted.operation_id in {item.operation_id for item in retained.operations}
+        spec = selection(content=contents, entries=[parent.args["entry_id"]], metadata=[clear_id])
+        with pytest.raises(n.NamespaceError, match="namespace-dependency-conflict"):
+            propose(handle, spec)  # The shared live owner must be explicitly selected.
+        assert handle.info() == before
+        spec["selection"]["entry_ids"].append(copy_id)
+        frozen = image(case.root, case.cas_root)
+        token = str(uuid.uuid4())
+        preview = propose(handle, spec, token)
+        assert preview.request is not None and preview.conflicting_content_ids == []
+        assert set(preview.entry_ids) == removed | {copy_id}
+        owners = set(preview.request.args["selection"]["operation_ids"])
+        assert preview.metadata_entry_ids == [clear_id]
+        assert cleared_owner.operation_id in owners
+        assert {
+            created_parent.operation_id,
+            created_file.operation_id,
+            replaced.operation_id,
+            copied.operation_id,
+            deleted.operation_id,
+        } <= owners
+        assert image(case.root, case.cas_root) == frozen
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            assert all(
+                result == preview
+                for result in pool.map(lambda _: propose(handle, spec, token), range(2))
+            )
+        assert image(case.root, case.cas_root) == frozen
+        # Inventory limits apply to complete collections, not a sum of owners
+        # and dependencies; deliberately too-small limits refuse, never truncate.
+        with monkeypatch.context() as patch:
+            patch.setattr(n, "MAX_ENTRIES", 4)
+            with pytest.raises(n.NamespaceError, match="namespace-limit-exceeded"):
+                read(handle, "inventory-excision", {})
+        assert handle.info() == before
+        for bad, code in (
+            (selection(entries=[str(uuid.uuid4())]), "namespace-entry-missing"),
+            (selection(entries=[case.initial.root_id]), "namespace-root-immutable"),
+        ):
+            with pytest.raises(n.NamespaceError, match=code):
+                propose(handle, bad)
+            assert handle.info() == before
+        for collision in (
+            file_id,
+            case.initial.namespace_id,
+            created_file.operation_id,
+            before.cas.store_id,
+            before.cas.lineage_id,
+            before.cas.epoch_id,
+        ):
+            with pytest.raises(
+                n.NamespaceError, match="namespace-(request-invalid|operation-conflict)"
+            ):
+                propose(handle, spec, collision)
+            assert handle.info() == before
+        with pytest.raises(n.NamespaceError, match="namespace-request-invalid"):
+            read(handle, "preview-excision", {"operation_id": token, **spec}, revision=False)
+        authorize = case.session.check_authorized
+        with monkeypatch.context() as patch:
+
+            def deny_history(kind):
+                if kind == "excision-inventory":
+                    n._refuse("namespace-access-denied")
+                authorize(kind)
+
+            patch.setattr(case.session, "check_authorized", deny_history)
+            for candidate in (file_id, str(uuid.uuid4())):
+                with pytest.raises(n.NamespaceError, match="namespace-access-denied"):
+                    propose(handle, selection(entries=[candidate]))
+            base = n.ReadRequest(
+                before.namespace_id,
+                before.cas,
+                before.revision,
+                "preview-excision",
+                {"operation_id": token, **spec},
+            )
+            for denied in (
+                replace(base, at_revision=before.revision - 1),
+                replace(base, expected_cas=replace(before.cas, store_id=str(uuid.uuid4()))),
+                replace(base, kind="inventory-excision", args={}),
+            ):
+                with pytest.raises(n.NamespaceError, match="namespace-access-denied") as caught:
+                    n.read_namespace(handle, denied)
+                assert caught.value.actual_revision is None and caught.value.effect == "none"
+        with monkeypatch.context() as patch:
+
+            def deny_history_result(kind):
+                if kind == "excision-inventory-result":
+                    n._refuse("namespace-access-denied")
+                authorize(kind)
+
+            patch.setattr(case.session, "check_authorized", deny_history_result)
+            for kind, args in (
+                ("inventory-excision", {}),
+                ("preview-excision", {"operation_id": token, **spec}),
+            ):
+                frozen_denied = image(case.root, case.cas_root)
+                with pytest.raises(n.NamespaceError, match="namespace-access-denied"):
+                    read(handle, kind, args)
+                assert image(case.root, case.cas_root) == frozen_denied
+        # The public preview result must reauthorize even after the final
+        # private closure check has completed under the original permission.
+        with monkeypatch.context() as patch:
+            completed_plan = []
+            planning = cutover.selection_plan
+
+            def complete_private_plan(*args):
+                result = planning(*args)
+                completed_plan.append(True)
+                return result
+
+            def deny_after_private_plan(kind):
+                if kind == "excision-inventory-result" and completed_plan:
+                    n._refuse("namespace-access-denied")
+                authorize(kind)
+
+            patch.setattr(cutover, "selection_plan", complete_private_plan)
+            patch.setattr(case.session, "check_authorized", deny_after_private_plan)
+            frozen_denied = image(case.root, case.cas_root)
+            with pytest.raises(n.NamespaceError, match="namespace-access-denied"):
+                propose(handle, spec)
+            assert completed_plan == [True]
+            assert image(case.root, case.cas_root) == frozen_denied
+        assert handle.info() == before
+        # A rejected request adds disclosing history without advancing revision.
+        rejected = case.request(
+            handle,
+            "relocate",
+            {
+                "entry_id": file_id,
+                "parent_id": case.initial.root_id,
+                "name": "removed rejected rename sentinel",
+            },
+        )
+        with pytest.raises(n.NamespaceError, match="namespace-entry-missing"):
+            n.execute_namespace(handle, rejected, {})
+        assert handle.info() == before
+        destination = case.directory / "successor"
+        roots = {"predecessor_root": case.cas_root, "successor_root": destination}
+        with pytest.raises(n.NamespaceError, match="namespace-dependency-conflict"):
+            n.execute_namespace(handle, preview.request, {}, roots)
+        assert not destination.exists() and replacement.read(case.root) is None
+        assert n.namespace_operation(handle, token).state == "unknown"
+        preview = propose(handle, spec)
+        assert rejected.operation_id in preview.request.args["selection"]["operation_ids"]
+        result = n.execute_namespace(handle, preview.request, {}, roots)
+        assert result.revision_after == before.revision + 1
+        assert result.cas_binding.generation == before.cas.generation + 1
+    session = LocalSession(case.root, destination, case.directory / "domain.lock")
+    with n.open_namespace(case.root, destination, session) as handle:
+        assert set(handle.entries(live=False)) == {case.initial.root_id, clear_id}
+        assert handle.entries()[clear_id].metadata == {}
+        assert not (set(contents) & set(handle.objects))
+        assert all(event["cas_id"] not in contents for event in journal.read_journal(destination))
+        assert (
+            cas.require_object(destination, case.stored.cas_id).read_bytes()
+            == case.source.read_bytes()
+        )
+        for owner in preview.request.args["selection"]["operation_ids"]:
+            assert n.namespace_operation(handle, owner).state == "retired"
+        assert read(handle, "inventory-excision", {}).operations == []
+        for _, raw in image(case.root, destination).values():
+            for forbidden in [
+                *payloads,
+                b"removed parent name sentinel",
+                b"removed file name sentinel",
+                b"removed metadata sentinel",
+                b"removed metadata-only sentinel",
+                b"removed rejected rename sentinel",
+            ]:
+                assert forbidden not in raw
+        with pytest.raises(n.NamespaceError, match="namespace-operation-retired"):
+            n.execute_namespace(
+                handle,
+                preview.request,
+                {},
+                {
+                    "predecessor_root": destination,
+                    "successor_root": case.directory / "unused",
+                },
+            )
+        final_info = handle.info()
+    recovery = {
+        **roots,
+        "expected_predecessor": before.cas,
+        "operation_id": preview.request.operation_id,
+        "action": "resume",
+    }
+    for _ in range(2):
+        recovered = n.recover_namespace(
+            case.root,
+            case.cas_root,
+            LocalSession(case.root, case.cas_root, case.directory / "domain.lock"),
+            recovery,
+        )
+        assert recovered.revision == final_info.revision and recovered.cas_binding == final_info.cas
+
+    # Name-only removal and metadata-only clearing share the empty-content path.
+    case = Case(tmp_path / "content-free-history")
+    with case.open() as handle:
+        captured = case.apply(handle, "snapshot", {"snapshot_id": str(uuid.uuid4())})
+        case.apply(handle, "delete-snapshot", {"snapshot_id": captured.snapshot.snapshot_id})
+        parent = case.directory_request(handle, "private content-free parent sentinel")
+        n.execute_namespace(handle, parent, {})
+        child = case.directory_request(
+            handle, "private deleted empty sentinel", parent=parent.args["entry_id"]
+        )
+        n.execute_namespace(handle, child, {})
+        case.apply(handle, "delete-entry", {"entry_id": child.args["entry_id"]})
+        file_id = str(uuid.uuid4())
+        case.apply(
+            handle,
+            "create-file",
+            {
+                "entry_id": file_id,
+                "parent_id": case.initial.root_id,
+                "name": "retained name",
+                "metadata": {"private": "private cleared-only sentinel"},
+                "content": {"cas_id": case.stored.cas_id, "size": len(case.source.read_bytes())},
+            },
+        )
+        info = handle.info()
+        inventory = read(handle, "inventory-excision", {})
+        assert len(inventory.snapshots) == 1 and not inventory.snapshots[0].live
+        assert inventory.snapshots[0].view.manifest["origin"] == {"kind": "capture"}
+        spec = selection(entries=[parent.args["entry_id"]], metadata=[file_id])
+        with pytest.raises(n.NamespaceError, match="namespace-dependency-conflict"):
+            propose(handle, spec)
+        assert handle.info() == info
+        spec["snapshot_actions"] = [
+            {
+                "snapshot_id": captured.snapshot.snapshot_id,
+                "action": "replace",
+                "remove_entry_ids": [],
+                "clear_metadata_entry_ids": [],
+            }
+        ]
+        with pytest.raises(n.NamespaceError, match="namespace-request-invalid"):
+            propose(handle, spec, captured.snapshot.snapshot_id)
+        assert handle.info() == info
+        preview = propose(handle, spec)
+        assert preview.request.args["selection"]["content_ids"] == []
+        assert set(preview.entry_ids) == {parent.args["entry_id"], child.args["entry_id"]}
+        old_objects = {
+            key: cas.require_object(case.cas_root, key).read_bytes() for key in handle.objects
+        }
+        destination = case.directory / "successor"
+        n.execute_namespace(
+            handle,
+            preview.request,
+            {},
+            {"predecessor_root": case.cas_root, "successor_root": destination},
+        )
+    with n.open_namespace(
+        case.root, destination, LocalSession(case.root, destination, case.directory / "domain.lock")
+    ) as handle:
+        assert handle.info().cas.generation == info.cas.generation + 1
+        assert (
+            handle.entries()[file_id].metadata == {}
+            and handle.entries()[file_id].name == "retained name"
+        )
+        inventory = read(handle, "inventory-excision", {})
+        assert inventory.snapshots[0].view.manifest["origin"]["kind"] == "redacted"
+        assert (
+            inventory.snapshots[0].view.snapshot.captured_revision
+            == captured.snapshot.captured_revision
+        )
+        assert not inventory.snapshots[0].live
+        assert all(
+            cas.require_object(destination, key).read_bytes() == data
+            for key, data in old_objects.items()
+        )
+        for _, raw in image(case.root, destination).values():
+            assert b"private cleared-only sentinel" not in raw
+            assert b"private deleted empty sentinel" not in raw
+
+    # Innocent equal strings are conservatively reported, never auto-selected.
+    case = Case(tmp_path / "content-free-innocent-conflict")
+    with case.open() as handle:
+        directory = case.directory_request(handle, "retained directory")
+        directory.args["metadata"] = {"language": "namespace-test"}
+        n.execute_namespace(handle, directory, {})
+        spec = selection(metadata=[directory.args["entry_id"]])
+        frozen = image(case.root, case.cas_root)
+        proposal = propose(handle, spec)
+        assert proposal.request is None and proposal.conflicting_content_ids == [case.stored.cas_id]
+        assert spec["selection"]["content_ids"] == [] and image(case.root, case.cas_root) == frozen
+        request = case.request(handle, "excise", spec)
+        request.args["selection"]["operation_ids"] = [directory.operation_id]
+        with pytest.raises(n.NamespaceError, match="^namespace-dependency-conflict$") as refusal:
+            n.execute_namespace(
+                handle,
+                request,
+                {},
+                {"predecessor_root": case.cas_root, "successor_root": case.directory / "absent"},
+            )
+        assert case.stored.cas_id not in str(refusal.value)
+        assert image(case.root, case.cas_root) == frozen
+        assert handle.info().revision == 1
+
+    # Metadata keys and canonical scalar values are disclosure inputs too.
+    for index, (source_id, metadata) in enumerate(
+        [
+            ("namespace-test", {"namespace-test": "innocent key"}),
+            ("71", {"number": [71]}),
+            ("true", {"flag": True}),
+            ("null", {"missing": None}),
+            ("project/docs/a.py", {"docs": "ordinary field"}),
+            ("photos/2024/1/a.jpg", {"sequence": 1}),
+        ]
+    ):
+        case = Case(tmp_path / f"metadata-source-conflict-{index}", source_id=source_id)
+        with case.open() as handle:
+            directory = case.directory_request(handle, "retained metadata owner")
+            directory.args["metadata"] = metadata
+            n.execute_namespace(handle, directory, {})
+            spec = selection(metadata=[directory.args["entry_id"]])
+            frozen = image(case.root, case.cas_root)
+            proposal = propose(handle, spec)
+            assert proposal.request is None
+            assert proposal.conflicting_content_ids == [case.stored.cas_id]
+            assert image(case.root, case.cas_root) == frozen
+            request = case.request(handle, "excise", spec)
+            request.args["selection"]["operation_ids"] = [directory.operation_id]
+            with pytest.raises(n.NamespaceError, match="namespace-dependency-conflict") as caught:
+                n.execute_namespace(
+                    handle,
+                    request,
+                    {},
+                    {
+                        "predecessor_root": case.cas_root,
+                        "successor_root": case.directory / "absent",
+                    },
+                )
+            assert caught.value.effect == "none" and image(case.root, case.cas_root) == frozen
+
+    payload = b"selected literal in a retained source field\n"
+    selected_cas = "sha256:" + hashlib.sha256(payload).hexdigest()
+    case = Case(tmp_path / "journal-selected-literal", source_id=selected_cas)
+    with case.open() as handle:
+        selected_id = str(uuid.uuid4())
+        created = n.execute_namespace(
+            handle,
+            case.request(
+                handle,
+                "create-file",
+                {
+                    "entry_id": selected_id,
+                    "parent_id": case.initial.root_id,
+                    "name": "selected source-field content",
+                    "metadata": {},
+                    "content": {"cas_id": selected_cas, "size": len(payload)},
+                },
+            ),
+            {selected_cas: payload},
+        )
+        spec = selection(content=[selected_cas], entries=[selected_id])
+        proposal = propose(handle, spec)
+        assert proposal.request is None
+        assert proposal.conflicting_content_ids == [case.stored.cas_id]
+        spec["selection"]["operation_ids"] = [created.operation_id]
+        frozen = image(case.root, case.cas_root)
+        with pytest.raises(n.NamespaceError, match="namespace-dependency-conflict") as caught:
+            n.execute_namespace(
+                handle,
+                case.request(handle, "excise", spec),
+                {},
+                {"predecessor_root": case.cas_root, "successor_root": case.directory / "absent"},
+            )
+        assert caught.value.effect == "none" and image(case.root, case.cas_root) == frozen
+
+    # A retained literal must refuse before retirement, including a literal
+    # that survives only in the sanitized snapshot recipe after current clearing.
+    for field in (
+        "metadata",
+        "name",
+        "upper-name",
+        "deleted-upper-name",
+        "mixed-name",
+        "deleted-metadata",
+        "snapshot-metadata",
+    ):
+        case = Case(tmp_path / ("retained-literal-" + field))
+        with case.open() as handle:
+            payload = b"selected provenance literal content\n"
+            cas_id = "sha256:" + hashlib.sha256(payload).hexdigest()
+            selected_id = str(uuid.uuid4())
+            n.execute_namespace(
+                handle,
+                case.request(
+                    handle,
+                    "create-file",
+                    {
+                        "entry_id": selected_id,
+                        "parent_id": case.initial.root_id,
+                        "name": "selected literal source",
+                        "metadata": {},
+                        "content": {"cas_id": cas_id, "size": len(payload)},
+                    },
+                ),
+                {cas_id: payload},
+            )
+            is_name = field == "name" or field.endswith("-name")
+            name = cas_id
+            if field in {"upper-name", "deleted-upper-name"}:
+                name = cas_id.upper()
+            elif field == "mixed-name":
+                name = "prefix-Sha256:" + cas_id[7:].upper() + "-suffix"
+            owner = case.directory_request(handle, name if is_name else "retained literal owner")
+            owner_id = owner.args["entry_id"]
+            if not is_name:
+                owner.args["metadata"] = {"derived_from": cas_id}
+            n.execute_namespace(handle, owner, {})
+            spec = selection(content=[cas_id], entries=[selected_id])
+            if field in {"deleted-metadata", "deleted-upper-name"}:
+                case.apply(handle, "delete-entry", {"entry_id": owner_id})
+            if field == "snapshot-metadata":
+                captured = case.apply(handle, "snapshot", {"snapshot_id": str(uuid.uuid4())})
+                case.apply(handle, "set-metadata", {"entry_id": owner_id, "metadata": {}})
+                spec["selection"]["content_ids"].append(captured.snapshot.cas_id)
+                spec["snapshot_actions"] = [
+                    {
+                        "snapshot_id": captured.snapshot.snapshot_id,
+                        "action": "replace",
+                        "remove_entry_ids": [selected_id],
+                        "clear_metadata_entry_ids": [],
+                    }
+                ]
+            spec["selection"]["operation_ids"] = [
+                op.operation_id for op in read(handle, "inventory-excision", {}).operations
+            ]
+            frozen = image(case.root, case.cas_root)
+            info = handle.info()
+            request = case.request(handle, "excise", spec)
+            successor = case.directory / "successor"
+            roots = {"predecessor_root": case.cas_root, "successor_root": successor}
+            for invoke in (
+                lambda: propose(handle, spec, request.operation_id),
+                lambda: n.execute_namespace(handle, request, {}, roots),
+            ):
+                with pytest.raises(
+                    n.NamespaceError, match="namespace-dependency-conflict"
+                ) as caught:
+                    invoke()
+                assert caught.value.effect == "none"
+                assert image(case.root, case.cas_root) == frozen
+                assert not successor.exists() and replacement.read(case.root) is None
+                assert handle.info() == info
+                assert n.namespace_operation(handle, request.operation_id).state == "unknown"
+            if is_name:
+                spec["selection"]["entry_ids"].append(owner_id)
+            elif field == "snapshot-metadata":
+                spec["snapshot_actions"][0]["clear_metadata_entry_ids"] = [owner_id]
+            else:
+                spec["selection"]["metadata_entry_ids"] = [owner_id]
+            proposal = propose(handle, spec)
+            assert proposal.request is not None
+            # The exact released baseline already requires the private closure
+            # result permission for execution, before any durable intent.
+            authorize = case.session.check_authorized
+            frozen_denied = image(case.root, case.cas_root)
+            with monkeypatch.context() as patch:
+
+                def deny_query_result(kind):
+                    if kind == "excision-inventory-result":
+                        n._refuse("namespace-access-denied")
+                    authorize(kind)
+
+                patch.setattr(case.session, "check_authorized", deny_query_result)
+                with pytest.raises(n.NamespaceError, match="namespace-access-denied") as caught:
+                    n.execute_namespace(handle, proposal.request, {}, roots)
+                assert caught.value.effect == "none"
+                assert image(case.root, case.cas_root) == frozen_denied
+                assert not successor.exists() and replacement.read(case.root) is None
+                assert (
+                    n.namespace_operation(handle, proposal.request.operation_id).state == "unknown"
+                )
+            result = n.execute_namespace(handle, proposal.request, {}, roots)
+            assert result.revision_after == info.revision + 1
+        recovery_session = LocalSession(case.root, case.cas_root, case.directory / "domain.lock")
+        recovered = n.recover_namespace(
+            case.root,
+            case.cas_root,
+            recovery_session,
+            {
+                **roots,
+                "expected_predecessor": info.cas,
+                "operation_id": proposal.request.operation_id,
+                "action": "resume",
+            },
+        )
+        assert recovered.cas_binding == result.cas_binding
+
+    # A same-token content-free race is serialized; the closed predecessor
+    # handle cannot initiate a second transition after the winner completes.
+    import threading
+
+    case = Case(tmp_path / "content-free-same-token-race")
+    with case.open() as handle:
+        directory = case.directory_request(handle, "raced empty directory")
+        n.execute_namespace(handle, directory, {})
+        preview = propose(handle, selection(entries=[directory.args["entry_id"]]))
+        barrier = threading.Barrier(2)
+        destination = case.directory / "successor"
+
+        def race(_):
+            barrier.wait(timeout=10)
+            try:
+                return n.execute_namespace(
+                    handle,
+                    preview.request,
+                    {},
+                    {
+                        "predecessor_root": case.cas_root,
+                        "successor_root": destination,
+                    },
+                )
+            except n.NamespaceError as error:
+                return error.code, error.effect
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outcomes = list(pool.map(race, range(2)))
+        winners = [item for item in outcomes if type(item) is n.MutationResult]
+        assert len(winners) == 1 and winners[0].revision_after == 2
+        assert outcomes.count(("namespace-storage-recovery-required", "none")) == 1
+    with n.open_namespace(
+        case.root, destination, LocalSession(case.root, destination, case.directory / "domain.lock")
+    ) as handle:
+        assert handle.info().cas.generation == 1 and handle.info().revision == 2
+        assert n.namespace_operation(handle, preview.request.operation_id).state == "retired"
+        with pytest.raises(n.NamespaceError, match="namespace-operation-retired") as caught:
+            n.execute_namespace(
+                handle,
+                preview.request,
+                {},
+                {"predecessor_root": destination, "successor_root": case.directory / "unused"},
+            )
+        assert caught.value.effect == "none"
+
+
+def content_free_restart_proof(tmp_path, monkeypatch, Case):
+    """Real process loss and sync/uncertain-commit faults with no CAS selection."""
+    import sqlite3
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    from castle import cas
+    from castle import namespace_store as store
+    from castle.namespace_environment import LocalSession
+
+    def prepared(label):
+        case = Case(tmp_path / label)
+        with case.open() as handle:
+            parent = case.directory_request(handle, "content-free interrupted parent sentinel")
+            n.execute_namespace(handle, parent, {})
+            child = case.directory_request(
+                handle, "content-free interrupted child sentinel", parent=parent.args["entry_id"]
+            )
+            n.execute_namespace(handle, child, {})
+            case.apply(handle, "delete-entry", {"entry_id": child.args["entry_id"]})
+            info = handle.info()
+            query = n.ReadRequest(
+                info.namespace_id,
+                info.cas,
+                info.revision,
+                "preview-excision",
+                {
+                    "operation_id": str(uuid.uuid4()),
+                    "selection": {
+                        "content_ids": [],
+                        "entry_ids": [parent.args["entry_id"]],
+                        "operation_ids": [],
+                        "metadata_entry_ids": [],
+                    },
+                    "snapshot_actions": [],
+                },
+            )
+            request = n.read_namespace(handle, query).value.request
+        destination = case.directory / "successor"
+        roots = {"predecessor_root": case.cas_root, "successor_root": destination}
+        recovery = {
+            **roots,
+            "operation_id": request.operation_id,
+            "expected_predecessor": request.expected_cas,
+            "action": "resume",
+        }
+        return case, request, roots, recovery
+
+    def recovered(case, request, roots, recovery, *, preflight=False):
+        if preflight:
+            authorize = case.session.check_authorized
+            observed = []
+            with monkeypatch.context() as patch:
+
+                def deny_private_result(kind):
+                    if kind == "excision-inventory-result":
+                        observed.append(kind)
+                        n._refuse("namespace-access-denied")
+                    authorize(kind)
+
+                patch.setattr(case.session, "check_authorized", deny_private_result)
+                with pytest.raises(n.NamespaceError, match="namespace-access-denied"):
+                    n.recover_namespace(case.root, case.cas_root, case.session, recovery)
+            assert observed == ["excision-inventory-result"]
+            assert store_state.read_store_identity(case.cas_root) == request.expected_cas
+            assert not roots["successor_root"].exists()
+        result = n.recover_namespace(case.root, case.cas_root, case.session, recovery)
+        assert result.state == "ready" and result.revision == 4
+        assert result.cas_binding.generation == request.expected_cas.generation + 1
+        assert n.recover_namespace(case.root, case.cas_root, case.session, recovery) == result
+        with n.open_namespace(
+            case.root,
+            roots["successor_root"],
+            LocalSession(case.root, roots["successor_root"], case.directory / "domain.lock"),
+        ) as handle:
+            assert set(handle.entries(live=False)) == {case.initial.root_id}
+            assert n.namespace_operation(handle, request.operation_id).state == "retired"
+            assert (
+                cas.require_object(roots["successor_root"], case.stored.cas_id).read_bytes()
+                == case.source.read_bytes()
+            )
+            for file in case.root.rglob("*"):
+                if file.is_file():
+                    assert b"content-free interrupted parent sentinel" not in file.read_bytes()
+                    assert b"content-free interrupted child sentinel" not in file.read_bytes()
+
+    for point in (
+        "after-intent",
+        "after-retirement",
+        "after-image-ready",
+        "after-cleanup-scanned",
+        "response",
+    ):
+        case, request, roots, recovery = prepared("content-free-kill-" + point)
+        payload = {
+            "root": str(case.root),
+            "source": str(case.cas_root),
+            "destination": str(roots["successor_root"]),
+            "domain": str(case.directory / "domain.lock"),
+            "caller": str(Path(__file__).parents[1] / "examples" / "namespace_demo.py"),
+            "request": asdict(request),
+            "point": point,
+        }
+        child = subprocess.run(
+            [sys.executable, "-c", _KILL_CHILD, json.dumps(payload)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert child.returncode == 97, (point, child.returncode, child.stdout, child.stderr)
+        recovered(case, request, roots, recovery, preflight=point == "after-intent")
+
+    for point in ("commit-response", "retirement-sync"):
+        case, request, roots, recovery = prepared("content-free-fault-" + point)
+        hits = []
+        with case.open() as handle:
+            with monkeypatch.context() as patch:
+                if point == "commit-response":
+                    commit = store._commit
+
+                    def lose_response(connection):
+                        commit(connection)
+                        if not hits:
+                            hits.append(point)
+                            raise sqlite3.OperationalError(
+                                "injected content-free commit response loss"
+                            )
+
+                    patch.setattr(store, "_commit", lose_response)
+                else:
+                    sync = store_state._fsync_directory
+
+                    def fail_fence_sync(directory):
+                        if (
+                            directory == case.cas_root
+                            and (directory / "retired.json").exists()
+                            and not hits
+                        ):
+                            hits.append(point)
+                            raise OSError("injected content-free retirement directory sync")
+                        sync(directory)
+
+                    patch.setattr(store_state, "_fsync_directory", fail_fence_sync)
+                with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+                    n.execute_namespace(handle, request, {}, roots)
+            assert hits == [point] and handle.failed
+        recovered(case, request, roots, recovery, preflight=point == "commit-response")
+
+
 def metadata_proof(tmp_path, Case):
     case = Case(tmp_path / "excision-metadata-only-selection")
     with case.open() as handle:
@@ -1149,22 +1955,20 @@ def advice_boundary_proof(tmp_path, monkeypatch, Case):
     case.session.active = True
     assert n.recover_namespace(case.root, case.cas_root, case.session, recovery).state == "ready"
 
-    for value_is_forbidden in (False, True):
-        case, request, roots, _ = _small_case(
-            tmp_path, Case, "metadata-key-" + str(value_is_forbidden)
-        )
+    for matching_field in ("key", "value", "neither"):
+        case, request, roots, _ = _small_case(tmp_path, Case, "metadata-key-" + matching_field)
         with case.open() as handle:
-            metadata = (
-                {"private": "namespace-test"}
-                if value_is_forbidden
-                else {"namespace-test": "innocent value"}
-            )
+            metadata = {
+                "key": {"namespace-test": "innocent value"},
+                "value": {"private": "namespace-test"},
+                "neither": {"unrelated-field": "innocent value"},
+            }[matching_field]
             change = case.apply(
                 handle, "set-metadata", {"entry_id": identity(80), "metadata": metadata}
             )
             request.args["selection"]["operation_ids"].append(change.operation_id)
             request = replace(request, expected_revision=handle.info().revision)
-            if value_is_forbidden:
+            if matching_field != "neither":
                 with pytest.raises(n.NamespaceError, match="namespace-dependency-conflict"):
                     n.execute_namespace(handle, request, {}, roots)
                 assert not roots["successor_root"].exists()
@@ -1454,6 +2258,22 @@ def abort_proof(tmp_path, monkeypatch, Case):
                 with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
                     n.execute_namespace(handle, request, {}, roots)
         recovery["action"] = "abort-before-retirement"
+        if point == "before-cas":
+            authorize = case.session.check_authorized
+            denied = []
+            with monkeypatch.context() as patch:
+
+                def deny_abort_inventory_result(kind):
+                    if kind == "excision-inventory-result":
+                        denied.append(kind)
+                        n._refuse("namespace-access-denied")
+                    authorize(kind)
+
+                patch.setattr(case.session, "check_authorized", deny_abort_inventory_result)
+                with pytest.raises(n.NamespaceError, match="namespace-access-denied"):
+                    n.recover_namespace(case.root, case.cas_root, case.session, recovery)
+            assert denied == ["excision-inventory-result"]
+            assert store_state.read_store_identity(case.cas_root) == request.expected_cas
         if point == "retirement-temporary":
             temporary = case.cas_root / ".retired.json.tmp"
             temporary.write_bytes(b"uncertain retirement writer residue")
@@ -1591,6 +2411,7 @@ def restart_proof(tmp_path, monkeypatch, Case):
     from pathlib import Path
 
     fault_proof(tmp_path, monkeypatch, Case)
+    content_free_restart_proof(tmp_path, monkeypatch, Case)
     for point in (
         "before-intent",
         "after-intent",
