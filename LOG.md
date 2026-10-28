@@ -1897,3 +1897,29 @@ The exact test correction END was accepted after four current candidate gates an
 
 Lessons:
 - favorite-mongoose records complete bounded control-progress qualification. Original local candidates and the rejected unexecuted allowance-reset startup remain preserved; existing no-reset rules apply.
+
+## 2026-10-28 09:22 — LEARN
+
+Timestamp for this entry: UTC. The original local-header append was refused before mutation; its draft and diagnostic remain preserved. Historical unzoned headers and the committed log prefix are unchanged.
+
+Adopted the approved delivery-completion workflow: each scope inventories its temporary worktrees, temporary branches and generated outputs, then records retirement, retention for a named current purpose, or an exact blocker. Useful incremental build directories, dependency caches and environments may remain. Ordinary nonforced cleanup requires verified integration, released ownership, terminal commands and preserved canonical evidence; no age-based purge, forced deletion, broad branch authority or cleanup subsystem was added.
+
+Donor: public Starter template at `46f9e154460cfb1815fd4bbf85678e846e61a3e7`, baseline `46c58806fd2a9705f7378800d18cebfb822afda1`. The supplied patch, manifest and adoption instructions matched their approved hashes; all seven donor pre/postimages matched the pinned commits. One Tier 1 workflow bundle absorbed; donor lessons harvested: 0; application-found return candidates: 1. The packet's declared prerequisite gap and adapted contexts were handled locally, preserving their diagnostics, without importing donor judgments. A later automatic-log timezone mismatch produced the recipient-only candidate described below.
+
+Files changed:
+- `.claude/skills/kickoff/close.md`, `CLAUDE.md`, `bin/README.md`, `policies/human-in-the-loop.md` — completion procedure, narrow authority and command contract.
+- `bin/kickoff-evidence` — read-only `verify-completion` and its location-only durable-storage prerequisite; historical run admission and pinned tools unchanged.
+- `tests/test_kickoff_evidence.py` — existing delivery fixture extended in durable ignored storage; no new collected family or leaf.
+- `LOG.md` — this recipient-owned adoption record.
+- `lessons/warping-shrimp.md` — recipient-only timezone observation; no policy or writer change.
+
+Validation: focused evidence/toolchain checks passed 31 tests. The changed-path selector correctly widened to the full suite and passed 196 tests without warnings or skips. Lint, formatting, catalogs, harness parity, caller inventory, lessons, log, candidate declaration and proof-estate checks passed. The first bare implementation-candidate full gate passed all 196 tests and all policies without warnings or skips. Twenty-four target-local observations demonstrated safe real nonforced fixture retirement, retained build/evidence integrity, absent-but-registered newline worktrees, false branch ancestry, mutated evidence, invalid/incomplete claims, blockers, empty inventories and refusal of temporary storage/symlink aliases; five injected defects were falsified and the disposable tool's exact original bytes restored. Target proof records remain in durable ignored storage; no donor receipt, ledger or judgment was imported.
+
+Review lane: methodology one-shot by the retained primary; independent review not applicable. Product advice snapshots, cumulative review allowances, all valid failed/rejected history, release tags/assets and product bytes remain unchanged. Runtime wrappers, pin, metadata, lock, hooks, callers, Rule One bundle, catalogs and parity retain their existing contract; focused behavioral checks and full gates qualify that unchanged bundle. Stale migrations: six AUTO resources applied; no unresolved DECIDE or DEFER. The product brief contained no conflicting blanket branch clause and was preserved.
+
+Handoff gate: pending after this final tracked bookkeeping write; completion depends on the unchanged candidate's second bare `./bin/check all` receipt. Commit and normal fast-forward push follow only after that gate and explicit staged-diff checks. Actual delivery/readback and resource-disposition outcomes belong in private durable receipts and the coordinator report, with no later tracked write. No product release, tag, adoption by a downstream project, live-store action or new permission is part of this update.
+
+Resource disposition: no source worktree or temporary source branch was created. Adoption provenance, target-local falsifiers, synthetic fixture states and canonical full-gate records are retained for current validation/audit purposes; existing useful builds/caches remain. Actual post-delivery resource inventory and readback use the live completion verifier. No historical cleanup was performed.
+
+Lessons:
+`warping-shrimp` records one actual automatic-header timezone mismatch and the unchanged chronology refusal; no rule was graduated. Existing candidate graduation remains with the operator. No human-only action was created; earlier manual product criteria remain open.

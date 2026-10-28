@@ -280,6 +280,8 @@ behavioral coverage lives in `tests/test_kickoff_tree_id.py`.
 
 ### `kickoff-evidence` — run-scoped review and gate evidence
 
+`kickoff-evidence verify-completion --repository <root> --record <durable-json>` reads back scope-owned delivery resource dispositions without executing cleanup. See [delivery resource disposition](../policies/human-in-the-loop.md#delivery-resource-disposition) for the record contract and authority boundaries.
+
 Primary mode captures plans, ingests immutable advisory reports, and records primary adopt/decline/defer decisions. The shared `lib/agentic_starter/workflow.py` and `advisory.py` modules govern routing and phase-wide pass limits. `carry-advice` preserves prior pinned validation across continuations; it does not reset the two-pass budget.
 
 Managed `run-gate` executions initially have unreviewed diagnostics. After inspecting the complete output, use `review-gate --gate <hash> --warning-count <observed-count> --summary <assessment>`. Corrections require the previous review hash through `--supersedes`; they do not create another execution. Acceptance refuses unreviewed diagnostics. The watcher derives telemetry routing from the authenticated per-attempt registration, and its readiness probe executes the actual repository runtime.

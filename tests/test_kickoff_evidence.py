@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -857,6 +858,12 @@ def _assert_failed_close_is_truthful_terminal_and_idempotent(
 def test_complete_synthetic_kickoff_cross_validates_roles_revision_and_gates(
     repository: Path, tmp_path: Path
 ) -> None:
+    proof_root = ROOT / ".kickoff" / "delivery-completion-proofs"
+    proof_root.mkdir(parents=True, exist_ok=True)
+    tmp_path = Path(tempfile.mkdtemp(prefix="fixture-", dir=proof_root))
+    durable_repository = tmp_path / "repo"
+    shutil.copytree(repository, durable_repository, symlinks=True)
+    repository = durable_repository
     primary_repository = tmp_path / "primary-repo"
     shutil.copytree(repository, primary_repository, symlinks=True)
     _assert_complete_synthetic_kickoff(
@@ -1748,6 +1755,192 @@ def _assert_complete_synthetic_kickoff(
         check=True,
     )
     assert not clean.stdout
+
+    # Actual post-delivery disposition, without manufacturing another phase run.
+    completion = tmp_path / "completion.json"
+    proof = tmp_path / "canonical-proof.txt"
+    proof.write_bytes(b"required canonical fixture evidence")
+    reference = {"path": str(proof), "sha256": hashlib.sha256(proof.read_bytes()).hexdigest()}
+    build = tmp_path / "incremental-build"
+    build.mkdir()
+    retired_output = tmp_path / "disposable-output"
+    worktree = tmp_path / "temporary\nworktree"
+    subprocess.run(
+        ["git", "worktree", "add", "-b", "delivered-temp", str(worktree)],
+        cwd=repository,
+        capture_output=True,
+        check=True,
+    )
+    retirement = {
+        "integration": reference,
+        "released_ownership": reference,
+        "terminal": reference,
+        "tip": None,
+        "integrated_into": None,
+    }
+    resources = [
+        {
+            "kind": "generated-output",
+            "target": str(build),
+            "disposition": "retained",
+            "reason": "Current incremental compiler output",
+            "required_evidence": [],
+            "retirement": None,
+        },
+        {
+            "kind": "generated-output",
+            "target": str(retired_output),
+            "disposition": "retired",
+            "reason": "Disposable output removed after integration",
+            "required_evidence": [reference],
+            "retirement": retirement,
+        },
+        {
+            "kind": "worktree",
+            "target": str(worktree),
+            "disposition": "retired",
+            "reason": "Scope writer released; source integrated",
+            "required_evidence": [reference],
+            "retirement": retirement,
+        },
+        {
+            "kind": "branch",
+            "target": "delivered-temp",
+            "disposition": "retired",
+            "reason": "Exact temporary tip integrated",
+            "required_evidence": [],
+            "retirement": {
+                **retirement,
+                "tip": local_head.decode().strip(),
+                "integrated_into": local_head.decode().strip(),
+            },
+        },
+    ]
+    record = {
+        "scope": "Delivered synthetic library",
+        "inventory_complete": True,
+        "resources": resources[:3],
+    }
+
+    def completion_result():
+        completion.write_text(json.dumps(record))
+        return run(
+            "verify-completion", "--repository", str(repository), "--record", str(completion)
+        )
+
+    result = completion_result()
+    assert result.returncode == 2 and "still exists or is registered" in result.stderr, (
+        "COMPLETION ACTIVE RESOURCE ACCEPTED: " + result.stderr
+    )
+    moved_worktree = tmp_path / "moved-worktree"
+    worktree.rename(moved_worktree)
+    result = completion_result()
+    assert result.returncode == 2 and "still exists or is registered" in result.stderr, (
+        "COMPLETION REGISTERED RESOURCE HIDDEN: " + result.stderr
+    )
+    moved_worktree.rename(worktree)
+    subprocess.run(["git", "worktree", "remove", str(worktree)], cwd=repository, check=True)
+    record["resources"] = resources
+    result = completion_result()
+    assert result.returncode == 2 and "still exists or is registered" in result.stderr, (
+        "COMPLETION LIVE BRANCH HIDDEN: " + result.stderr
+    )
+    subprocess.run(
+        ["git", "branch", "-d", "delivered-temp"], cwd=repository, capture_output=True, check=True
+    )
+    result = completion_result()
+    assert result.returncode == 0 and json.loads(result.stdout)["complete"], (
+        "COMPLETION VALID DISPOSITION REFUSED: " + result.stderr
+    )
+    assert build.is_dir(), "COMPLETION USEFUL BUILD REMOVED"
+    assert proof.read_bytes() == b"required canonical fixture evidence", (
+        "COMPLETION EVIDENCE ALTERED"
+    )
+    proof.write_bytes(b"changed canonical evidence")
+    try:
+        result = completion_result()
+        assert result.returncode == 2 and "evidence digest mismatch" in result.stderr, (
+            "COMPLETION MUTATED EVIDENCE ACCEPTED: " + result.stderr
+        )
+    finally:
+        proof.write_bytes(b"required canonical fixture evidence")
+    # This target's location-only prerequisite must reject real temporary storage
+    # and persistent-looking symlink aliases without touching historical tools.
+    with tempfile.TemporaryDirectory(prefix="completion-location-") as temporary:
+        alias = tmp_path / "temporary-alias"
+        alias.symlink_to(temporary, target_is_directory=True)
+        try:
+            for location in (Path(temporary) / "record.json", alias / "record.json"):
+                location.write_text(json.dumps(record))
+                result = run(
+                    "verify-completion",
+                    "--repository",
+                    str(repository),
+                    "--record",
+                    str(location),
+                )
+                assert result.returncode == 2 and "temporary storage" in result.stderr, (
+                    "COMPLETION VOLATILE EVIDENCE ACCEPTED: " + result.stderr
+                )
+        finally:
+            alias.unlink()
+    # Each refusal reaches the changed completion boundary, not an earlier phase gate.
+    cases = [
+        (record, "inventory_complete", False, "complete resource inventory"),
+        (resources[0], "reason", "", "current reason"),
+        (
+            resources[0],
+            "target",
+            str(tmp_path / "absent-build"),
+            "retained completion resource is absent",
+        ),
+        (resources[1], "retirement", None, "retirement requires"),
+        (
+            resources[1],
+            "required_evidence",
+            [{**reference, "sha256": "0" * 64}],
+            "evidence digest mismatch",
+        ),
+        (resources[3]["retirement"], "tip", "0" * 40, "Git readback failed"),
+    ]
+    tree = subprocess.run(
+        ["git", "rev-parse", "HEAD^{tree}"],
+        cwd=repository,
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout.strip()
+    unintegrated = subprocess.run(
+        ["git", "commit-tree", tree, "-m", "Unintegrated synthetic history"],
+        cwd=repository,
+        capture_output=True,
+        check=True,
+        text=True,
+    ).stdout.strip()
+    cases.append((resources[3]["retirement"], "tip", unintegrated, "Git readback failed"))
+    for owner, key, broken, diagnostic in cases:
+        original = owner[key]
+        owner[key] = broken
+        try:
+            result = completion_result()
+            assert result.returncode == 2 and diagnostic in result.stderr, (
+                "COMPLETION FALSE CLAIM ACCEPTED: " + diagnostic + result.stderr
+            )
+        finally:
+            owner[key] = original
+    resources[0]["disposition"] = "blocked"
+    resources[0]["reason"] = (
+        "Current writer has not released this build; next action is owner handoff"
+    )
+    result = completion_result()
+    assert result.returncode == 2 and json.loads(result.stdout)["blocked"] == 1, (
+        "COMPLETION BLOCKER HIDDEN: " + result.stdout + result.stderr
+    )
+    record["resources"] = []
+    result = completion_result()
+    assert result.returncode == 0 and json.loads(result.stdout)["resources"] == 0, (
+        "COMPLETION EMPTY INVENTORY REFUSED: " + result.stderr
+    )
 
     (repository / "code.py").write_text("VALUE = 3\n")
     stale = run(
