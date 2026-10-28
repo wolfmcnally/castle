@@ -1805,3 +1805,95 @@ The exact correction END was accepted after four current-candidate gates and com
 
 Lessons:
 - attractive-lemming has three distinct actual occurrences; devious-cheetah has one. Existing deterministic report and exact closed-schema rules cover the bookkeeping correction. No policy, permission, provider, timeout or review allowance changed.
+
+## 2026-10-28 08:01 — START (resumed)
+Phase 9 — Hosted lock-proof calibration correction before tagged release
+
+Execution trace: 330a2241f0dd42dbb937da160eaf981f
+Baseline: abd6847b1ded0bd1db3fa6d88c750c4726fe6fc5 — delivered Delete/Excise source, all local gates passed; hosted macOS CI not qualified
+
+The exact source-backed corrective instruction authorizes a bounded test instrument repair under the existing full tagged-release goal. Preserve failed CI and the original local accepted evidence; do not rerun the earlier successful handoff because of a provider interruption. Hosted Ubuntu190passed with six expected skips and installed chains passed. Hosted macOS195passed with one inconclusive exclusion observation: nine complete control cycles in0.5seconds, below the existing ten-cycle minimum. No waiter entered its held critical section.
+
+Planned work:
+- Keep the real lock/concurrency guarantee, continuous exclusion/process-aliveness checks, measured minimum window, ten control cycles, five heartbeat samples and existing two-second cap. Account for complete control progress within one bounded observation, without retries, threshold reduction or skips.
+- Qualify delayed live controls, non-excluding waiter, dead control and cap refusal in the existing test family; run affected native/Linux journal and namespace proofs.
+- Rebuild and qualify the changed source archive and exact installed workflows; record unchanged wheel equality only after fresh verification. Complete both full gates, forward commit and actual master/tag CI before the authorized three-asset release and downloaded-byte/prior-release verification.
+
+Completed-phase direct-fix route preserves the historical completed marker and END blocks. Primary planning/coding remains on the same retained writer. All original PLAN/CODE reports and cumulative exhausted CODE allowance carry forward, without a third review. The exhausted self-resume allowance remains zero. The new exact corrective relay authorizes this one bounded correction only; it grants no reset or additional autonomous retry. The rejected original startup assigned three units and was rejected before execution; it is preserved and never executed. No policy, runtime, identity, grant, live store or consumer scope changes.
+
+## 2026-10-28 08:17 — END (correction)
+Phase 9 — Complete-control lock qualification before tagged release
+
+The lock test now measures complete live control progress within its original bounded observation. Continuous exclusion, process aliveness, the half-second minimum, ten cycles, five heartbeats and two-second cap remain required. Runtime, public API, schemas, CLI, versions and namespace authorization are unchanged. Fresh native/Linux implementation and rebuilt-package checks pass; the separate handoff gate and actual forward-commit/CI/tag/release verification remain pending.
+
+Execution trace: 330a2241f0dd42dbb937da160eaf981f
+
+Files changed:
+- EXECUTION_LOG.jsonl
+- LOG.md
+- lessons/favorite-mongoose.md
+- project/tests/test_journal.py
+
+Build status:
+- Preserved hosted CI failure: macOS195passed/1failed, with9free-lock cycles in0.5seconds versus10required. No waiter entered while held. Ubuntu190passed/6expectedDarwin skips and both installed chains passed. The failing observation is inconclusive, not a lock violation or a qualified release.
+- Independent local red: delayed actual control produced6cycles at the old0.5second exit. Corrected whole journal family26passed on native and Linux, including exact delayed positive, unlocked-waiter exclusion failure, dead-control failure and unchanged-cap refusal.
+- Full native implementation:196passed, no skips/warnings/errors and every policy passes.
+- Full Linux implementation:190passed/6expectedDarwin-only successful clone/merge skips, every policy passes; unsupported-platform refusals execute.
+- Fresh wheel/source/rebuilt-wheel and isolated installed public workflows pass on native/Linux. Independent Linux archives are byte-identical to current native builds. Wheel/runtime equality with the earlier candidate is verified; the changed source archive has new qualification and is not claimed covered by old results.
+- Four Linux uv hardlink-to-copy warnings concern separate cache/environment filesystems; actual copied/module/archive bytes and installed workflows are verified. No import/runtime fallback, warning suppression or gate weakening.
+- Handoff: pending the separate bare ./bin/check all after this correction/report bookkeeping. No tracked write may follow its success.
+
+Review lane:
+- full, product primary mode; direct-fix completed-phase correction. Both original CODE passes and the original PLAN report are carried with exact provenance. No third review, budget reset, new writer/model or new permission.
+
+Evidence lane:
+- full.
+
+Follow-up route:
+- direct fix — a bounded test instrument/family repair authorized by the exact corrective relay; no product runtime or owning contract change. The accepted completed marker and all historical END/PARK records remain untouched.
+
+Role model/venue — orchestrated by codex:
+- Primary correction and gates use the retained configured Sol session. Host observed model/effort remain unreported rather than inferred from dormant pins. Direct-fix route skips new role preflight/dispatch; retained routing receipt validates.
+- Original independent PLAN/CODE requested Opus/high through Claude; observed claude-opus-5-5/harness2.1.312, effort unreported. No new intelligence attempt or relabeling of old advice as review of later bytes.
+
+Candidate-bound evidence:
+- Current implementation candidate: 0b79f10da515146a9a3fb911e2df78df7108223380b1ea09da82ec5b5092f298
+- Full implementation tree: c86ecc54c7173ec88dcaa39ae60e18208af7380fe688e7ac45d0c4b46879577c
+- Original28findings retain25adopt/3decline dispositions; the exact-baseline false premise remains declined and both original planner permissions remain intact. Current primary delta explicitly covers the test instrument and unchanged runtime hash inventory.
+- Four exact final manifest commands succeeded with unchanged full/product before-after identities and complete diagnostic reviews. Acceptance validation and exact monotonic joins pass. Current makespan 974128545125ns, gate union 466838412377ns, reconciliation union 973768059666ns, retry/rework 0ns, failed-work union 0ns, unattributed 360485459ns; categories can overlap. Inline model timing remains unreported.
+- No operator-input intervals are open; phase summary has total0 by method none. Both self-resume and CODE allowances remain0. The exact relay authorizes this correction only, not additional autonomous retries.
+- Wheel SHA-256: 58b9b81641b12aae57479295a14ec1de175ff528837bf8ca9e1cc8ff5a434e97
+- Source archive SHA-256: 4005eb617851ff5cd7b126812e66e8e3a5ce1406862dfb39db6bf0d5d361e59d
+- Rebuilt wheel SHA-256: 58b9b81641b12aae57479295a14ec1de175ff528837bf8ca9e1cc8ff5a434e97
+
+Acceptance:
+- Objective: exact delayed-control calibration and independent exclusion/aliveness/cap negatives; unchanged runtime/authorization; retained Delete/Excise, process-loss, concurrency and refusal suites; native/Linux exact source/archive/installed-chain qualification.
+- Parked for the operator: manual naming/error/retry-window usability. Physical overwrite, hardware power loss, protected/live-store deployment, external copies and downstream adoption remain outside the claim.
+- Worker conditions still required: actual handoff gate, clean forward commit and package-input equality, fresh exact master CI, scoped annotated tag/tag CI, public release with exactly three verified assets and downloaded-byte/prior-release equality. No generic publication approval is requested again.
+
+Delivery:
+- Scoped authorization, verbatim: “I approve a full tagged release of Castle with the Delete/Excise improvements.” The exact corrective relay additionally authorizes this bounded test repair and required rebuild/revalidation. Version0.2.1 remains unpublished; only the existing public wolfmcnally/castle GitHub destination and verified wheel, source archive and SHA256SUMS are included. No PyPI, live stores, grants or downstream adoption.
+- Automatic native review rejected the first startup because it assigned exhausted self-resume allowance3. CreateProcess did not run; source/trace stayed unchanged. The rejected original is preserved. One subsequent exact startup, corrected to0 and bound to the newly received explicit disposition, passed native review. No alternate execution route or changed security policy was used.
+
+Ripple:
+- AUTO: none — no downstream sketches or ledger transition in this completed-phase correction.
+- DECIDE: none for this scoped release.
+
+Lessons:
+- favorite-mongoose filed as a local test candidate, one actual hosted/local calibration defect. Observe complete control progress rather than using acquisition latency alone as its proxy. Existing family negatives make the principle executable; no new collected proof family or threshold change.
+- Original attractive-lemming and devious-cheetah candidates remain unchanged; optional graduation remains an operator judgment, not a release gate. Native startup allowance denial follows existing no-reset rules; no new policy is written.
+- Recalibration: previous reader has insufficient30-success samples, exact per-group counts unreported. No timeout/provider/configuration change.
+
+User demo:
+User Demo: N/A for automated release qualification; manual usability remains an operator judgment, not an asserted acceptance result.
+
+Remaining:
+- Materialize this correction, append actual bookkeeping, regenerate the accepted report, run the separate full handoff gate, then forward-commit and complete actual hosted CI/tag/release/download verification. Retain original failed hosted/local observations, prior qualified assets and rejected startup intact. Methodology adoption still waits for verified release closure; useful incremental environments/caches remain for current validation.
+
+## 2026-10-28 08:18 — CLOSE BOOKKEEPING
+Phase 9 — Hosted instrument correction handoff preparation
+
+The exact test correction END was accepted after four current candidate gates and full diagnostics. Runtime hashes equal the delivered baseline; the rebuilt source archive has fresh native/Linux qualification. Existing completed status and original accepted/failed/withdrawn history remain unchanged. The local favorite-mongoose test lesson is filed with one actual hosted/local observation; all lessons validate and no graduation occurs. Both exhausted allowances remain zero, and no third review or security-policy change occurred. The final sanitized report is generated next, then the separate bare handoff gate and actual forward-commit/CI/tag/release verification remain required. No remote outcome is preclaimed.
+
+Lessons:
+- favorite-mongoose records complete bounded control-progress qualification. Original local candidates and the rejected unexecuted allowance-reset startup remain preserved; existing no-reset rules apply.

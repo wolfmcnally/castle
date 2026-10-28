@@ -635,7 +635,19 @@ def _observe_exclusion(
                 f"the {label} process died inside the exclusion window"
                 f" (exit {process.returncode}){diagnostics()}"
             )
-        if time.perf_counter() - window_start >= window:
+        elapsed = time.perf_counter() - window_start
+        heartbeat_gain = len(_complete_lines(waiter_paths["heartbeat"])) - heartbeats_at_start
+        cycle_gain = len(_parse_pacer_cycles(pacer_paths["events"])) - cycles_at_start
+        # Acquisition latency omits the control's full cycle (including event
+        # writes and sleeping). Qualify that actual progress in this same
+        # continuously observed interval, without retrying or lowering counts.
+        assert elapsed <= _EXCLUSION_WINDOW_CAP_S, (
+            "control progress did not qualify within the exclusion window cap" + diagnostics()
+        )
+        if elapsed >= window and (
+            heartbeat_gain >= _MIN_HEARTBEATS and cycle_gain >= _MIN_PACER_CYCLES
+        ):
+            window = elapsed
             break
         time.sleep(_POLL_INTERVAL_S)
 
@@ -676,6 +688,82 @@ def _journal_module_tree() -> ast.Module:
 # --------------------------------------------------------------------------
 
 
+def _qualify_exclusion_window(tmp_path: Path) -> None:
+    """Exercise complete control progress and independent exclusion refusals."""
+    for label, interval in (("delayed", 0.075), ("unlocked", 0.01), ("cap", 0.35), ("dead", 0.01)):
+        root = tmp_path / label
+        root.mkdir()
+        store, pacer_store = root / "store", root / "pacer-store"
+        waiter_paths = {
+            key: root / ("waiter-" + key) for key in ("flock_calls", "events", "heartbeat")
+        }
+        pacer_paths = {key: root / ("pacer-" + key) for key in ("flock_calls", "events")}
+        stop = root / "stop"
+        waiter_out, pacer_out = root / "waiter.out", root / "pacer.out"
+
+        def diagnostics() -> str:
+            return _child_output("waiter", waiter_out) + _child_output("pacer", pacer_out)
+
+        waiter = pacer = None
+        try:
+            with journal.journal_lock(store):
+                # An independently unlocked store simulates a waiter that does
+                # not share the held lock. Its entry must never become a pass.
+                waiter = _spawn_child(
+                    _WAITER_SCRIPT,
+                    waiter_paths["flock_calls"],
+                    root / "unlocked-store" if label == "unlocked" else store,
+                    waiter_paths["events"],
+                    waiter_paths["heartbeat"],
+                    _HEARTBEAT_INTERVAL_S,
+                    out_path=waiter_out,
+                )
+                pacer = _spawn_child(
+                    _PACER_SCRIPT,
+                    pacer_paths["flock_calls"],
+                    pacer_store,
+                    pacer_paths["events"],
+                    stop,
+                    interval,
+                    _HOLD_DEADLINE_S,
+                    out_path=pacer_out,
+                )
+                if label == "unlocked":
+                    _await_marker(
+                        waiter_paths["events"],
+                        message="unlocked waiter did not enter",
+                        diagnostics=diagnostics,
+                    )
+                elif label == "dead":
+                    _await_marker(
+                        pacer_paths["events"],
+                        message="control did not start",
+                        diagnostics=diagnostics,
+                    )
+                    _publish_marker(stop)
+                    assert pacer.wait(timeout=_CHILD_JOIN_TIMEOUT_S) == 0
+                arguments = dict(
+                    waiter_paths=waiter_paths, pacer_paths=pacer_paths, diagnostics=diagnostics
+                )
+                if label == "delayed":
+                    _, window = _observe_exclusion(waiter, pacer, **arguments)
+                    assert _EXCLUSION_WINDOW_FLOOR_S < window <= _EXCLUSION_WINDOW_CAP_S
+                else:
+                    expected = {
+                        "unlocked": "waiter entered the critical section",
+                        "cap": "control progress did not qualify within the exclusion window cap",
+                        "dead": "pacer process died",
+                    }[label]
+                    with pytest.raises(AssertionError, match=expected):
+                        _observe_exclusion(waiter, pacer, **arguments)
+                _publish_marker(stop)
+            assert waiter.wait(timeout=_CHILD_JOIN_TIMEOUT_S) == 0, diagnostics()
+            assert pacer.wait(timeout=_CHILD_JOIN_TIMEOUT_S) == 0, diagnostics()
+        finally:
+            _terminate(waiter)
+            _terminate(pacer)
+
+
 def test_lock_survives_atomic_replacement_of_the_journal(tmp_path: Path) -> None:
     """The lock is held on the sidecar inode, which the rename does not touch.
 
@@ -685,6 +773,7 @@ def test_lock_survives_atomic_replacement_of_the_journal(tmp_path: Path) -> None
     waiter and the machine were running throughout the window in which it did
     not.
     """
+    _qualify_exclusion_window(tmp_path)
     store = tmp_path / "store"
     pacer_store = tmp_path / "pacer-store"
     waiter_paths = {
