@@ -1969,3 +1969,32 @@ new-checkout setup and report-feed freshness diagnostics were preserved and corr
 Phase10 — Bounded current-close field formatting repair
 
 The active uncommitted close field used inline Lessons text instead of a literal Lessons: line. One deterministic whitespace-only repair was validated in memory, atomically applied and byte-verified under the bounded mechanical repair policy before any successful handoff gate. Committed prefix, all non-whitespace record text and implementation/product identity were preserved. The original rejected bytes and accepted evidence remain immutable in durable private storage; no historical committed block, policy, validator or source code changed. Original blockf41972cd12b6756ada806c17718d8d4a2f1d297c01a24fcf36ae148e21bb8961; current formatted block7d67d5683e32a6168a556b13033ee06b1785d66b83b9f37bd6201be851ac0e97. Both composed log checks now pass. Final bare handoff gate still required before delivery.
+
+## 2026-11-04 08:48 — METHODOLOGY SCOPE
+Isolate full-gate fallback from Git hook-local repository context
+
+Authorized outcome: finish the explicitly approved0.3.0release safely after the tag push's mandatory full-gate fallback exposed inherited Git-local context in nested fixture repositories. Restore only verified test-induced local metadata while retaining every fixture commit and preimage; prevent recurrence before any publication retry.
+
+Surfaces: .githooks/pre-push fallback child environment, existing tests/test_check_receipt.py hook proof family, and factual log/lesson close records. Preserve receipt checks and the complete fallback gate. No namespace/package runtime, version, persisted format, caller grant, policy, permission, remote setting, prior release/tag or user-data change. Original private working bytes remain intact.
+
+Observed failure:4failed/181passed/11errors and candidate drift during the annotated-tag fallback; five synthetic fixture commits/config/index changes stayed local. All332qualified public files and26private WIP paths verified unchanged. Remote master remained the qualified source commit and no remote0.3.0tag existed. Metadata was restored with exact preconditions, saved preimages, a retained private forensic ref and no working-file or remote write. The failed gate remains failed; no push retry occurred.
+
+Route: primary one-shot methodology repair; independent review not applicable. Keep original product PLAN/CODE identities and consumed allowances unchanged. Prove inherited Git-local environment isolation with a nested real Git fixture and unchanged parent refs/index/config, then complete focused and both full gates, commit/source CI and the approved release route. No safeguard bypass.
+
+## 2026-11-04 09:08 — METHODOLOGY
+Isolate Git hook fallback validation from foreign-repository fixtures
+
+The bounded repair preserves receipt verification and the full fallback gate. It captures Git's repository-local variable list after binding the publishing root and clears those variables only before the fallback child; the publisher and its settings are not changed by that child environment operation. The existing hook proof family now runs a real nested Git repository under inherited hook context and checks unchanged parent HEAD, logical index and config.
+
+Actual changed paths: .githooks/pre-push; tests/test_check_receipt.py; this factual log pair; lessons/wealthy-doberman.md. No namespace runtime, package inputs, versions, schemas, access grants, security policy or release destination changed. No product phase row or adviser pass was added. Primary self-inspection checked the full diff and root binding/fail-closed enumeration/unset semantics; independent review: not applicable — primary one-shot methodology work.
+
+Validation: focused regression passed on native macOS and isolated Linux. The exact old hook failed the new proof in a disposable synthetic fixture, with real repository metadata unchanged. Full native196passed in259.58seconds/allpolicies; isolated Linux190passed/sixexpectedDarwin-only skips in185.78seconds/allpolicies. Both full-tree receipts bind35244e85bbc6c5387bb4cf4ef075bbe029d36b251d48b0e00f2f0935a3dfcb7c. Proof estate remains163families/218leaves with no growth. The old failed tag-push gate remains failed; original Git preimages, five synthetic commits, source/WIP preservation proofs and all product advice remain retained. Installed source/package inputs and the qualified0.3.0artifact bytes are unchanged.
+
+Scope departures: none beyond the required actual incident recovery and narrow fallback regression. Verified task-induced metadata restoration retained all history, original private HEAD/index and all332public/26private working paths; no remote, working-file reset, force push or hook bypass. The native source still has the same parent commit and enforcement path. Previous releases/tags remain unchanged.
+
+Delivery: commit and ordinary fast-forward push after the final bare ./bin/check all on this complete tracked tree. Then qualify the exact source commit's hosted CI and the unpublished0.3.0tag/release through the already approved route. Final handoff gate and real remote publication/download outcomes remain pending worker conditions; no result is preclaimed. Original private evidence worktree and clean publisher remain retained for current verification; full resource readback follows delivery.
+
+Lessons:
+- wealthy-doberman filed/validated, methodology/bin candidate, one occurrence; no graduation. Existing attractive-lemming has three occurrences and optional proposed test graduation remains with the operator, not a release gate.
+
+Remaining human criteria: actual mounted deployment/integration, protected custody and hardware power-loss qualification remain unclaimed. No live stores or downstream repository were operated on. No tracked write follows a successful final handoff gate.

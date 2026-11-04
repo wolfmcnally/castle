@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import shutil
 import subprocess
@@ -292,3 +293,51 @@ def test_pre_push_hook_skips_only_a_verified_hit(repository: Path) -> None:
     assert miss.returncode == 0, miss.stderr
     assert "reason=working-tree-not-clean" in miss.stderr
     assert marker.read_text(encoding="utf-8") == "called\n"
+
+    # A real push exports repository-local Git context to the hook. Nested
+    # fixture repositories must not mutate the publishing repository.
+    write_executable(
+        repository / "bin" / "check",
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        'nested="$PWD/.kickoff/nested"\n'
+        'git init -q -b nested "$nested"\n'
+        'git -C "$nested" config user.name "Nested fixture"\n'
+        'git -C "$nested" config user.email nested@example.invalid\n'
+        'printf "nested\\n" > "$nested/value"\n'
+        'git -C "$nested" add value\n'
+        'git -C "$nested" commit -qm nested\n',
+    )
+    before_head = head(repository)
+    before_config = (repository / ".git" / "config").read_bytes()
+    before_index = subprocess.check_output(["git", "ls-files", "--stage"], cwd=repository)
+    environment = os.environ.copy()
+    environment.update(
+        GIT_DIR=str(repository / ".git"),
+        GIT_COMMON_DIR=str(repository / ".git"),
+        GIT_WORK_TREE=str(repository),
+        GIT_INDEX_FILE=str(repository / ".git" / "index"),
+        GIT_PREFIX="",
+    )
+    inherited = subprocess.run(
+        [str(hook), "origin", "fixture"],
+        cwd=repository,
+        env=environment,
+        input=push_input(repository),
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert inherited.returncode == 0, inherited.stdout + inherited.stderr
+    assert head(repository) == before_head
+    assert (repository / ".git" / "config").read_bytes() == before_config
+    assert subprocess.check_output(["git", "ls-files", "--stage"], cwd=repository) == before_index
+    nested = repository / ".kickoff" / "nested"
+    assert (
+        subprocess.check_output(["git", "branch", "--show-current"], cwd=nested, text=True).strip()
+        == "nested"
+    )
+    assert (
+        subprocess.check_output(["git", "show", "HEAD:value"], cwd=nested, text=True) == "nested\n"
+    )

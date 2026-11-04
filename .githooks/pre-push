@@ -8,4 +8,10 @@ cd "$repo_root"
 if ./bin/check-receipt pre-push; then
   exit 0
 fi
+# Git exports repository-local context to hooks. The full gate creates
+# independent fixture repositories, so its child must discover each cwd.
+hook_git_local_names="$(git rev-parse --local-env-vars)"
+while IFS= read -r hook_git_local_name; do
+  [[ -z "$hook_git_local_name" ]] || unset "$hook_git_local_name"
+done <<< "$hook_git_local_names"
 exec ./bin/check all
