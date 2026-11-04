@@ -1923,3 +1923,49 @@ Resource disposition: no source worktree or temporary source branch was created.
 
 Lessons:
 `warping-shrimp` records one actual automatic-header timezone mismatch and the unchanged chronology refusal; no rule was graduated. Existing candidate graduation remains with the operator. No human-only action was created; earlier manual product criteria remain open.
+
+## 2026-11-04 07:25 — PARK
+Phase 10 — Public release evidence setup
+
+Execution trace: b1d0680ed23e42c5a467ba677a1ad1ad
+
+The evidence manager refused to transfer advisory identity across different checkout roots. Setup and root spans closed error2; original reports and phase-wide allowances remain canonical in the original work item. No identity field was changed, no retry or extra review occurred. This public tree receives independent full gates and exact package-input equality against versioned original-work-item qualification. Required public source is projected from the already public baseline; private execution prose is preserved intact outside publication.
+
+Lessons:
+- The existing evidence interface binds advice to one original repository identity; use that identity for continuation and independently validate a distinct publication tree. No rule or budget change is proposed.
+
+## 2026-11-04 07:26 — RELEASE PREPARATION
+Phase 10 — Read-only namespace access, version 0.3.0
+
+The read-only opener and reference shared-reader session preserve existing validation and formats, support authorized reads/snapshots and refuse mutation or repair. One original direct PLAN and two CODE reports supplied independent advice; their original identities, all29 dispositions, failed history and consumed allowances remain in the canonical original work item. This public tree is independently qualified, not relabeled as the same advisory work item.
+
+Source runtime/tests equal the reviewed API candidate except the deliberate version constant. All43 self-contained project inputs equal the versioned original work item. Native macOS/arm64 Linux wheel, validated sdist and rebuilt-wheel chains passed four isolated installed workflows and produced identical bytes. Wheel SHA256: 1a601b7fd3d821605c5db1c4fa63e599259ed1dc03c04aba3ccf69fe8576ef5c. Source archive SHA256: 7486364195f1185971464d0fafa1b820fd9487b1ae35ecb06d8caff2697f3ca1. SHA256SUMS SHA256: 06190c76392a662a5e377d1e8c15878c5ef10002e1fa542ecc3f49a9a83ba92a. Two Linux hardlink-to-copy performance warnings were inspected; installs passed.
+
+Original reader source qualification passed196native/190Linux tests, with six existing Darwin-only Linux skips; a fresh assay detected11/12historical defects and12/12holdout mutants under existing floors. Proof estate remains163families/218leaves. Fresh versioned native/Linux full gates, public handoff gate, clean source-input commit equality, exact master/tag CI and publication/download readback remain required executable delivery conditions. No remote outcome is asserted here.
+
+The concrete publication projection contains generic source, contracts, version metadata, release notes and this sanitized record. Private working prose and consumer identities are excluded while originals remain intact. Bounded new-content names/credential-shapes/machine-route screening found none; existing already-public history is retained without rewriting. The operator's autonomous delivery instruction covers the established public GitHub route for this bounded improvement; only inspected wheel, sdist and SHA256SUMS are release assets. No PyPI, live-store operation, new access, unrelated source disclosure or downstream edit is included. Earlier releases remain untouched.
+
+Human integration, actual read-only mounted deployment, protected custody, native VFS/device hardware loss, physical erasure and external copies remain unqualified. The safe synthetic test entry point is ./bin/test project/tests/test_namespace.py::test_namespace_transactions_and_admission -q; expected one passing existing family using disposable fixtures. No operational service was deployed.
+
+Lessons: cross-checkout evidence identity correctly refused; retain canonical advisory work-item identity and independently validate public projection. Existing provisional lessons and optional graduation decisions remain unchanged; no policy amendment or budget reset.
+
+## 2026-11-04 07:57 — END (correction)
+Phase 10 — Qualified0.3.0public source handoff
+
+The versioned original-work-item source correction is accepted after complete candidate-bound native/Linux gates and fresh primary dispositions against the original one PLAN/two CODE reports. The33runtime/test paths equal accepted reader source except the intended package version constant. All43self-contained package inputs equal this public tree; exact native/Linux wheel/sdist/rebuilt-wheel chains and four isolated installed workflows passed. Prior failed setup and report-policy traces remain canonical failures, no budget or identity rewrite occurred.
+
+Final native candidate gate:196passed in265.37seconds/allpolicies, no warnings. Fresh Linux report-inclusive gate:190passed/sixexistingDarwin-only skips in184.35seconds/allpolicies, no warnings. Independent unchanged public candidate first full gate:196passed in269.06seconds/allpolicies. Two Linux uv hardlink-to-copy performance warnings were inspected; installs passed. Actual read-only mounted deployment, protected custody, native VFS/device hardware loss and human integration remain unclaimed.
+
+The generated private report was refreshed after actual finalized trace changes; the source acceptance trace is b96302fe28d6457d9a3b193f2cc9c550. Private execution prose and consumer identities remain excluded from this generic public projection, with original bytes retained intact. Bounded new-content disclosure screening and direct source review found no consumer names, credential shapes or machine-private routes. No policy, permission, persisted format, live-store or downstream-source change is included.
+
+Final public handoff gate is next, after this complete tracked record. Clean commit/input equality, existing master CI, annotated v0.3.0/tag CI and publication of only the inspected wheel/sdist/SHA256SUMS remain executable worker conditions. Verify all downloaded assets and unchanged prior releases. No public commit, tag or release outcome is asserted before those actions. This completed source phase remains complete; the existing historical release/manual marker is unchanged. There is no new approval gate for routine scoped delivery.
+
+User Demo: N/A for automated source/release qualification; human integration remains open. Safe synthetic protocol: ./bin/test project/tests/test_namespace.py::test_namespace_transactions_and_admission -q, expected one existing-family pass on disposable fixtures.
+
+Lessons:
+new-checkout setup and report-feed freshness diagnostics were preserved and corrected through canonical commands; all original review allowances remain consumed. Provisional methodology lessons stay in their canonical private source ledger and no policy graduation was applied. Retain original evidence and the release worktree for current source/remote verification; disposition/readback follows actual delivery.
+
+## 2026-11-04 08:02 — BOOKKEEPING
+Phase10 — Bounded current-close field formatting repair
+
+The active uncommitted close field used inline Lessons text instead of a literal Lessons: line. One deterministic whitespace-only repair was validated in memory, atomically applied and byte-verified under the bounded mechanical repair policy before any successful handoff gate. Committed prefix, all non-whitespace record text and implementation/product identity were preserved. The original rejected bytes and accepted evidence remain immutable in durable private storage; no historical committed block, policy, validator or source code changed. Original blockf41972cd12b6756ada806c17718d8d4a2f1d297c01a24fcf36ae148e21bb8961; current formatted block7d67d5683e32a6168a556b13033ee06b1785d66b83b9f37bd6201be851ac0e97. Both composed log checks now pass. Final bare handoff gate still required before delivery.

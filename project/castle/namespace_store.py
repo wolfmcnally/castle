@@ -200,10 +200,21 @@ class NamespaceHandle:
         initialize: n.InitializeRequest | None = None,
         recover: bool = False,
         cutover_recovery: object = None,
+        read_only: bool = False,
     ) -> None:
+        if read_only and (initialize is not None or recover or cutover_recovery is not None):
+            n._refuse("namespace-access-denied")
+        self.read_only = read_only
         self.session = session
         n._authorize(
-            session, "initialize" if initialize is not None else "recover" if recover else "open"
+            session,
+            "open-readonly"
+            if read_only
+            else "initialize"
+            if initialize is not None
+            else "recover"
+            if recover
+            else "open",
         )
         self.closed = False
         self.failed = False
@@ -256,7 +267,7 @@ class NamespaceHandle:
 
                 self.cutover_result = cutover.recover(self, cutover_recovery)
                 return
-            with journal._stable_lock(self.cas_root):
+            with journal._stable_lock(self.cas_root, shared=self.read_only):
                 self._inventory(initializing=initialize is not None)
                 if initialize is not None:
                     self._cas_check()
@@ -308,14 +319,15 @@ class NamespaceHandle:
         return self.connection
 
     def _lock(self, file: Path, *, create: bool) -> None:
-        flags = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK
+        flags = (os.O_RDONLY if self.read_only else os.O_RDWR) | os.O_NOFOLLOW | os.O_NONBLOCK
         descriptor = os.open(file, flags | (os.O_CREAT if create else 0), 0o600)
         try:
             info = os.fstat(descriptor)
             if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size:
                 n._refuse("namespace-root-unsafe")
             try:
-                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                mode = fcntl.LOCK_SH if self.read_only else fcntl.LOCK_EX
+                fcntl.flock(descriptor, mode | fcntl.LOCK_NB)
             except BlockingIOError:
                 n._refuse("namespace-coordinator-busy")
             self.descriptors.append(descriptor)
@@ -328,6 +340,11 @@ class NamespaceHandle:
             raise
 
     def _inventory(self, *, initializing: bool = False) -> None:
+        if self.read_only:
+            for suffix in ("-journal", "-wal", "-shm"):
+                sidecar = self.root / ("namespace.sqlite" + suffix)
+                if sidecar.exists() or sidecar.is_symlink():
+                    n._refuse("namespace-storage-recovery-required")
         allowed = (
             {"coordinator.lock"}
             if initializing
@@ -365,13 +382,19 @@ class NamespaceHandle:
             descriptor = os.open(file, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
             os.close(descriptor)
         self.connection = sqlite3.connect(
-            file.as_uri() + "?mode=rw",
+            file.as_uri() + ("?mode=ro" if self.read_only else "?mode=rw"),
             uri=True,
             isolation_level=None,
             check_same_thread=False,
             timeout=0,
         )
         self.db.execute("PRAGMA foreign_keys=ON")
+        if self.read_only:
+            self.db.execute("PRAGMA query_only=ON")
+            self.db.execute("PRAGMA temp_store=MEMORY")
+            if self.db.execute("PRAGMA journal_mode").fetchone() != ("delete",):
+                n._refuse("namespace-storage-recovery-required")
+            return
         if self.db.execute("PRAGMA journal_mode=DELETE").fetchone() != ("delete",):
             n._refuse("namespace-protection-unsupported")
         self.db.execute("PRAGMA synchronous=EXTRA")
@@ -1097,7 +1120,7 @@ class NamespaceHandle:
             self.effect = "none"
             try:
                 self._inventory()
-                with journal._stable_lock(self.cas_root):
+                with journal._stable_lock(self.cas_root, shared=self.read_only):
                     if self.session.describe_capabilities() != self.descriptor:
                         n._refuse("namespace-protection-unsupported")
                     self._cas_check(full=False)
@@ -1174,6 +1197,9 @@ class NamespaceHandle:
     ) -> n.MutationResult:
         from castle import namespace_transactions as transactions
 
+        if self.read_only:
+            n._authorize(self.session, "admit")
+            n._refuse("namespace-access-denied")
         with self.admitted():
             return transactions.execute(self, request, content_sources)
 

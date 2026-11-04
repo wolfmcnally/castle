@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Add explicit validated read-only namespace opening and reference shared-reader sessions, supporting existing reads and immutable snapshot inspection.
+- Use read-only SQLite and shared ownership while excluding writers; refuse mutation, initialization, recovery and interrupted authority without repair. Preserve writer defaults and persisted formats.
+- Qualify unchanged authority images, public mode/refusal boundaries, independent domain/coordinator/CAS locks and exact installed reader workflows on native macOS and arm64 Linux. Actual read-only mounted deployment, protected custody and hardware power loss remain separate.
+
 ## 0.2.1
 
 - Keep logical Delete distinct from managed-content/metadata Excise; support content-free directory/name/metadata excision with an epoch advance through the existing recovery mechanism.

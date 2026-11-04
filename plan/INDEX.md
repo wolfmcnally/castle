@@ -14,6 +14,7 @@
 | [Phase 7](phase-7.md) | Consumer surface and namespace qualification | ✅ |
 | [Phase 8](phase-8.md) | Version 0.2.0 release preparation | ✅ |
 | [Phase 9](phase-9.md) | Delete and Excise correction and tagged release | ✅ |
+| [Phase 10](phase-10.md) | Read-only namespace access | ✅ |
 
 Private execution history is excluded. The public package contracts and methodology policies govern future work.
 

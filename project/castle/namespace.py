@@ -533,12 +533,28 @@ def open_namespace(
     return NamespaceHandle(namespace_root, cas_root, session)
 
 
+def open_namespace_readonly(
+    namespace_root: Path, cas_root: Path, session: AuthorizedSession
+) -> NamespaceHandle:
+    """Open existing validated authority without writing or repairing it.
+
+    The caller's session must fence all writers while admitting shared readers.
+    Use LocalSession(..., read_only=True) for the reference local environment.
+    """
+    from castle.namespace_store import NamespaceHandle
+
+    return NamespaceHandle(namespace_root, cas_root, session, read_only=True)
+
+
 def execute_namespace(
     handle: NamespaceHandle,
     request: MutationRequest,
     content_sources: Mapping[str, bytes],
     excision_roots: object = None,
 ) -> MutationResult:
+    if handle.read_only:
+        _authorize(handle.session, "admit")
+        _refuse("namespace-access-denied")
     if type(request) is MutationRequest and request.kind == "excise":
         from castle import namespace_excision as cutover
 

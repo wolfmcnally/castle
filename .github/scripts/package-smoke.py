@@ -13,7 +13,7 @@ from pathlib import Path
 
 import castle
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 
 
 def main() -> None:
@@ -203,6 +203,26 @@ def main() -> None:
         manifest = json.loads((output / "snapshot.json").read_bytes())
         if member not in {row["entry_id"] for row in manifest["entries"]}:
             raise AssertionError("Installed replacement lost stable entry identity")
+        # The installed public reader uses existing authority and snapshots.
+        read_session = namespace_environment.LocalSession(
+            namespace_root, store, domain, read_only=True
+        )
+        with namespace.open_namespace_readonly(namespace_root, store, read_session) as reader:
+            info = reader.info()
+            if info.namespace_id != namespace_id:
+                raise AssertionError("Installed reader changed namespace identity")
+            view = namespace.read_namespace(
+                reader,
+                namespace.ReadRequest(
+                    namespace_id,
+                    info.cas,
+                    info.revision,
+                    "inspect-snapshot",
+                    {"snapshot_id": snapshot_id},
+                ),
+            ).value
+            if view.manifest != manifest:
+                raise AssertionError("Installed reader snapshot differs from exported manifest")
         # Delete is a namespace projection change, retaining bytes and logs.
         deletion = {
             "schema": "castle.namespace_request.v1",

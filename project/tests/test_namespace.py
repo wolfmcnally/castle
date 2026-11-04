@@ -15,6 +15,7 @@ import unicodedata
 import uuid
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -127,9 +128,383 @@ def _tree(handle: n.NamespaceHandle) -> dict[str, dict]:
     return result
 
 
+def _readonly_contract(directory: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    case = Case(directory)
+    folder, file_id, snapshot = _id(), _id(), _id()
+    with case.open() as writer:
+        case.apply(
+            writer,
+            "create-directory",
+            {
+                "entry_id": folder,
+                "parent_id": case.initial.root_id,
+                "name": "Folder",
+                "metadata": {},
+            },
+        )
+        case.apply(
+            writer,
+            "create-file",
+            {
+                "entry_id": file_id,
+                "parent_id": folder,
+                "name": "File.txt",
+                "metadata": {},
+                "content": {"cas_id": case.stored.cas_id, "size": case.source.stat().st_size},
+            },
+        )
+        captured = case.apply(writer, "snapshot", {"snapshot_id": snapshot})
+        expected_info, expected_tree = writer.info(), _tree(writer)
+
+    def session() -> LocalSession:
+        return LocalSession(
+            case.root, case.cas_root, case.directory / "domain.lock", read_only=True
+        )
+
+    def readonly() -> n.NamespaceHandle:
+        return n.open_namespace_readonly(case.root, case.cas_root, session())
+
+    alternate_domain = case.directory / "alternate-domain.lock"
+    alternate_domain.write_bytes(b"")
+    image = _cas_image(case.directory)
+
+    def directory_image():
+        return {
+            str(p.relative_to(case.directory)): (
+                p.stat().st_mtime_ns,
+                p.stat().st_ctime_ns,
+                tuple(sorted(c.name for c in p.iterdir())),
+            )
+            for p in (case.directory, case.root, case.root / "operations", case.cas_root)
+        }
+
+    directories = directory_image()
+    opened = []
+    os_open, connect = os.open, sqlite3.connect
+
+    def no_writable_open(path, flags, *args, **kwargs):
+        assert not flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC), (path, flags)
+        opened.append(str(path))
+        return os_open(path, flags, *args, **kwargs)
+
+    def readonly_connect(database, *args, **kwargs):
+        if str(database) != ":memory:":
+            assert str(database).endswith("namespace.sqlite?mode=ro") and kwargs.get("uri")
+        return connect(database, *args, **kwargs)
+
+    def no_sync(*args):
+        raise AssertionError("reader attempted a durability write")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "open", no_writable_open)
+        patch.setattr(os, "fsync", no_sync)
+        patch.setattr(sqlite3, "connect", readonly_connect)
+        with readonly() as first, readonly() as second:
+            assert first.info() == second.info() == expected_info
+            assert _tree(first) == expected_tree
+            request = n.ReadRequest(
+                expected_info.namespace_id,
+                expected_info.cas,
+                None,
+                "inspect-snapshot",
+                {"snapshot_id": snapshot},
+            )
+            view = n.read_namespace(second, request).value
+            assert {e["entry_id"] for e in view.manifest["entries"]} == set(expected_tree)
+            assert (
+                next(e for e in view.manifest["entries"] if e["entry_id"] == file_id)["cas_id"]
+                == case.stored.cas_id
+            )
+            with pytest.raises(sqlite3.OperationalError, match="readonly"):
+                first.db.execute("UPDATE namespace SET revision=99")
+            assert first.db.execute("PRAGMA query_only").fetchone() == (1,)
+            for kind, args in (
+                ("info", {}),
+                ("resolve", {"components": ["Folder", "File.txt"]}),
+                ("inventory-excision", {}),
+                (
+                    "preview-excision",
+                    {
+                        "operation_id": _id(),
+                        "selection": {
+                            "content_ids": [captured.snapshot.cas_id],
+                            "entry_ids": [],
+                            "operation_ids": [],
+                            "metadata_entry_ids": [],
+                        },
+                        "snapshot_actions": [{"snapshot_id": snapshot, "action": "drop"}],
+                    },
+                ),
+            ):
+                n.read_namespace(
+                    first,
+                    n.ReadRequest(
+                        expected_info.namespace_id,
+                        expected_info.cas,
+                        expected_info.revision,
+                        kind,
+                        args,
+                    ),
+                )
+            assert n.namespace_operation(first, captured.operation_id).state == "committed"
+            mutation = case.directory_request(first, "forbidden")
+            for action in (
+                lambda: n.execute_namespace(first, mutation, {}),
+                lambda: first.execute(mutation, {}),
+                lambda: n.execute_namespace(first, replace(mutation, kind="excise"), {}, {}),
+            ):
+                with pytest.raises(n.NamespaceError, match="namespace-access-denied") as error:
+                    action()
+                assert error.value.effect == "none"
+    assert opened and _cas_image(case.directory) == image
+    assert directory_image() == directories
+
+    child_code = """
+from pathlib import Path
+import sys
+from castle import namespace as n
+from castle.namespace_environment import LocalSession
+root = Path(sys.argv[1])
+read_only = sys.argv[2] == "read"
+domain = Path(sys.argv[3]) if len(sys.argv) > 3 else root/"domain.lock"
+session = LocalSession(root/"namespace", root/"cas", domain, read_only=read_only)
+try:
+    opener = n.open_namespace_readonly if read_only else n.open_namespace
+    with opener(root/"namespace", root/"cas", session) as handle:
+        print(handle.info().revision)
+except n.NamespaceError as error:
+    print(error.code)
+    sys.exit(23)
+"""
+
+    def child(mode, domain=None):
+        arguments = [sys.executable, "-c", child_code, str(case.directory), mode]
+        if domain is not None:
+            arguments.append(str(domain))
+        return subprocess.run(
+            arguments,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+
+    other = Case(directory.parent / "readonly-other-domain-member")
+    with readonly():
+        result = child("read")
+        assert result.returncode == 0 and result.stdout.strip() == str(expected_info.revision), (
+            result.stderr
+        )
+        result = child("write")
+        assert result.returncode == 23 and result.stdout.strip() == "namespace-coordinator-busy"
+        result = child("write", alternate_domain)
+        assert result.returncode == 23 and result.stdout.strip() == "namespace-coordinator-busy"
+        shared_domain = LocalSession(other.root, other.cas_root, case.directory / "domain.lock")
+        with pytest.raises(n.NamespaceError, match="namespace-coordinator-busy"):
+            n.open_namespace(other.root, other.cas_root, shared_domain)
+    with case.open():
+        with pytest.raises(n.NamespaceError, match="namespace-coordinator-busy"):
+            readonly()
+        result = child("read")
+        assert result.returncode == 23 and result.stdout.strip() == "namespace-coordinator-busy"
+        result = child("read", alternate_domain)
+        assert result.returncode == 23 and result.stdout.strip() == "namespace-coordinator-busy"
+    assert child("write").returncode == 0
+    assert _cas_image(case.directory) == image
+
+    # Independent shared CAS lock: the reader must finish while another
+    # process holds LOCK_SH. An exclusive regression times out this child.
+    import select
+
+    lock_code = """
+from pathlib import Path
+import sys
+from castle import journal
+with journal._stable_lock(Path(sys.argv[1]), shared=True):
+    print("held", flush=True)
+    sys.stdin.readline()
+"""
+    holder = subprocess.Popen(
+        [sys.executable, "-c", lock_code, str(case.cas_root)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert select.select([holder.stdout], [], [], 10)[0], "shared lock child did not start"
+        assert holder.stdout.readline() == "held\n"
+        result = child("read")
+        assert result.returncode == 0 and result.stdout.strip() == str(expected_info.revision), (
+            result.stderr
+        )
+    finally:
+        holder.communicate("\n", timeout=10)
+    assert holder.returncode == 0
+    assert _cas_image(case.directory) == image
+
+    from castle.namespace_environment import DirectoryDestination
+
+    output = directory.parent / "readonly-export"
+    with readonly() as handle:
+        n.read_namespace(
+            handle,
+            n.ReadRequest(
+                expected_info.namespace_id,
+                expected_info.cas,
+                expected_info.revision,
+                "export-snapshot",
+                {"snapshot_id": snapshot},
+            ),
+            destination=DirectoryDestination(output, case.root, case.cas_root),
+        )
+    assert (output / "tree/Folder/File.txt").read_bytes() == case.source.read_bytes()
+    assert _cas_image(case.directory) == image
+
+    for base, suffixes in (
+        (case.root / "namespace.sqlite", ("-journal", "-wal", "-shm")),
+        (case.cas_root / cas.INDEX_FILENAME, ("-journal", "-wal")),
+    ):
+        for suffix in suffixes:
+            residue = base.with_name(base.name + suffix)
+            residue.write_bytes(
+                b"\xd9\xd5\x05\xf9\x20\xa1\x63\xd7" + b"synthetic killed-writer residue"
+            )
+            before = _cas_image(case.directory)
+
+            def no_namespace_sql(database, *args, **kwargs):
+                if "namespace.sqlite" in str(database):
+                    raise AssertionError("namespace residue reached SQLite opening")
+                return connect(database, *args, **kwargs)
+
+            with monkeypatch.context() as patch:
+                if base.parent == case.root:
+                    patch.setattr(sqlite3, "connect", no_namespace_sql)
+                with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+                    readonly()
+            assert _cas_image(case.directory) == before
+            residue.unlink()  # Only the test's explicitly planted synthetic file.
+
+    # A healthy ordinary CAS query may keep empty WAL/SHM sidecars alive.
+    # Their presence alone is not interrupted namespace authority.
+    with closing(sqlite3.connect(case.cas_root / cas.INDEX_FILENAME)) as query:
+        query.execute("SELECT count(*) FROM objects").fetchone()
+        before = _cas_image(case.directory)
+        with readonly() as handle:
+            assert handle.info() == expected_info
+        assert _cas_image(case.directory) == before
+
+    with pytest.raises(n.NamespaceError, match="namespace-access-denied"):
+        LocalSession(
+            case.root,
+            case.cas_root,
+            case.directory / "domain.lock",
+            create_domain_lock=True,
+            read_only=True,
+        )
+    with pytest.raises(n.NamespaceError, match="namespace-access-denied"):
+        n.open_namespace(case.root, case.cas_root, session())
+    with pytest.raises(n.NamespaceError, match="namespace-protection-unsupported"):
+        n.open_namespace_readonly(case.root, case.cas_root, case.session)
+    assert _cas_image(case.directory) == image
+    with pytest.raises(n.NamespaceError, match="namespace-access-denied"):
+        n.recover_namespace(case.root, case.cas_root, session(), None)
+    assert _cas_image(case.directory) == image
+    fresh = directory.parent / "readonly-initialization-forbidden"
+    initializer = LocalSession(fresh, case.cas_root, case.directory / "domain.lock", read_only=True)
+    with pytest.raises(n.NamespaceError, match="namespace-access-denied"):
+        n.create_namespace(fresh, case.cas_root, initializer, case.initial)
+    assert not fresh.exists() and _cas_image(case.directory) == image
+    for kwargs in ({"recover": True}, {"initialize": case.initial}, {"cutover_recovery": {}}):
+        with pytest.raises(n.NamespaceError, match="namespace-access-denied"):
+            store.NamespaceHandle(case.root, case.cas_root, session(), read_only=True, **kwargs)
+    with readonly() as handle:
+        handle.session.active = False
+        with pytest.raises(n.NamespaceError, match="namespace-session-expired"):
+            handle.info()
+    assert _cas_image(case.directory) == image
+
+    class PermissiveSession(LocalSession):
+        def check_authorized(self, operation_kind):
+            if not self.active or self.pid != os.getpid():
+                n._refuse("namespace-session-expired")
+
+    permissive = PermissiveSession(
+        case.root, case.cas_root, case.directory / "domain.lock", read_only=True
+    )
+    with n.open_namespace_readonly(case.root, case.cas_root, permissive) as handle:
+        mutation = case.directory_request(handle, "forbidden-permissive")
+        with pytest.raises(n.NamespaceError, match="namespace-access-denied"):
+            handle.execute(mutation, {})
+        with pytest.raises(n.NamespaceError, match="namespace-access-denied"):
+            n.execute_namespace(handle, replace(mutation, kind="excise"), {}, {})
+    assert _cas_image(case.directory) == image
+
+    with case.open() as handle:
+        interrupted = case.directory_request(handle, "interrupted")
+    result = _child(case, interrupted, "prepared")
+    assert result.returncode == 61, result.stdout + result.stderr
+    before = _cas_image(case.directory)
+    with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+        readonly()
+    assert _cas_image(case.directory) == before
+    n.recover_namespace(case.root, case.cas_root, case.session, None)
+    with readonly() as handle:
+        assert handle.info().revision == expected_info.revision + 1
+
+    # Independent filesystem witness, including root-run Linux lanes: drop
+    # privilege only in the probe child before attempting any store access.
+    from tempfile import TemporaryDirectory
+
+    with TemporaryDirectory(prefix="castle-readonly-") as temporary:
+        top = Path(temporary)
+        top.chmod(0o755)
+        limited = Case(top / "store")
+        paths = [top, limited.directory, *limited.directory.rglob("*")]
+        modes = {p: p.stat().st_mode & 0o777 for p in paths}
+        try:
+            for path in paths:
+                path.chmod(0o555 if path.is_dir() else 0o444)
+            probe = """
+import os,sys
+from pathlib import Path
+from castle import namespace as n
+from castle.namespace_environment import LocalSession
+if os.geteuid() == 0:
+    os.setgroups([])
+    os.setgid(65534)
+    os.setuid(65534)
+root = Path(sys.argv[1])
+try:
+    fd = os.open(root/"domain.lock", os.O_RDWR)
+except PermissionError:
+    pass
+else:
+    os.close(fd)
+    raise AssertionError("fixture does not enforce read-only file permissions")
+session = LocalSession(root/"namespace", root/"cas", root/"domain.lock", read_only=True)
+with n.open_namespace_readonly(root/"namespace", root/"cas", session) as handle:
+    assert handle.info().revision == 0
+print("readonly-filesystem-probe-passed")
+"""
+            result = subprocess.run(
+                [sys.executable, "-c", probe, str(limited.directory)],
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+            assert (
+                result.returncode == 0
+                and result.stdout.strip() == "readonly-filesystem-probe-passed"
+            ), result.stderr
+        finally:
+            for path, mode in modes.items():
+                path.chmod(mode)
+
+
 def test_namespace_transactions_and_admission(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    _readonly_contract(tmp_path / "readonly", monkeypatch)
     runpy.run_path(str(Path(__file__).with_name("test_namespace_consumers.py")))[
         "environment_protocol"
     ](Case(tmp_path / "consumer-environment"), monkeypatch)

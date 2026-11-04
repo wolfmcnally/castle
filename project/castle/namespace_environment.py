@@ -110,6 +110,7 @@ class LocalSession:
         domain_lock: Path,
         *,
         create_domain_lock: bool = False,
+        read_only: bool = False,
     ) -> None:
         if os.name != "posix" or not all(
             hasattr(os, name) for name in ("O_NOFOLLOW", "O_DIRECTORY", "register_at_fork")
@@ -129,6 +130,9 @@ class LocalSession:
             for root in (self.namespace_root, self.cas_root)
         ):
             n._refuse("namespace-root-unsafe")
+        if read_only and create_domain_lock:
+            n._refuse("namespace-access-denied")
+        self.read_only = read_only
         self.create_domain_lock = create_domain_lock
         self.active = True
         self.pid = os.getpid()
@@ -138,6 +142,26 @@ class LocalSession:
     def check_authorized(self, operation_kind: str) -> None:
         if not self.active or os.getpid() != self.pid:
             n._refuse("namespace-session-expired")
+        if operation_kind == "open-readonly" and not self.read_only:
+            n._refuse("namespace-protection-unsupported")
+        if self.read_only and operation_kind not in {
+            "open-readonly",
+            "domain-ownership",
+            "ready",
+            "admit",
+            "info",
+            "read",
+            "read-result",
+            "status",
+            "status-result",
+            "excision-inventory",
+            "excision-inventory-result",
+            "export-source",
+            "export-source-result",
+            "export",
+            "export-result",
+        }:
+            n._refuse("namespace-access-denied")
 
     def describe_capabilities(self) -> n.CapabilityDescriptor:
         return n.CapabilityDescriptor(
@@ -167,7 +191,7 @@ class LocalSession:
         )
         descriptor = None
         try:
-            flags = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK
+            flags = (os.O_RDONLY if self.read_only else os.O_RDWR) | os.O_NOFOLLOW | os.O_NONBLOCK
             if self.create_domain_lock:
                 try:
                     descriptor = os.open(
@@ -182,15 +206,17 @@ class LocalSession:
             if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
                 n._refuse("namespace-root-unsafe")
             try:
-                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                mode = fcntl.LOCK_SH if self.read_only else fcntl.LOCK_EX
+                fcntl.flock(descriptor, mode | fcntl.LOCK_NB)
             except BlockingIOError:
                 n._refuse("namespace-coordinator-busy")
             if not _same_file(
                 info, os.stat(self.domain_lock.name, dir_fd=parent, follow_symlinks=False)
             ):
                 n._refuse("namespace-root-unsafe")
-            os.fsync(descriptor)
-            os.fsync(parent)
+            if not self.read_only:
+                os.fsync(descriptor)
+                os.fsync(parent)
             self.create_domain_lock = False
             _close(self, parent)
             self.check_authorized("domain-ownership")

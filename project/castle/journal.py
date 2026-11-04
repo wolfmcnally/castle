@@ -320,7 +320,9 @@ def _journal_lock(store: Path, *, canonical: bool) -> Iterator[TextIO]:
 
 
 @contextmanager
-def _stable_lock(store: Path, *, canonical: bool = True, create: bool = False) -> Iterator[None]:
+def _stable_lock(
+    store: Path, *, canonical: bool = True, create: bool = False, shared: bool = False
+) -> Iterator[None]:
     """Acquire only the stable inode; never create directories or open authority."""
     store = Path(store)
     lock_path = store / JOURNAL_LOCK_FILENAME
@@ -354,7 +356,7 @@ def _stable_lock(store: Path, *, canonical: bool = True, create: bool = False) -
             # the observation does not depend on how or when the patch was
             # applied. ``test_journal_module_calls_flock_through_the_fcntl_module``
             # holds the form.
-            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            fcntl.flock(descriptor, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
             try:
                 if create:
                     os.fsync(descriptor)
