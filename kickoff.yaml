@@ -14,8 +14,8 @@ workflow:
   review_preference: cross-vendor
   adviser_models:
     claude:
-      reviewer: [sol]
-      critic: [sol]
+      reviewer: [fable]
+      critic: [fable]
     codex:
       reviewer: [opus]
       critic: [opus]

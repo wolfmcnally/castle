@@ -1998,3 +1998,103 @@ Lessons:
 - wealthy-doberman filed/validated, methodology/bin candidate, one occurrence; no graduation. Existing attractive-lemming has three occurrences and optional proposed test graduation remains with the operator, not a release gate.
 
 Remaining human criteria: actual mounted deployment/integration, protected custody and hardware power-loss qualification remain unclaimed. No live stores or downstream repository were operated on. No tracked write follows a successful final handoff gate.
+
+## 2026-11-11 10:23 — START
+Phase 11 — Incremental admission design review
+
+Execution trace: 6c131c51e60d42c3b57fbd1c5e37f230
+
+Planned work:
+- A design, captured as this phase's plan artifact, covering: admission that keeps today's constant-cost identity, lock, epoch, protection, service-state and pending-operation checks; validation of touched records and their ancestry; restart and admission when earlier observations are absent or stale; concurrent same-size modification; cross-platform timestamp semantics; replacement and excision interaction; incremental commit, including tree-wide bounds and dependency maintenance; and the minimal public read surface (revision probe with store position, targeted entry read, directory page, change discovery including deletions, explicit diagnosis).
+- An exact statement of what 0.3.0 validation actually protects, and of what the design preserves, defers to touch or diagnosis, or does not provide. No cryptographic guarantee that the library does not have may be claimed.
+- Non-destructive format compatibility and migration options under the release posture in `policies/greenfield-until-released.md`.
+- Recorded dispositions of independent Fable High advisory review findings, and a minimal scoped implementation proposal for a later, separately authorized phase.
+
+## 2026-11-11 10:57 — PARK
+Phase 11 — Incremental admission design review
+
+Execution trace: 6c131c51e60d42c3b57fbd1c5e37f230 (finalized; root outcome interrupted at the decision park)
+Operator-input park: decision, opened 2026-11-11T18:57:33Z
+
+Reason: design-only phase complete to its review seam; implementation, contract amendments and evidence tasks await operator decisions. No runtime source, test, schema, format, release, tag or push change was made.
+
+Outcome:
+- Design captured as the immutable plan artifact (SHA-256 1837b3f814fa962dbeaf214a3fe34b2dc9dae889ac6160c95198da74ca7a7acb), concreteness check passed.
+- One registered qualifying independent review: role.plan-review attempt 1, claude/fable/high, primary advisory mode, 18 findings (4 high, 8 medium, 4 low, 2 informational), ingested against its review span. Recorded cause (not persisted by the registration tool): this was the second pass under the two-pass bound; the first was a non-qualifying unregistered native review launched after a watcher refusal and preserved separately. No third pass.
+- Dispositions and minimal implementation proposal recorded (adopted advice is not resolution; high findings list the changed design, required evidence and remaining decisions). Proposed scope: in-session amortization plus cross-process O(1) open under an explicit threat model and named full-validation boundaries; content publication stays at current cost pending a separate decision.
+
+Preserved evidence: evidence run (plan, review report, registration, cause file, dispositions); repo-local ignored design folder (draft, refused watcher log, non-qualifying native report and its dispositions, design-edit-during-review marker, preflight receipts).
+
+Resume condition: operator decides the open items in the dispositions document (scope, threat model, validation boundaries and per-boot option, residuals, format and migration, evidence tasks E1/E2, brief amendments). An authorized implementation then starts a fresh run with its own planning and review.
+
+Remaining uncommitted changes: plan/INDEX.md row, plan/phase-11.md, LOG.md, EXECUTION_LOG.jsonl, kickoff.yaml reviewer/critic adviser routing (two lines), three lesson files.
+
+Lessons:
+- nifty-termite filed (methodology/skill): a watcher precondition refusal is a park, not a venue switch.
+- brilliant-mantis filed (methodology/bin): register-role-attempt silently drops --cause on attempt 1.
+- vociferous-jerboa filed (methodology/skill): never edit an artifact under active independent review; capture an immutable copy first.
+- lessons validate OK; attractive-lemming remains at three occurrences, graduation stays with the operator. Timeout recommendation: insufficient samples.
+
+## 2026-11-11 11:05 — PARK
+Phase 11 — Incremental admission design review
+
+Resumed on the coordinator's relayed root direction (bounded synthetic evidence plus reconciliation), then re-parked. The earlier decision park was closed late: the R2 work began before park-close. Recorded here rather than hidden. A new decision park is open.
+
+Work: evidence tasks E1/E2 ran on synthetic scratch only. macOS APFS ran in repo-local ignored scratch; Linux ext4 ran in the standing devlinux container home volume with working directory /, touching no project tree. Both used Python 3.12.12 and SQLite 3.50.4, and both scratch directories were removed. Findings:
+- NORMAL+DELETE leaves no journal after commit or idle kill.
+- data_version changes only for foreign commits; the header counter advances per commit.
+- EXCLUSIVE keeps the journal and advances the counter once.
+- A timestamp-preserving in-place rewrite changes only ctime, like chmod or an xattr write.
+- On macOS, mmap stores change nothing until unmap, then ctime only.
+- Directory nlink tracks subdirectory adds.
+- Both filesystems gave distinct ctimes for back-to-back writes; coarse-clock kernels were not tested.
+- hashlib state cannot be exported.
+
+Two R1 claims withdrawn:
+- the running-SHA-256 store position, which a new process cannot extend without a full rehash;
+- the metadata-only classification by mtime, which non-adversarial timestamp-preserving tools defeat.
+
+The R2 addendum replaces them with O(1) per-authority content witnesses, store-position options P2/P3, and three root-ready choices. The R1 text is preserved byte-for-byte. No source, schema, migration or review call was made; no third review.
+
+Resume condition: root choices (store position P2 or P3; per-boot pass; publication slice timing) and authorization of an implementation phase.
+
+Lessons:
+- No new lesson filed. Observation for the owner: R1 inferred actor intent from a timestamp field. The correction (classify by content witnesses only) sits in the design. A lesson candidate would duplicate the existing evidence-over-proxies invariant, so it is recorded here only.
+
+## 2026-11-11 11:17 — PARK
+Phase 11 — Incremental admission design review
+
+Resumed on relayed root direction (do not accept weaker integrity by inference), then re-parked. The decision park was closed before this work began. R3 analysis written (SHA-256 fdfc3086fedb4e533832f99fb357980fe5ba0190db599480956cc89d49ddaef8): the exact 0.3.0 per-admission CAS guarantee, which operations need which part of it, and why the stamp and witness fast path does not preserve it (mmap-invisible writes, unverified mutable prefix, advisory lock). Three options: A (exact 0.3.0 reread per admission), B (immutable sealed segments, CAS format change), C (per-touched-record proof against current bytes, with stated delayed detection). Store position is logical only. R1, R2 and the evidence are preserved. No source, schema, migration or review call.
+
+Resume condition: operator choice of A, B or C for the CAS journal guarantee, and the timing of the content-upload slice.
+
+Lessons:
+- No new lesson filed. Observation: R2 again treated stamp equality as evidence of unchanged bytes despite the E1 mmap result measured the same hour. Covered by the existing evidence-over-proxies invariant, so no duplicate candidate.
+
+## 2026-11-11 13:04 — PARK
+Phase 11 — Incremental admission design review
+
+Execution trace: 6c131c51e60d42c3b57fbd1c5e37f230 (finalized; root outcome interrupted at the decision park)
+
+Terminal design close, recorded as a non-accepted park. The design work is finished and the operator has ruled on it; this phase is not resumed. Its implementation is carried by Phases 12 and 13. An accepted close is not available: in primary mode with full review and evidence lanes, acceptance requires a registered code critique and a final candidate gate, and a design-only phase has no product code to critique and no review pass left under its bounds. The phase therefore stays 🚧 in the index rather than being marked complete by hand.
+
+What is true now:
+- The design, its dispositions (R1, R2) and the integrity tradeoff analysis (R3) are complete and preserved. No runtime source, test, schema, storage format, migration, release, tag or push change was made, and no runtime integrity property is claimed as proved.
+- One registered qualifying independent review (Fable High plan review, 18 findings) and one earlier non-qualifying native review are recorded. Every high finding from both, the withdrawn R2 claims and the R3 mutable-prefix point remain open obligations for the implementation phases. Closing this phase resolves none of them.
+
+Operator rulings (relayed by the coordinator, preserved verbatim):
+- Question: "For Castle, should normal operations validate only the records they touch, with damage elsewhere detected when accessed or during a full diagnostic, rather than blocking unrelated work immediately? The owner recommends this approach to meet your scaling requirement." Answer: "Yes, absolutely." This selects R3 option C.
+- Question: "Should this Castle update also make content uploads incremental, or leave that for a later phase? Deferring it would leave uploads doing whole-CAS work even after reads and metadata operations improve. I recommend including it now." Answer: "Include it now."
+- Root, 2026-11-11T19:56:48Z: separate implementation phases, Phase 12 (touched-record admission, option C) then Phase 13 (incremental content publication). Each has exactly one Fable plan review and one Fable code review under a proper preflight. All earlier findings, advice and review limits carry forward, and this phase's spent review history is not reset. There will be one final release later. There is no publication, push or tag now, no live-data migration, and no destructive migration, and the user's work in progress is preserved.
+
+Operator-input parks: three decision parks, all closed; total 1h03m22s (exact monotonic union).
+
+Delivery: restricted — "No public push/tag or live data migration now." Local commit only, of this phase's explicit records, after two bare full gates.
+
+Remaining:
+- Phases 12 and 13: implementation, each under its own fresh preflight and review allowance.
+- Ignored design artifacts are retained as evidence for Phases 12 and 13 until those phases complete.
+
+Lessons:
+- imported-manatee filed (methodology/skill): a design-only product phase has no reachable accepted close in primary full-lane mode; decide its terminal form at planning time. One occurrence.
+- Earlier Phase 11 lessons stand: nifty-termite, brilliant-mantis, vociferous-jerboa. lessons validate OK; attractive-lemming remains at three occurrences, graduation stays with the operator.
