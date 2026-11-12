@@ -2480,3 +2480,23 @@ Authority: the operator's standing direction that agents commit and push qualifi
 Changes: version 0.4.0 in project/pyproject.toml, project/castle/__init__.py, project/uv.lock and both package scripts; the 0.4.0 changelog entry, including the explicit backed-up v1 to v2 namespace migration that existing 0.3.0 namespaces need before they open; README and RELEASE.md scope. One correction: .github/scripts/package-qualify.py now allowlists tests/demo_incremental_cost.py, which Phase 12 added to the package's test directory without registering it, so the sdist qualification refused it. The release commit carries that fix.
 
 Qualification before commit: macOS package qualification passed (exact wheel castle-0.4.0-py3-none-any.whl ca0da81b9f4b893bcaf338d203c4dd17138ac8a358e1e09885f90ba25db75b2c, sdist castle-0.4.0.tar.gz c9e088c51518cc1bc3c79fd07bf75c4ed4af6cfd333317e597a760ed3e90dde9, byte-identical sdist-rebuilt wheel, installed smokes). Pending after this block: the macOS and Linux full gates and Linux package qualification on this exact tree, the commit, master CI, the annotated v0.4.0 tag and its CI, then the GitHub release with only the inspected wheel, sdist and SHA256SUMS, and verification of the downloaded assets and unchanged earlier releases. No outcome is claimed before it happens.
+
+## 2026-11-12 00:59 — RELEASE
+
+Release 0.4.0 — Publication outcomes and documentation closure
+
+Actual outcomes of the steps the RELEASE block listed as pending; that block is unchanged.
+
+- Release commit 6e1b40bbf48994c8e5d2791ee26f0d8f9220a879, fast-forward pushed to master after macOS ./bin/check all (197 passed, no warnings) and Linux ./bin/check all (191 passed, 6 macOS-only skips) on the same tree, with package qualification passing on both platforms.
+- Master CI run 43176200931 on that commit: success on macos-latest and ubuntu-latest (full package gate and exact wheel/sdist qualification).
+- Annotated tag v0.4.0 on that commit, pushed; the pre-push full-gate fallback passed and the checkout stayed clean. Tag CI run 43177890552: success on both platforms.
+- GitHub release v0.4.0 at the existing destination, not a draft or prerelease, with exactly three assets: castle-0.4.0-py3-none-any.whl (ca0da81b9f4b893bcaf338d203c4dd17138ac8a358e1e09885f90ba25db75b2c), castle-0.4.0.tar.gz (c9e088c51518cc1bc3c79fd07bf75c4ed4af6cfd333317e597a760ed3e90dde9) and SHA256SUMS (557bb3721ea1086c1c1fbc7505a7298e7210c8a0d2277c912176cbea842c0f66). All three were downloaded and are byte-identical to the inspected artifacts; SHA256SUMS verifies. The macOS and Linux builds produced identical artifact hashes.
+- Earlier releases preserved: v0.1.0 through v0.3.0 keep their tags and three assets each; re-downloaded v0.3.0 assets verify against its SHA256SUMS.
+- The pushed Phase 13 commit ff01141's master CI run 43174909089 failed only its sdist qualification step, because Phase 12 never registered tests/demo_incremental_cost.py in the package qualification allowlist. The release commit fixed that, and its CI is green.
+
+Documentation closure: brief section 25.1 discloses the excision resume window deferred as CODE-F004 and the migration's verified conversion of 0.3.0 receipts, and records the two Phase 12 residuals as threat-model exclusions under the operator's 2026-11-12 ruling (deliberate tampering, not detected or repaired), with the honest re-append case kept separate as a refused ordinary fault. User action sincere-jaguar has a reconciliation note and stays pending for the operator's judgment on brief section 24. No product, schema, tag or published artifact changed.
+
+Lessons:
+- none new; mighty-ammonite and agate-phoenix were filed at the Phase 13 close.
+
+Remaining: the operator's judgment on brief section 24 (sincere-jaguar). Four optional Linux qualification copies stay retained outside this repository; no cleanup is authorized or needed.

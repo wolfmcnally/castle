@@ -405,3 +405,17 @@ These checks keep their whole-sequence form:
 - Interrupted-publication recovery keeps the full path. It parses and validates the whole journal, hashes every object, rebuilds the whole index, and snapshots and compares remote rows around its own rebuild.
 - Excision keeps its whole-journal witness. It records the successor journal's SHA-256 after its publications and compares it at its reference and cleanup steps, because an honest merge or rebuild can re-sort earlier lines between them. Before validating receipts, excision cleanup runs the full CAS check.
 - Untouched objects, untouched index rows, the object-tree inventory and remote rows are checked by verify, rebuild, merge, migration, excision, recovery and `diagnose`.
+
+### 25.1 Amendments after Phase 13 review and release 0.4.0
+
+As of 2026-11-12, appended after Phase 13's single code critique and the 0.4.0 release; the text above is kept as written, and the version captured by the Phase 13 run is in that commit's history.
+
+Excision resume window (code critique finding CODE-F004, deferred to the Phase 13 record and disclosed here). Publication evidence holds the tail line, not a whole-prefix SHA-256. When an excision publication is resumed between saving its evidence and saving excision's own whole-journal witness, the resume checks that tail line and the whole-journal parse rather than a whole-prefix hash. A same-length, well-formed rewrite of earlier journal lines in that window is therefore not refused there. It is a deliberate in-place rewrite, one of the threat-model exclusions above; an honest merge or rebuild moves the tail or the publication's own line and is still refused. Once excision's witness is saved, its reference and cleanup steps compare the whole journal as before.
+
+Migration and receipts. Section 24 says receipts are unchanged by the v1 migration. That was true of its schema conversion but not of the content of 0.3.0 publication receipts, which bound the whole journal prefix. Since 0.4.0 the migration verifies each such receipt against the journal before commit and rebinds it to its own line's offset, length and digest; a receipt that does not verify refuses before commit and leaves the v1 database unchanged.
+
+Recorded status of the section 24 residuals under the 2026-11-12 ruling quoted at the head of this section. They are threat-model exclusions, not defects detected or repaired:
+- A coherent edit of both a located row and its witness inside namespace.sqlite: deliberate tampering, not detected on touch; diagnosis and recovery still refuse it.
+- A repeated event id carrying another object's identity and deliberately given a later timestamp: deliberate tampering, not detected on append; diagnosis and recovery still refuse it.
+
+Kept separate, because it is an ordinary fault and not an exclusion: an honest re-append of an already-minted record, including after the namespace lost its own located row, keeps the earlier timestamp and is refused by canonical order on the appended range (catch-up refuses a record that sorts at or before the tail). The Phase 13 crash proofs exercise it.
