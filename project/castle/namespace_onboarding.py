@@ -110,7 +110,10 @@ def inspect_seed(cas_root: Path, session: n.AuthorizedSession) -> SeedInventory:
 
 
 def _control(handle: n.NamespaceHandle, identity: str) -> bool:
-    size = handle.objects[identity][1]
+    row = handle.content_row(identity)
+    if row is None:
+        n._refuse("namespace-storage-recovery-required")
+    size = row[1]
     if size > n.MAX_MANIFEST_BYTES:
         return False
     raw = cas.object_path(handle.cas_root, identity).read_bytes()

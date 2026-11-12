@@ -1101,6 +1101,7 @@ def _assert_complete_synthetic_kickoff(
         exit_code: int = 0,
         model: str | None = None,
         effort: str | None = None,
+        preclaimed: bool = False,
     ) -> None:
         handoff = run_dir / f"{operation}-{attempt}.json"
         arguments = [
@@ -1128,6 +1129,11 @@ def _assert_complete_synthetic_kickoff(
             arguments.extend(["--cause", "Check the concrete correction once"])
         registered = run(*arguments)
         assert registered.returncode == 0, registered.stderr
+        if preclaimed:
+            # The defect under test: claiming the launch by hand before the
+            # watcher, which then refuses before creating any child.
+            claimed = run("start-advice", "--run-dir", str(run_dir), "--registration", str(handoff))
+            assert claimed.returncode == 0, claimed.stderr
         if harness in {"claude", "codex"}:
             executable = tmp_path / harness
             event = (
@@ -1186,7 +1192,11 @@ def _assert_complete_synthetic_kickoff(
                 text=True,
                 check=False,
             )
-            if primary and attempt == 3:
+            if preclaimed:
+                assert watched.returncode != 0 and "already launched" in watched.stderr, (
+                    watched.stderr
+                )
+            elif primary and attempt == 4:
                 assert watched.returncode != 0 and "maximum two" in watched.stderr, watched.stderr
             else:
                 assert watched.returncode == exit_code, watched.stderr
@@ -1290,9 +1300,143 @@ def _assert_complete_synthetic_kickoff(
         role_attempt("role.plan-review", "reviewer", "claude", 1, "initial", model="opus")
         (repository / "code.py").write_text("VALUE = 2\n")
         implemented = capture(repository, run_dir)
-        role_attempt("role.code-review", "critic", "claude", 1, "initial", model="opus")
+        role_attempt(
+            "role.code-review", "critic", "claude", 1, "initial", model="opus", preclaimed=True
+        )
+
+        def reconcile(attempt: int) -> subprocess.CompletedProcess[str]:
+            return run(
+                "reconcile-unstarted-advice",
+                "--run-dir",
+                str(run_dir),
+                "--operation",
+                "role.code-review",
+                "--attempt",
+                str(attempt),
+            )
+
+        budget = next((repository / ".kickoff" / "advice-budgets").glob("*.jsonl"))
+        ledger_before = budget.read_bytes()
+        dispatch_before = (run_dir / "role-dispatch.jsonl").read_bytes()
+        claim_before = (run_dir / "advice-launch-critic-1.json").read_bytes()
+        # Fails closed when the dispatch candidate is not in the recorded
+        # lineage, without writing anything.
+        lineage = run_dir / "lineage.jsonl"
+        lineage_before = lineage.read_bytes()
+        dispatched = json.loads(dispatch_before.splitlines()[-1])["dispatch_candidate_id"]
+        lineage.write_bytes(
+            b"".join(
+                line
+                for line in lineage_before.splitlines(keepends=True)
+                if dispatched.encode() not in line
+            )
+        )
+        unbound = reconcile(1)
+        assert unbound.returncode != 0 and "lineage" in unbound.stderr, unbound.stderr
+        lineage.write_bytes(lineage_before)
+        assert budget.read_bytes() == ledger_before
+        assert not (run_dir / "advice-reconciliation-critic-1.json").exists()
+        # Each refusal below writes nothing: no receipt and no ledger row.
+        receipt_file = run_dir / "advice-reconciliation-critic-1.json"
+        claim_file = run_dir / "advice-launch-critic-1.json"
+        dispatch_file = run_dir / "role-dispatch.jsonl"
+        later = dict(json.loads(claim_before), run=str(tmp_path / "another-run"), attempt=1)
+        later["pass"] = 2
+        for label, damage, restore, message in (
+            (
+                "later-claim-from-another-run",
+                lambda: budget.write_bytes(
+                    ledger_before + (json.dumps(later, sort_keys=True) + "\n").encode()
+                ),
+                lambda: budget.write_bytes(ledger_before),
+                "later advisory claim",
+            ),
+            (
+                "claim-mismatch",
+                lambda: claim_file.write_text(
+                    json.dumps(dict(json.loads(claim_before), attempt=9), sort_keys=True)
+                ),
+                lambda: claim_file.write_bytes(claim_before),
+                "does not match",
+            ),
+            (
+                "null-span",
+                lambda: dispatch_file.write_text(
+                    "".join(
+                        json.dumps(
+                            dict(record, intelligence_span_id=None)
+                            if record.get("operation") == "role.code-review"
+                            and record.get("attempt") == 1
+                            else record,
+                            sort_keys=True,
+                        )
+                        + "\n"
+                        for record in map(json.loads, dispatch_before.splitlines())
+                    )
+                ),
+                lambda: dispatch_file.write_bytes(dispatch_before),
+                "no intelligence span",
+            ),
+        ):
+            damage()
+            refused = reconcile(1)
+            restore()
+            assert refused.returncode != 0 and message in refused.stderr, (label, refused.stderr)
+            assert budget.read_bytes() == ledger_before, label
+            assert not receipt_file.exists(), label
+        # A later product change (such as a repair of this control) is recorded
+        # beside the dispatch candidate, never asserted equal to it.
+        (repository / "code.py").write_text("VALUE = 3\n")
+        moved = run("current-candidate", "--run-dir", str(run_dir)).stdout.strip()
+        assert moved != dispatched
+        # Positive: exactly one appended cancellation; originals unchanged.
+        refunded = reconcile(1)
+        assert refunded.returncode == 0, refunded.stderr
+        appended = budget.read_bytes()
+        assert appended.startswith(ledger_before)
+        added = [json.loads(line) for line in appended[len(ledger_before) :].splitlines()]
+        assert len(added) == 1
+        assert added[0]["not_started"] == json.loads(claim_before)
+        assert (run_dir / "role-dispatch.jsonl").read_bytes() == dispatch_before
+        assert (run_dir / "advice-launch-critic-1.json").read_bytes() == claim_before
+        receipt = json.loads((run_dir / "advice-reconciliation-critic-1.json").read_text())
+        assert (receipt["dispatch_candidate_id"], receipt["current_candidate_id"]) == (
+            dispatched,
+            moved,
+        )
+        (repository / "code.py").write_text("VALUE = 2\n")
+        # Exactly once.
+        again = reconcile(1)
+        assert again.returncode != 0 and "already reconciled" in again.stderr, again.stderr
+        assert budget.read_bytes() == appended
+        # A reconciled attempt is never claimed again: an identical claim would
+        # read as cancelled and its pass would never be counted.
+        reclaimed = run(
+            "start-advice",
+            "--run-dir",
+            str(run_dir),
+            "--registration",
+            str(run_dir / "role.code-review-1.json"),
+        )
+        assert reclaimed.returncode != 0 and "reconciled" in reclaimed.stderr, reclaimed.stderr
+        assert budget.read_bytes() == appended
+        # The refunded pass is available again: two real passes, then the cap.
         role_attempt("role.code-review", "critic", "claude", 2, "revision", model="opus")
         role_attempt("role.code-review", "critic", "claude", 3, "revision", model="opus")
+        # Fails closed on a launched dispatch (a child ran), on a refusal that
+        # never claimed, and on an earlier claim once later dispatches exist.
+        launched = reconcile(3)
+        assert launched.returncode != 0 and "not a rejected" in launched.stderr, launched.stderr
+        role_attempt("role.code-review", "critic", "claude", 4, "revision", model="opus")
+        launches = budget.read_bytes()
+        assert sum(b"not_started" in line for line in launches.splitlines()) == 1
+        unclaimed = reconcile(4)
+        assert unclaimed.returncode != 0 and "no recorded advisory claim" in unclaimed.stderr, (
+            unclaimed.stderr
+        )
+        stale_order = reconcile(1)
+        assert stale_order.returncode != 0 and "later dispatch" in stale_order.stderr
+        assert budget.read_bytes() == launches
     else:
         role_attempt(
             "role.plan",
@@ -1337,7 +1481,7 @@ def _assert_complete_synthetic_kickoff(
         if dispatch.get("state") != "opened"
     ]
     if primary:
-        assert len(dispatches) == 4
+        assert len(dispatches) == 5
         assert sum(d["accepted"] for d in dispatches) == 3
         assert {d["operation"] for d in dispatches} == {
             "role.plan-review",

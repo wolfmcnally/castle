@@ -35,6 +35,10 @@ _READS = {
     "export-snapshot": "export-snapshot",
     "inventory-excision": "inventory-excision",
     "preview-excision": "preview-excision",
+    "probe": "probe",
+    "page": "list-directory-page",
+    "changes": "changes-since",
+    "diagnose": "diagnose",
 }
 
 
@@ -46,11 +50,11 @@ def add_parser(commands: Any) -> None:
         "--domain-lock", type=Path, help="shared external domain lock; never removed"
     )
     verbs = parser.add_subparsers(dest="namespace_command", required=True)
-    for name in ("identity", "init", "info", "status", "recover", *_MUTATIONS, *_READS):
+    for name in ("identity", "init", "info", "status", "target", "recover", *_MUTATIONS, *_READS):
         verb = verbs.add_parser(name)
         if name in {"init", "recover", *_MUTATIONS, *_READS}:
             verb.add_argument("--request-file", type=Path, required=True)
-        if name == "status":
+        if name in {"status", "target"}:
             verb.add_argument("operation_id")
         if name in {"create-file", "replace-content", "import-folder"}:
             sources = verb.add_mutually_exclusive_group()
@@ -269,6 +273,8 @@ def _run(arguments: argparse.Namespace) -> Any:
             return handle.info()
         if verb == "status":
             return n.namespace_operation(handle, arguments.operation_id)
+        if verb == "target":
+            return n.namespace_operation_target(handle, arguments.operation_id)
         if verb in _MUTATIONS:
             return n.execute_namespace(handle, request, sources)
         destination = (

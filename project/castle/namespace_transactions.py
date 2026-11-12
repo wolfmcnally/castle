@@ -143,6 +143,7 @@ def _raise_saved(handle: store.NamespaceHandle, row: dict[str, Any]) -> None:
 
 
 def _replay(handle: store.NamespaceHandle, row: dict[str, Any]) -> n.MutationResult:
+    handle._check_operation(row, handle.load_info())
     if row["state"] == "retired":
         n._refuse("namespace-operation-retired")
     if row["state"] == "rejected":
@@ -189,6 +190,8 @@ def prepare(
     if request["kind"] == "expire-results":
         for target in request["args"]["operation_ids"]:
             target_row = _row(handle, target)
+            if target_row is not None:
+                handle._check_operation(target_row, info)
             if target_row and target_row["state"] in {"committed", "rejected"}:
                 directory = handle.root / "operations" / target
                 receipt["expiry"][target] = {
@@ -200,6 +203,12 @@ def prepare(
     content_io.check_capacity(receipt)
     encoded_receipt = content_io.encode_recipe(receipt)
     handle.db.execute("BEGIN IMMEDIATE")
+    # At most one operation is ever unsettled; a new one needs proof the last one finished.
+    (marked,) = handle.db.execute("SELECT unsettled_operation FROM coordinator_state").fetchone()
+    if marked is not None:
+        if not handle._settled(marked):
+            n._refuse("namespace-storage-recovery-required")
+        handle.db.execute("UPDATE coordinator_state SET unsettled_operation=NULL")
     handle.operation_id = identity
     handle.write_started = True
     handle.effect = "recovery-required"
@@ -236,7 +245,14 @@ def execute(
     row = _row(handle, value["operation_id"])
     if row is not None:
         handle.operation_id = value["operation_id"]
+        # Prove the touched row before any domain refusal is derived from it.
+        handle._check_operation(row, info)
         if row["state"] == "retired":
+            # Retirement removes the operation directory before its expiry
+            # settles, and ordinary admission refuses an unsettled expiry, so
+            # a surviving directory here is a forged or damaged row.
+            if (handle.root / "operations" / row["operation_id"]).exists():
+                n._refuse("namespace-storage-recovery-required")
             n._refuse("namespace-operation-retired")
         if row["fingerprint"] != n._fingerprint(value):
             n._refuse("namespace-operation-conflict")
@@ -277,24 +293,178 @@ def execute(
     return finish(handle, value["operation_id"])
 
 
-def _subtree(entries: dict[str, n.EntryRecord], identity: str) -> set[str]:
-    children: dict[str, list[str]] = {}
-    for entry in entries.values():
-        if entry.parent_id is not None:
-            children.setdefault(entry.parent_id, []).append(entry.entry_id)
-    result: set[str] = set()
-    pending = [identity]
-    while pending:
-        current = pending.pop()
-        if current in result:
-            n._refuse("namespace-cycle")
-        result.add(current)
-        pending.extend(children.get(current, []))
-    return result
+class _TreeView:
+    """The touched part of the live tree plus this request's overlay.
+
+    Every row it loads passes touch_entry; loaded originals also pass their
+    ancestry. Children come from live_names, so no mutation loads the tree.
+    """
+
+    def __init__(self, handle: store.NamespaceHandle, info: n.NamespaceInfo) -> None:
+        self.handle, self.info = handle, info
+        self.overlay: dict[str, n.EntryRecord | None] = {}
+        # Live overlay entries indexed once per write, so a request's checks
+        # stay linear in its own size (CODE-F020).
+        self._added_children: dict[str, set[str]] = {}
+        self._added_names: dict[tuple[str | None, str], set[str]] = {}
+
+    def original(self, identity: str) -> n.EntryRecord | None:
+        """A stored row this request rests on; any finding about it is damage.
+
+        A read may report the specific code, but a mutation must not record a
+        durable domain rejection that rests on a damaged row (CODE-F018).
+        """
+        try:
+            touched = self.handle.touch_entry(identity, self.info.revision)
+            if touched is None or not touched[1]:
+                return None
+            self.handle.touch_ancestry(touched[0], self.info)
+        except n.NamespaceError as error:
+            if error.code in store._DIAGNOSE_PASSTHROUGH:
+                raise
+            raise n.NamespaceError(
+                "namespace-storage-recovery-required", effect="recovery-required"
+            ) from error
+        return touched[0]
+
+    def get(self, identity: str | None) -> n.EntryRecord | None:
+        if identity is None:
+            return None
+        if identity in self.overlay:
+            return self.overlay[identity]
+        return self.original(identity)
+
+    def __contains__(self, identity: object) -> bool:
+        return isinstance(identity, str) and self.get(identity) is not None
+
+    def __getitem__(self, identity: str) -> n.EntryRecord:
+        found = self.get(identity)
+        if found is None:
+            raise KeyError(identity)
+        return found
+
+    def _unindex(self, identity: str) -> None:
+        previous = self.overlay.get(identity)
+        if previous is not None:
+            self._added_children[previous.parent_id].discard(identity)
+            self._added_names[(previous.parent_id, n._key(previous.name))].discard(identity)
+
+    def __setitem__(self, identity: str, entry: n.EntryRecord) -> None:
+        self._unindex(identity)
+        self.overlay[identity] = entry
+        self._added_children.setdefault(entry.parent_id, set()).add(identity)
+        self._added_names.setdefault((entry.parent_id, n._key(entry.name)), set()).add(identity)
+
+    def __delitem__(self, identity: str) -> None:
+        self._unindex(identity)
+        self.overlay[identity] = None
+
+    def children(self, identity: str) -> list[str]:
+        stored = [
+            child
+            for (child,) in self.handle.db.execute(
+                "SELECT entry_id FROM entries WHERE parent_id=? AND live=1 "
+                "ORDER BY comparison_key,entry_id",
+                (identity,),
+            )
+            if child not in self.overlay
+        ]
+        return stored + sorted(self._added_children.get(identity, ()))
+
+    def has_children(self, identity: str) -> bool:
+        """Whether a directory has a live child, without loading its children."""
+        if self._added_children.get(identity):
+            return True
+        for (child,) in self.handle.db.execute(
+            "SELECT entry_id FROM entries WHERE parent_id=? AND live=1", (identity,)
+        ):
+            if child not in self.overlay:
+                return True
+        return False
+
+    def members(self, identity: str) -> set[str]:
+        result: set[str] = set()
+        pending = [identity]
+        while pending:
+            current = pending.pop()
+            if current in result:
+                n._refuse("namespace-cycle")
+            result.add(current)
+            pending.extend(self.children(current))
+        return result
+
+    def check(self, info: n.NamespaceInfo) -> None:
+        """store._tree over the next state, restricted to what this request changed."""
+        handle = self.handle
+        originals = {key: self.original(key) for key in self.overlay}
+        live, total, _ = store.tree_totals(handle)
+        for key, entry in self.overlay.items():
+            if originals[key] is not None:
+                live, total = live - 1, total - store.entry_bytes(originals[key])
+            if entry is not None:
+                live, total = live + 1, total + store.entry_bytes(entry)
+        if live > n.MAX_ENTRIES:
+            self._limit()
+        for key, entry in self.overlay.items():
+            if entry is None:
+                if self.has_children(key):
+                    n._refuse("namespace-format-unsupported")
+                continue
+            store._validate_entry(entry, info.revision)
+            if key == info.root_id:
+                n._refuse("namespace-format-unsupported")
+            parent = self.get(entry.parent_id)
+            if parent is None or parent.kind != "directory":
+                n._refuse("namespace-format-unsupported")
+            comparison = n._key(entry.name)
+            stored = [
+                other
+                for (other,) in handle.db.execute(
+                    "SELECT entry_id FROM entries WHERE parent_id=? AND comparison_key=? "
+                    "AND live=1",
+                    (entry.parent_id, comparison),
+                )
+                if other not in self.overlay
+            ]
+            added = self._added_names.get((entry.parent_id, comparison), set()) - {key}
+            for other in stored:
+                # A durable rejection may rest only on a sibling that passes
+                # touched validation itself (CODE-F013).
+                sibling = self.original(other)
+                if (
+                    sibling is None
+                    or sibling.parent_id != entry.parent_id
+                    or n._key(sibling.name) != comparison
+                ):
+                    n._refuse("namespace-storage-recovery-required")
+            if stored or added:
+                n._refuse("namespace-name-conflict")
+        for key, entry in self.overlay.items():
+            seen: set[str] = set()
+            current = entry
+            while current is not None and current.entry_id != info.root_id:
+                if current.entry_id in seen:
+                    n._refuse("namespace-cycle")
+                seen.add(current.entry_id)
+                current = self.get(current.parent_id)
+            if entry is not None and current is None:
+                n._refuse("namespace-cycle")
+        from castle.namespace_snapshots import manifest
+
+        empty = len(n.canonical_bytes(manifest(info, {}), limit=n.MAX_MANIFEST_BYTES))
+        if empty + total + max(0, live - 1) > n.MAX_MANIFEST_BYTES:
+            self._limit()
+
+    def _limit(self) -> None:
+        """A limit rejection derived from tree_totals first re-derives them (PLAN-F006)."""
+        summary = store.summarize(self.handle.entries())
+        if store.tree_totals(self.handle) != summary:
+            n._refuse("namespace-storage-recovery-required")
+        n._refuse("namespace-limit-exceeded")
 
 
 def _content(handle: store.NamespaceHandle, cas_id: str, size: int) -> None:
-    row = handle.objects.get(cas_id)
+    row = handle.content_row(cas_id)
     if row is None or row[1] != size:
         n._refuse("namespace-content-mismatch")
     file = cas.object_path(handle.cas_root, cas_id)
@@ -309,7 +479,7 @@ def _changes(
     *,
     available: dict[str, int] | None = None,
 ) -> tuple[dict[str, n.EntryRecord], set[str]]:
-    entries = handle.entries()
+    entries = _TreeView(handle, info)
     kind, args = request["kind"], request["args"]
     revision = info.revision + 1
     affected: set[str] = set()
@@ -379,11 +549,20 @@ def _changes(
         source = entry(args["entry_id"])
         if source.entry_id == info.root_id and kind != "duplicate":
             n._refuse("namespace-root-immutable")
-        membership = _subtree(entries, source.entry_id)
+        # Only the subtree operations walk the subtree (CODE-F007); the others
+        # stay proportional to the touched rows and the new parent's ancestry.
+        membership = (
+            entries.members(source.entry_id)
+            if kind in {"delete-subtree", "duplicate"}
+            else {source.entry_id}
+        )
         if kind == "relocate":
             parent(args["parent_id"])
-            if args["parent_id"] in membership:
-                n._refuse("namespace-cycle")
+            ancestor = entries.get(args["parent_id"])
+            while ancestor is not None:
+                if ancestor.entry_id == source.entry_id:
+                    n._refuse("namespace-cycle")
+                ancestor = entries.get(ancestor.parent_id)
             entries[source.entry_id] = replace(
                 source, parent_id=args["parent_id"], name=args["name"], changed_revision=revision
             )
@@ -394,7 +573,7 @@ def _changes(
             )
             affected.add(source.entry_id)
         elif kind in {"delete-entry", "delete-subtree"}:
-            if kind == "delete-entry" and len(membership) != 1:
+            if kind == "delete-entry" and entries.has_children(source.entry_id):
                 n._refuse("namespace-directory-not-empty")
             if kind == "delete-subtree" and source.kind != "directory":
                 n._refuse("namespace-kind-mismatch")
@@ -448,7 +627,7 @@ def _changes(
         n._refuse()
     if len(affected) > n.MAX_ENTRIES:
         n._refuse("namespace-limit-exceeded")
-    store._tree(replace(info, revision=revision), entries)
+    entries.check(replace(info, revision=revision))
     return entries, affected
 
 
@@ -469,9 +648,6 @@ def _expire(handle: store.NamespaceHandle, request: dict[str, Any], current_time
                 "ULL,recovery_action=NULL WHERE operation_id=?"
             ),
             (identity,),
-        )
-        handle.db.execute(
-            "DELETE FROM dependencies WHERE owner_kind='operation' AND owner_id=?", (identity,)
         )
 
 
@@ -565,6 +741,9 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
                 publication_receipt = content_io.publish(handle, row)
             handle.publication_receipts[operation_id] = publication_receipt
             handle._cas_check(full=False)
+            # Locate the appended lines; drop proofs taken before publication.
+            handle._cas_position()
+            handle.forget_touched()
         entries, affected = _changes(handle, request, info)
     except n.NamespaceError as error:
         if error.code in {
@@ -578,7 +757,7 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
         rejection = n.NamespaceError(
             error.code, info.namespace_id, operation_id, info.revision, "none"
         )
-        entries, affected = handle.entries(), set()
+        entries, affected = None, set()
     completed = _now()
     handle.write_started = True
     handle.effect = "recovery-required"
@@ -586,19 +765,21 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
     if rejection is None:
         content_io.save_receipt(handle, row, publication_receipt)
     if rejection is None:
-        old_entries = handle.entries()
+        old_entries = {key: entries.original(key) for key in affected}
         # Vacate affected live names first; no observer sees intermediate rows.
         for identity in affected:
-            if identity in old_entries:
-                handle.db.execute("UPDATE entries SET live=0 WHERE entry_id=?", (identity,))
+            if old_entries[identity] is not None:
+                handle.vacate_entry(old_entries[identity])
         for identity in sorted(affected):
-            if identity in entries:
+            if entries.get(identity) is not None:
                 handle.db.execute(
                     "INSERT OR IGNORE INTO entry_reservations VALUES (?)", (identity,)
                 )
                 handle.write_entry(entries[identity])
             else:
-                handle.write_entry(old_entries[identity], live=False)
+                handle.write_entry(
+                    old_entries[identity], live=False, touched_revision=info.revision + 1
+                )
         if request["kind"] == "expire-results":
             _expire(handle, request, completed)
         snapshot_result = snapshots.commit(handle, request, recipe["snapshot"])
@@ -647,14 +828,7 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
             operation_id,
         ),
     )
-    handle.db.execute("DELETE FROM dependencies WHERE owner_kind='operation'")
-    handle.db.executemany(
-        "INSERT INTO dependencies VALUES (?,?,?,?)", sorted(operation_dependencies(handle))
-    )
-    handle.db.execute("DELETE FROM dependencies WHERE owner_kind='snapshot'")
-    handle.db.executemany(
-        "INSERT INTO dependencies VALUES (?,?,?,?)", sorted(snapshots.dependencies(handle))
-    )
+    handle.db.execute("UPDATE coordinator_state SET unsettled_operation=?", (operation_id,))
     n._authorize(handle.session, request["kind"])
     store._commit(handle.db)
     handle.publication_receipts.pop(operation_id, None)
@@ -668,6 +842,98 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
     if rejection is not None:
         raise rejection from None
     return result
+
+
+def _live(handle: store.NamespaceHandle, info: n.NamespaceInfo, identity: str) -> n.EntryRecord:
+    """One live entry and its ancestry, validated against current bytes."""
+    touched = handle.touch_entry(identity, info.revision)
+    if touched is None or not touched[1]:
+        n._refuse("namespace-entry-missing")
+    handle.touch_ancestry(touched[0], info)
+    return touched[0]
+
+
+def _child(
+    handle: store.NamespaceHandle, info: n.NamespaceInfo, parent: n.EntryRecord, name: str
+) -> n.EntryRecord:
+    """The live child of a validated directory named by the comparison key, via live_names."""
+    rows = handle.db.execute(
+        "SELECT entry_id FROM entries WHERE parent_id=? AND comparison_key=? AND live=1",
+        (parent.entry_id, n._key(name)),
+    ).fetchall()
+    if len(rows) != 1:
+        n._refuse("namespace-entry-missing")
+    return _live(handle, info, rows[0][0])
+
+
+def _probe(handle: store.NamespaceHandle, info: n.NamespaceInfo) -> n.NamespaceProbe:
+    live, _, files = store.tree_totals(handle)
+    position = handle._position()
+    if position is None:
+        n._refuse("namespace-storage-recovery-required")
+    return n.NamespaceProbe(
+        info.namespace_id,
+        info.database_generation,
+        info.revision,
+        info.cas,
+        live,
+        files,
+        position[1],
+        position[2],
+        position[7],
+    )
+
+
+def _page(
+    handle: store.NamespaceHandle, info: n.NamespaceInfo, args: dict[str, Any]
+) -> n.DirectoryPage:
+    directory = _live(handle, info, args["entry_id"])
+    if directory.kind != "directory":
+        n._refuse("namespace-kind-mismatch")
+    # live_names is unique on (parent_id, comparison_key), so the key alone
+    # orders a page, and each form seeks rather than scans (CODE-F024).
+    if args["after"] is None:
+        rows = handle.db.execute(
+            "SELECT entry_id FROM entries WHERE parent_id=? AND live=1 "
+            "ORDER BY comparison_key LIMIT ?",
+            (directory.entry_id, args["limit"] + 1),
+        ).fetchall()
+    else:
+        rows = handle.db.execute(
+            "SELECT entry_id FROM entries WHERE parent_id=? AND live=1 AND comparison_key>? "
+            "ORDER BY comparison_key LIMIT ?",
+            (directory.entry_id, n._key(args["after"]), args["limit"] + 1),
+        ).fetchall()
+    entries = [_live(handle, info, identity) for (identity,) in rows[: args["limit"]]]
+    more = len(rows) > args["limit"]
+    return n.DirectoryPage(entries, entries[-1].name if more else None)
+
+
+def _changes_since(
+    handle: store.NamespaceHandle, info: n.NamespaceInfo, args: dict[str, Any]
+) -> n.ChangePage:
+    if args["database_generation"] != info.database_generation:
+        # A cutover issued a fresh authority: the caller resynchronizes.
+        raise n.NamespaceError(
+            "namespace-revision-conflict", info.namespace_id, actual_revision=info.revision
+        )
+    rows = handle.db.execute(
+        "SELECT entry_id,touched_revision FROM entries WHERE (touched_revision,entry_id)>(?,?) "
+        "ORDER BY touched_revision,entry_id LIMIT ?",
+        (args["after_revision"], args["after_entry_id"] or "", args["limit"] + 1),
+    ).fetchall()
+    changes = []
+    for identity, touched_revision in rows[: args["limit"]]:
+        entry, live = handle.touch_entry(identity, info.revision)
+        if live:
+            handle.touch_ancestry(entry, info)
+        changes.append(n.EntryChange(entry, live, touched_revision))
+    more = len(rows) > args["limit"]
+    return n.ChangePage(
+        changes,
+        changes[-1].touched_revision if more else None,
+        changes[-1].entry.entry_id if more else None,
+    )
 
 
 def read(
@@ -695,6 +961,10 @@ def read(
         "export-snapshot": {"snapshot_id"},
         "inventory-excision": set(),
         "preview-excision": {"operation_id", "selection", "snapshot_actions"},
+        "probe": set(),
+        "list-directory-page": {"entry_id", "after", "limit"},
+        "changes-since": {"database_generation", "after_revision", "after_entry_id", "limit"},
+        "diagnose": set(),
     }
     if (
         not isinstance(kind, str)
@@ -711,6 +981,16 @@ def read(
         n._uuid(args["snapshot_id"])
     if "entry_id" in args:
         n._uuid(args["entry_id"])
+    if "limit" in args:
+        if n._integer(args["limit"]) < 1 or args["limit"] > n.MAX_PAGE:
+            n._refuse()
+    if kind == "list-directory-page" and args["after"] is not None:
+        args["after"] = n._name(args["after"])
+    if kind == "changes-since":
+        n._uuid(args["database_generation"])
+        n._integer(args["after_revision"])
+        if args["after_entry_id"] is not None:
+            n._uuid(args["after_entry_id"])
     if kind == "resolve":
         if not isinstance(args["components"], list) or len(args["components"]) > n.MAX_ENTRIES:
             n._refuse()
@@ -724,10 +1004,12 @@ def read(
             raise n.NamespaceError(
                 "namespace-revision-conflict", info.namespace_id, actual_revision=info.revision
             )
-        entries = handle.entries()
         if kind in {"inventory-excision", "preview-excision"}:
             from castle import namespace_excision as cutover
 
+            # Whole-sequence reads keep 0.3.0's full validation before they run.
+            handle._cas_check()
+            handle._validate()
             result = (
                 cutover.inventory(handle)
                 if kind == "inventory-excision"
@@ -738,30 +1020,33 @@ def read(
             result = n.SnapshotView(record, snapshots.catalog_view(handle, record))
         elif kind == "info":
             result = info
+        elif kind == "probe":
+            result = _probe(handle, info)
+        elif kind == "diagnose":
+            result = n.NamespaceDiagnosis(**handle.diagnose_admitted())
+        elif kind == "list-directory-page":
+            result = _page(handle, info, args)
+        elif kind == "changes-since":
+            result = _changes_since(handle, info, args)
         elif kind == "resolve":
-            result = entries[info.root_id]
+            result = _live(handle, info, info.root_id)
             for component in args["components"]:
                 if result.kind != "directory":
                     n._refuse("namespace-kind-mismatch")
-                found = [
-                    e
-                    for e in entries.values()
-                    if e.parent_id == result.entry_id and n._key(e.name) == n._key(component)
-                ]
-                if len(found) != 1:
-                    n._refuse("namespace-entry-missing")
-                result = found[0]
+                result = _child(handle, info, result, component)
         else:
-            if args["entry_id"] not in entries:
-                n._refuse("namespace-entry-missing")
-            result = entries[args["entry_id"]]
+            result = _live(handle, info, args["entry_id"])
             if kind == "list-directory":
                 if result.kind != "directory":
                     n._refuse("namespace-kind-mismatch")
-                result = sorted(
-                    (e for e in entries.values() if e.parent_id == result.entry_id),
-                    key=lambda e: (n._key(e.name), e.entry_id),
-                )
+                result = [
+                    _live(handle, info, identity)
+                    for (identity,) in handle.db.execute(
+                        "SELECT entry_id FROM entries WHERE parent_id=? AND live=1 "
+                        "ORDER BY comparison_key,entry_id",
+                        (result.entry_id,),
+                    ).fetchall()
+                ]
         n.canonical_bytes(
             result.manifest
             if isinstance(result, n.SnapshotView)
@@ -779,6 +1064,33 @@ def read(
     return n.ReadResult(info.namespace_id, info.revision, info.cas, result)
 
 
+def operation_target(handle: store.NamespaceHandle, status: n.OperationStatus) -> n.OperationTarget:
+    """The entry a committed operation acted on, from its validated stored request."""
+    primary = None
+    if status.state == "committed" and status.result is not None:
+        row = _row(handle, status.operation_id)
+        request = n._decode(row["canonical_request"]) if row and row["canonical_request"] else None
+        kind = request["kind"] if request else None
+        args = request["args"] if request else {}
+        if kind in {
+            "create-directory",
+            "create-file",
+            "replace-content",
+            "relocate",
+            "set-metadata",
+            "delete-entry",
+            "delete-subtree",
+        }:
+            primary = args["entry_id"]
+        elif kind == "duplicate":
+            primary = next(
+                pair["new_id"]
+                for pair in args["identities"]
+                if pair["source_id"] == args["entry_id"]
+            )
+    return n.OperationTarget(*store.astuple_status(status), primary)
+
+
 def operation(handle: store.NamespaceHandle, operation_id: str) -> n.OperationStatus:
     n._authorize(handle.session, "status")
     n._uuid(operation_id)
@@ -786,6 +1098,8 @@ def operation(handle: store.NamespaceHandle, operation_id: str) -> n.OperationSt
     try:
         info = handle.load_info()
         row = _row(handle, operation_id)
+        if row is not None:
+            handle._check_operation(row, info)
         if row is None:
             result = n.OperationStatus(
                 info.namespace_id, operation_id, "unknown", None, None, "none"

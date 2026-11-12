@@ -81,7 +81,8 @@ def start(
     with file.open("a+") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         handle.seek(0)
-        records = active_launches([json.loads(line) for line in handle if line.strip()])
+        rows = [json.loads(line) for line in handle if line.strip()]
+        records = active_launches(rows)
         matching = [r for r in records if r["operation"] == operation]
         if any(r["run"] == str(run_dir.resolve()) and r["attempt"] == attempt for r in matching):
             raise AdvisoryError("advisory invocation already launched; resume is another pass")
@@ -96,6 +97,10 @@ def start(
             "pass": len(matching) + 1,
             "cause": cause,
         }
+        # A claim identical to a reconciled one would read as cancelled and
+        # never be counted; a reconciled attempt is never claimed again.
+        if digest(row) in {digest(r["not_started"]) for r in rows if "not_started" in r}:
+            raise AdvisoryError("advisory attempt was reconciled; register a new attempt")
         handle.write(json.dumps(row, sort_keys=True) + "\n")
         handle.flush()
         return row
@@ -116,6 +121,44 @@ def cancel_unstarted(root: Path, phase: str, claim: dict[str, Any]) -> None:
             raise AdvisoryError("unstarted advisory claim is missing")
         handle.write(json.dumps({"not_started": claim}, sort_keys=True) + "\n")
         handle.flush()
+
+
+def reconcile_unstarted(root: Path, phase: str, claim: dict[str, Any], receipt: str) -> None:
+    """Refund one claim proven never to have reached a child, appending once.
+
+    The caller has already verified the rejected, not-dispatched receipt. This
+    keeps the ledger rule: a pass is charged only after process creation. The
+    claim must still be active and must be its operation's latest active
+    claim; the original row is never altered.
+    """
+    with budget_path(root, phase).open("a+") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        handle.seek(0)
+        _check_reconcilable([json.loads(line) for line in handle if line.strip()], claim)
+        handle.write(
+            json.dumps({"not_started": claim, "reconciled_receipt": receipt}, sort_keys=True) + "\n"
+        )
+        handle.flush()
+
+
+def _check_reconcilable(rows: list[dict[str, Any]], claim: dict[str, Any]) -> None:
+    active = active_launches(rows)
+    if claim not in active:
+        raise AdvisoryError("advisory claim is not active: missing or already reconciled")
+    same = [row for row in active if row["operation"] == claim["operation"]]
+    if same[-1] != claim:
+        raise AdvisoryError("a later advisory claim exists; only the latest can be reconciled")
+
+
+def check_reconcilable(root: Path, phase: str, claim: dict[str, Any]) -> None:
+    """Read-only precheck, so a refused reconciliation writes nothing."""
+    file = budget_path(root, phase)
+    rows = (
+        [json.loads(line) for line in file.read_text().splitlines() if line.strip()]
+        if file.exists()
+        else []
+    )
+    _check_reconcilable(rows, claim)
 
 
 def launches(root: Path, phase: str) -> list[dict[str, Any]]:

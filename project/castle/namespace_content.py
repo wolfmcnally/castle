@@ -69,7 +69,9 @@ def source(
             or "sha256:" + hashlib.sha256(data).hexdigest() != identity
         ):
             n._refuse("namespace-content-mismatch")
-    if request["kind"] == "import-folder" and set(declared) - set(frozen) - set(handle.objects):
+    if request["kind"] == "import-folder" and {
+        i for i in set(declared) - set(frozen) if handle.content_row(i) is None
+    }:
         n._refuse("namespace-input-unfrozen")
     return frozen
 
@@ -82,21 +84,28 @@ def new_requests(
         request["operation_id"],
         handle.load_info().database_generation,
     }
-    for table, field in (
-        ("entry_reservations", "entry_id"),
-        ("snapshot_reservations", "snapshot_id"),
-        ("operations", "operation_id"),
-    ):
-        used.update(row[0] for row in handle.db.execute(f"SELECT {field} FROM {table}"))
+    used |= handle.authority_ids()
+
+    def taken(value: str) -> bool:
+        # Primary-key lookups: a fresh uuid never needs every reserved id loaded.
+        return value in used or any(
+            handle.db.execute(f"SELECT 1 FROM {table} WHERE {field}=?", (value,)).fetchone()
+            for table, field in (
+                ("entry_reservations", "entry_id"),
+                ("snapshot_reservations", "snapshot_id"),
+                ("operations", "operation_id"),
+            )
+        )
+
     if request["kind"] == "import-folder":
         used.update(e["entry_id"] for e in request["args"]["entries"])
     used.update(v for k, v in request["args"].items() if k in {"entry_id", "snapshot_id"})
     result = []
-    for identity in sorted(set(payloads) - set(handle.objects)):
+    for identity in sorted(i for i in payloads if handle.content_row(i) is None):
         allocated = []
         while len(allocated) < 2:
             value = str(uuid.uuid4())
-            if value not in used:
+            if not taken(value):
                 used.add(value)
                 allocated.append(value)
         result.append(

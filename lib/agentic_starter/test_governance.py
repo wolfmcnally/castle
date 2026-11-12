@@ -470,6 +470,8 @@ def validate(root: Path) -> dict[str, Any]:
         errors.append("reset_limits must be a mapping")
         limits = {}
     budget = manifest.get("test_budget_delta", {"families": 0, "leaves": 0})
+    approval = manifest.get("budget_approval")
+    approval_named = isinstance(approval, str) and bool(approval.strip())
     if not isinstance(budget, dict):
         errors.append("test_budget_delta must be a mapping")
         budget = {"families": 0, "leaves": 0}
@@ -487,7 +489,7 @@ def validate(root: Path) -> dict[str, Any]:
         if not isinstance(delta, int):
             errors.append(f"test_budget_delta.{dimension} must be an integer")
             continue
-        if delta > 0 and not isinstance(manifest.get("budget_approval"), str):
+        if delta > 0 and not approval_named:
             errors.append(f"positive {dimension} budget requires a named budget_approval")
         allowed = int(baseline_count * ratio_limit) + delta
         if current_count > allowed:
@@ -601,6 +603,19 @@ def validate(root: Path) -> dict[str, Any]:
     active = set(initial_active)
     available_retirements = set(reset_retired_ids)
     consumed_retirements: set[str] = set()
+    # A named approval funds admissions without a retirement. An admission
+    # row is a new family and a new leaf, so it consumes one approved unit of
+    # each, and the smaller approved delta bounds the funded count.
+    approved = [
+        budget.get(dimension, 0) if isinstance(budget, dict) else 0
+        for dimension in ("families", "leaves")
+    ]
+    budget_units = (
+        min(approved)
+        if approval_named and all(type(units) is int and units > 0 for units in approved)
+        else 0
+    )
+    budget_funded_admissions = 0
     seen_retirement_targets: set[str] = set()
     post_reset_retirement_ids: set[str] = set()
     post_reset_started = False
@@ -659,7 +674,12 @@ def validate(root: Path) -> dict[str, Any]:
         if row.get("disposition") != "retain" or row.get("replacement") != proof_id:
             errors.append(f"post-baseline admission must retain and self-bind: {proof_id}")
         compensation = row.get("compensating_retirement")
-        if compensation not in available_retirements:
+        if compensation is None and budget_units > 0:
+            # Funded by the named approved budget: one family and one leaf.
+            budget_funded_admissions += 1
+            if budget_funded_admissions > budget_units:
+                errors.append(f"post-baseline admission exceeds the approved budget: {proof_id}")
+        elif compensation not in available_retirements:
             errors.append(f"post-baseline admission lacks an available retirement: {proof_id}")
         elif compensation in consumed_retirements:
             errors.append(f"retirement budget is reused by admission: {proof_id}")

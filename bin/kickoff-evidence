@@ -2178,6 +2178,118 @@ def command_start_advice(arguments: argparse.Namespace) -> None:
     print("ADVICE LAUNCH RECORDED")
 
 
+def command_reconcile_unstarted_advice(arguments: argparse.Namespace) -> None:
+    """Refund an advisory pass whose launch provably never created a child.
+
+    The watcher writes a rejected, not-dispatched dispatch receipt only on its
+    pre-launch paths; every post-launch outcome is recorded as accepted. This
+    command checks that receipt, the matching active claim and that the
+    dispatch candidate is in this run's recorded lineage, then appends one
+    cancellation. It never alters the original
+    claim, the receipt or any artifact, and refuses every started, uncertain,
+    mismatched or already-reconciled case.
+    """
+    run = validate_run_dir(arguments.run_dir)
+    root = Path(run["repository_root"])
+    operation, attempt = arguments.operation, arguments.attempt
+    if run["workflow"]["mode"] != "primary":
+        raise EvidenceError("reconciliation applies only to primary-mode advisory claims")
+    registrations = [
+        record
+        for record in load_jsonl(arguments.run_dir / "role-attempts.jsonl")
+        if record.get("operation") == operation and record.get("attempt") == attempt
+    ]
+    if len(registrations) != 1:
+        raise EvidenceError("reconciliation requires exactly one registered attempt")
+    registration = registrations[0]
+    validate_role_record(registration, run)
+    events = [
+        record
+        for record in load_jsonl(arguments.run_dir / "role-dispatch.jsonl")
+        if record.get("operation") == operation
+    ]
+    mine = [record for record in events if record.get("attempt") == attempt]
+    if any(record.get("attempt", 0) > attempt for record in events):
+        raise EvidenceError("a later dispatch exists for this operation")
+    terminal = mine[-1] if mine else None
+    if (
+        not mine
+        or [record.get("state") for record in mine] not in (["rejected"], ["opened", "rejected"])
+        or terminal.get("accepted") is not False
+        or terminal.get("idle_telemetry") != "not-dispatched"
+        or terminal.get("wait_span_id") is not None
+        or terminal.get("dispatch_candidate_id") != terminal.get("return_candidate_id")
+        or any(
+            record.get("intelligence_span_id") != terminal.get("intelligence_span_id")
+            for record in mine
+        )
+    ):
+        raise EvidenceError("dispatch is not a rejected, not-dispatched prelaunch receipt")
+    # The receipt is bound to the candidate this run recorded at dispatch. A
+    # repair of this control necessarily moves the product candidate, so the
+    # current candidate is recorded beside it, never asserted equal.
+    lineage = {item["candidate_id"] for item in load_jsonl(arguments.run_dir / "lineage.jsonl")}
+    if terminal["dispatch_candidate_id"] not in lineage:
+        raise EvidenceError("dispatch candidate is not in this run's recorded lineage")
+    current = product_manifest(root)["candidate_id"]
+    span_id = terminal.get("intelligence_span_id")
+    if span_id is None:
+        raise EvidenceError("dispatch has no intelligence span to prove no child")
+    try:
+        span = closed_span(engine_root=root, trace_id=run["telemetry_trace_id"], span_id=span_id)
+        children = [
+            item
+            for item in closed_spans(engine_root=root, trace_id=run["telemetry_trace_id"])
+            if item.get("parent_span_id") == span_id
+        ]
+    except TelemetryError as exc:
+        raise EvidenceError(f"dispatch span is not provably closed: {exc}") from exc
+    if span.get("outcome") == "success" or children:
+        raise EvidenceError("dispatch span shows a started child")
+    claim_path = arguments.run_dir / f"advice-launch-{registration['role']}-{attempt}.json"
+    if not claim_path.is_file():
+        raise EvidenceError("no recorded advisory claim for this attempt")
+    claim = load_json(claim_path)
+    if not isinstance(claim, dict) or (
+        claim.get("run"),
+        claim.get("operation"),
+        claim.get("attempt"),
+    ) != (str(arguments.run_dir.resolve()), operation, attempt):
+        raise EvidenceError("advisory claim does not match this run, operation and attempt")
+    try:
+        advisory.check_reconcilable(root, run["phase"], claim)
+    except advisory.AdvisoryError as exc:
+        raise EvidenceError(str(exc)) from exc
+    receipt = {
+        "schema_version": SCHEMA_VERSION,
+        "operation": operation,
+        "attempt": attempt,
+        "claim_sha256": advisory.digest(claim),
+        "dispatch_receipt_sha256": advisory.digest(terminal),
+        "dispatch_candidate_id": terminal["dispatch_candidate_id"],
+        "current_candidate_id": current,
+        "intelligence_span_id": span_id,
+    }
+    receipt_path = (
+        arguments.run_dir / f"advice-reconciliation-{registration['role']}-{attempt}.json"
+    )
+    if receipt_path.exists():
+        # A repeat (or the completion of an interrupted call) must describe the
+        # same claim and dispatch; the observed current candidate may differ.
+        recorded = load_json(receipt_path)
+        stable = {key: value for key, value in receipt.items() if key != "current_candidate_id"}
+        if {k: v for k, v in recorded.items() if k != "current_candidate_id"} != stable:
+            raise EvidenceError("a different reconciliation is already recorded")
+        receipt = recorded
+    else:
+        atomic_json(receipt_path, receipt)
+    try:
+        advisory.reconcile_unstarted(root, run["phase"], claim, advisory.digest(receipt))
+    except advisory.AdvisoryError as exc:
+        raise EvidenceError(str(exc)) from exc
+    print("ADVICE CLAIM RECONCILED; the pass was never started")
+
+
 def command_ingest_advice(arguments: argparse.Namespace) -> None:
     validate_run_dir(arguments.run_dir)
     document = (
@@ -5322,6 +5434,14 @@ def build_parser() -> argparse.ArgumentParser:
     add_run_dir(start_advice)
     start_advice.add_argument("--registration", type=Path, required=True)
     start_advice.set_defaults(handler=command_start_advice)
+    reconcile_advice = subparsers.add_parser(
+        "reconcile-unstarted-advice",
+        description="Refund an advisory pass whose watcher launch was rejected before any child.",
+    )
+    add_run_dir(reconcile_advice)
+    reconcile_advice.add_argument("--operation", choices=sorted(REVIEW_OPERATIONS), required=True)
+    reconcile_advice.add_argument("--attempt", type=int, required=True)
+    reconcile_advice.set_defaults(handler=command_reconcile_unstarted_advice)
     accept_primary = subparsers.add_parser("accept-primary")
     add_run_dir(accept_primary)
     accept_primary.add_argument("--input", type=Path, required=True)

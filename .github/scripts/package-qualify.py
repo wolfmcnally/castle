@@ -35,6 +35,7 @@ MODULES = frozenset(
         "namespace_environment",
         "namespace_excision",
         "namespace_onboarding",
+        "namespace_migrate_v1",
         "namespace_replacement",
         "namespace_snapshots",
         "namespace_store",
@@ -57,6 +58,7 @@ TESTS = frozenset(
         "test_namespace",
         "test_namespace_consumers",
         "test_namespace_excision",
+        "test_namespace_incremental",
         "test_namespace_onboarding",
         "test_namespace_snapshots",
     ]

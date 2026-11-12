@@ -9,9 +9,9 @@ reset_limits:
   min_historical_recall: 0.8
   min_mutant_recall: 0.8
 test_budget_delta:
-  families: 0
-  leaves: 0
-budget_approval: null
+  families: 1
+  leaves: 1
+budget_approval: "Root ruling 2026-11-11T21:59Z: one-time +1 family and +1 leaf for the separately named Phase 12 incremental-admission proof"
 critical_risks:
   custody:
     state: applicable
@@ -928,8 +928,8 @@ families:
 - id: castle-namespace
   kind: pytest
   selectors: ["project/tests/test_namespace.py"]
-  source_paths: ["project/tests/test_namespace.py", "project/tests/test_namespace_snapshots.py", "project/tests/test_namespace_onboarding.py", "project/tests/test_namespace_excision.py", "project/tests/test_namespace_consumers.py"]
-  covers: ["project/castle/namespace.py", "project/castle/namespace_store.py", "project/castle/namespace_transactions.py", "project/castle/namespace_content.py", "project/castle/namespace_snapshots.py", "project/castle/namespace_excision.py", "project/castle/namespace_replacement.py", "project/castle/namespace_onboarding.py", "project/castle/namespace_environment.py", "project/examples/namespace_demo.py", "project/tests/test_namespace.py", "project/tests/test_namespace_snapshots.py", "project/tests/test_namespace_onboarding.py", "project/tests/test_namespace_excision.py"]
+  source_paths: ["project/tests/test_namespace.py", "project/tests/test_namespace_snapshots.py", "project/tests/test_namespace_onboarding.py", "project/tests/test_namespace_excision.py", "project/tests/test_namespace_consumers.py", "project/tests/test_namespace_incremental.py"]
+  covers: ["project/castle/namespace.py", "project/castle/namespace_store.py", "project/castle/namespace_transactions.py", "project/castle/namespace_content.py", "project/castle/namespace_snapshots.py", "project/castle/namespace_excision.py", "project/castle/namespace_replacement.py", "project/castle/namespace_onboarding.py", "project/castle/namespace_migrate_v1.py", "project/castle/namespace_environment.py", "project/examples/namespace_demo.py", "project/tests/test_namespace.py", "project/tests/test_namespace_snapshots.py", "project/tests/test_namespace_onboarding.py", "project/tests/test_namespace_excision.py", "project/tests/test_namespace_incremental.py"]
   contract: "Concurrent ACID namespace operations, multi-payload folder admission, explicit snapshots, seed provenance, coordinated epoch excision/fresh authority replacement and durable restart/refusal."
   risk_class: product-contract
   oracle: "Independent forests/canonical bytes/identity sets, exact CAS and retained snapshot dependency images, all-sighting seed evidence, admission/export races, real hot-journal/publication/cutover process-death and sync/uncertain-commit faults, independently chosen removed-only sentinel scans and preserved unknown-residue refusals."

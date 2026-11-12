@@ -18,6 +18,18 @@ from castle import cas_recovery as publication
 from castle import namespace as n
 from castle import namespace_content as content
 from castle import namespace_snapshots as snapshots
+from castle import namespace_store as store
+
+
+def _status(case, operation_id):
+    with case.open() as handle:
+        return n.namespace_operation(handle, operation_id)
+
+
+def _diagnose(case):
+    """v2 whole-sequence refuse-only check; the same check the public diagnose read runs."""
+    with case.open() as handle:
+        return handle._diagnose()
 
 
 def identity():
@@ -133,19 +145,17 @@ def semantic_proof(tmp_path, monkeypatch, Case, tree):
         wanted = {("snapshot", sid, record.cas_id, "manifest")} | {
             ("snapshot", sid, key, "member") for key in sources
         }
-        assert set(h.db.execute("SELECT * FROM dependencies WHERE owner_kind='snapshot'")) == wanted
-        assert set(
-            h.db.execute(
-                "SELECT cas_id FROM dependencies WHERE owner_kind='operation' AND owner_id=?",
-                (request.operation_id,),
-            )
-        ) == {(key,) for key in sources}
-        assert set(
-            h.db.execute(
-                "SELECT cas_id FROM dependencies WHERE owner_kind='operation' AND owner_id=?",
-                (capture.operation_id,),
-            )
-        ) == {(record.cas_id,)}
+        assert {row for row in store.dependency_rows(h) if row[0] == "snapshot"} == wanted
+        assert {
+            (row[2],)
+            for row in store.dependency_rows(h)
+            if row[:2] == ("operation", request.operation_id)
+        } == {(key,) for key in sources}
+        assert {
+            (row[2],)
+            for row in store.dependency_rows(h)
+            if row[:2] == ("operation", capture.operation_id)
+        } == {(record.cas_id,)}
         assert len(journal.read_journal(case.cas_root)) == len(before_records) + 1
         # Current mutation never edits the explicit historic capture.
         file_id = entries[2]["entry_id"]
@@ -204,7 +214,7 @@ def semantic_proof(tmp_path, monkeypatch, Case, tree):
         assert (
             snapshots._retained(h)[0].snapshot == record and snapshots._retained(h)[0].live is False
         )
-        assert set(h.db.execute("SELECT * FROM dependencies WHERE owner_kind='snapshot'")) == wanted
+        assert {row for row in store.dependency_rows(h) if row[0] == "snapshot"} == wanted
         assert cas.object_path(case.cas_root, record.cas_id).read_bytes() == expected_bytes
         for kind in ("inspect-snapshot", "export-snapshot"):
             with pytest.raises(n.NamespaceError, match="namespace-entry-missing"):
@@ -278,12 +288,11 @@ def semantic_proof(tmp_path, monkeypatch, Case, tree):
                 and (case.cas_root / "journal.jsonl").read_bytes() == journal_before
             )
             assert n.namespace_operation(h, request.operation_id).state == "rejected"
-            assert set(
-                h.db.execute(
-                    "SELECT cas_id FROM dependencies WHERE owner_kind='operation' AND owner_id=?",
-                    (request.operation_id,),
-                )
-            ) == {(key,) for key in sources}
+            assert {
+                (row[2],)
+                for row in store.dependency_rows(h)
+                if row[:2] == ("operation", request.operation_id)
+            } == {(key,) for key in sources}
 
     for mode in ("equal", "same", "changed"):
         case = Case(tmp_path / ("forest-race-" + mode))
@@ -526,14 +535,24 @@ def restart_proof(tmp_path, monkeypatch, Case, tree, child):
             result = case.apply(h, "snapshot", {"snapshot_id": identity()})
         if fault == "dependency":
             with sqlite3.connect(case.root / "namespace.sqlite") as db:
-                db.execute("DELETE FROM dependencies WHERE owner_kind='snapshot'")
+                # v2 never stores snapshot dependency rows: a stored one is damage.
+                db.execute(
+                    "INSERT INTO dependencies VALUES ('snapshot',?,?,'manifest')",
+                    (result.snapshot.snapshot_id, result.snapshot.cas_id),
+                )
         else:
             file = cas.object_path(case.cas_root, result.snapshot.cas_id)
             file.chmod(0o600)
             file.write_bytes(b"x" * result.snapshot.size)
             file.chmod(0o444)
-        with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
-            case.open()
+        # v2: untouched snapshot damage; whole-sequence checks still refuse it.
+        case.open().close()
+        for action in (
+            lambda: _diagnose(case),
+            lambda: n.recover_namespace(case.root, case.cas_root, case.session, None),
+        ):
+            with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+                action()
 
 
 def _redacted_fixtures(tmp_path, Case, tree):
@@ -1034,15 +1053,8 @@ def isolated_catalog_proof(tmp_path, monkeypatch, Case):
                     "UPDATE snapshots SET cas_id=?,size=? WHERE snapshot_id=?",
                     (replacement.cas_id, replacement.size, record.snapshot_id),
                 )
-                db.execute("DELETE FROM dependencies")
-                db.execute(
-                    "INSERT INTO dependencies VALUES ('snapshot',?,?,'manifest')",
-                    (record.snapshot_id, replacement.cas_id),
-                )
-                db.execute(
-                    "INSERT INTO dependencies VALUES ('operation',?,?,'request-result')",
-                    (result.operation_id, replacement.cas_id),
-                )
+                # v2 stores only entry dependency rows; snapshot and operation
+                # dependencies are computed from these rows where used.
 
         def image(root):
             return {
@@ -1053,8 +1065,11 @@ def isolated_catalog_proof(tmp_path, monkeypatch, Case):
 
         before_ops = image(case.root / "operations")
         before_cas = image(case.cas_root)
+        # v2: ordinary open no longer decodes every snapshot; diagnosis and
+        # recovery, both whole-sequence, still refuse the forged catalog.
+        case.open().close()
         for action in (
-            case.open,
+            lambda: _diagnose(case),
             lambda: n.recover_namespace(case.root, case.cas_root, case.session, None),
         ):
             with pytest.raises(n.NamespaceError, match="^namespace-storage-recovery-required$"):
@@ -1080,10 +1095,9 @@ def isolated_catalog_proof(tmp_path, monkeypatch, Case):
                     with pytest.raises(
                         n.NamespaceError, match="^namespace-storage-recovery-required$"
                     ):
-                        case.open()
+                        _diagnose(case)
                     patch.setattr(snapshots, "validate_provenance", lambda *args, **kwargs: None)
-                with case.open() as h:
-                    assert h.info().revision == 1
+                assert _diagnose(case)["revision"] == 1
 
 
 def typed_outcome_proof(tmp_path, Case):
@@ -1133,8 +1147,12 @@ def typed_outcome_proof(tmp_path, Case):
                 "UPDATE operations SET " + field + "=? WHERE operation_id=?",
                 (n.canonical_bytes(value).decode(), operation_id),
             )
+        # v2: the marked last operation is touched at open; an earlier row is
+        # touched by its status; diagnosis and recovery check every row.
+        touched = [lambda: _status(case, operation_id)] if fault == "result-join" else [case.open]
         for action in (
-            case.open,
+            *touched,
+            lambda: _diagnose(case),
             lambda: n.recover_namespace(case.root, case.cas_root, case.session, None),
         ):
             with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):

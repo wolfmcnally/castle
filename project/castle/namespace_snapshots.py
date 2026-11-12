@@ -38,7 +38,7 @@ def capture(
         if (
             check_content
             and entry.cas_id
-            and handle.objects.get(entry.cas_id, (None, None))[1] != entry.size
+            and (handle.content_row(entry.cas_id) or (None, None))[1] != entry.size
         ):
             n._refuse("namespace-content-mismatch")
     raw = n.canonical_bytes(manifest(info, entries), limit=n.MAX_MANIFEST_BYTES)
@@ -156,9 +156,9 @@ def _decode_manifest(
     _tree(replace(info, revision=record.captured_revision), entries)
     if check_content:
         for entry in entries.values():
-            if entry.cas_id and handle.objects.get(entry.cas_id, (None, None))[1] != entry.size:
+            if entry.cas_id and (handle.content_row(entry.cas_id) or (None, None))[1] != entry.size:
                 n._refuse("namespace-storage-recovery-required")
-        if handle.objects.get(record.cas_id, (None, None))[1] != record.size:
+        if (handle.content_row(record.cas_id) or (None, None))[1] != record.size:
             n._refuse("namespace-storage-recovery-required")
     return value
 
@@ -232,7 +232,7 @@ def dependencies(
             members = cached[1]
         if check_content:
             for identity, size in {**members, record.cas_id: record.size}.items():
-                if handle.objects.get(identity, (None, None))[1] != size:
+                if (handle.content_row(identity) or (None, None))[1] != size:
                     n._refuse("namespace-storage-recovery-required")
         result.add(("snapshot", record.snapshot_id, record.cas_id, "manifest"))
         result.update(("snapshot", record.snapshot_id, identity, "member") for identity in members)

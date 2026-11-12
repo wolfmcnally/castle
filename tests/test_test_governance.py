@@ -21,8 +21,8 @@ def test_parameterized_leaves_collapse_to_one_family() -> None:
 
 def test_inventory_counts_executable_families_and_expanded_leaves() -> None:
     observed = governance.inventory(REPO_ROOT)
-    assert observed["counts"] == {"families": 163, "leaves": 218}
-    assert observed["by_kind"]["pytest"] == {"families": 141, "leaves": 196}
+    assert observed["counts"] == {"families": 164, "leaves": 219}
+    assert observed["by_kind"]["pytest"] == {"families": 142, "leaves": 197}
     # Disposable assay controls must receive their explicitly isolated environment.
     child = governance._run(
         [sys.executable, "-c", "import os; assert os.environ.get('ASSAY_LANE') == 'copy'"],
@@ -44,12 +44,13 @@ def test_family_or_leaf_cap_overrun_fails_closed(
 ) -> None:
     original = governance.inventory(REPO_ROOT)
     over = copy.deepcopy(original)
-    over["counts"]["families"] = 164
+    # Caps are the 20% reset ceiling plus the named approved +1/+1 budget.
+    over["counts"]["families"] = 165
     monkeypatch.setattr(governance, "inventory", lambda _root: over)
     with pytest.raises(governance.GovernanceError, match="families cap exceeded"):
         governance.validate(REPO_ROOT)
-    over["counts"]["families"] = 163
-    over["counts"]["leaves"] = 233
+    over["counts"]["families"] = 164
+    over["counts"]["leaves"] = 234
     with pytest.raises(governance.GovernanceError, match="leaves cap exceeded"):
         governance.validate(REPO_ROOT)
 
@@ -183,6 +184,36 @@ def test_positive_growth_requires_named_approval(
     monkeypatch.setattr(governance, "load_yaml", unapproved)
     with pytest.raises(governance.GovernanceError, match="positive families budget"):
         governance.validate(REPO_ROOT)
+    mode[0] = "blank"
+
+    def blank(path: Path):
+        payload = original(path)
+        if path.name == "proof-estate.yaml":
+            payload["budget_approval"] = "   "
+        return payload
+
+    monkeypatch.setattr(governance, "load_yaml", blank)
+    # A blank approval names nothing: the budget is refused, and the
+    # budget-funded admission falls back to the original retirement failure.
+    with pytest.raises(
+        governance.GovernanceError,
+        match="positive families budget[^$]*lacks an available retirement",
+    ) as refused:
+        governance.validate(REPO_ROOT)
+    assert "positive leaves budget" in str(refused.value)
+
+    def leaves_only(path: Path):
+        payload = original(path)
+        if path.name == "proof-estate.yaml":
+            payload["test_budget_delta"]["families"] = 0
+        return payload
+
+    monkeypatch.setattr(governance, "load_yaml", leaves_only)
+    # An admission is a new family as well as a new leaf: an approval of
+    # leaves alone funds none, and the admission needs its retirement again.
+    with pytest.raises(governance.GovernanceError, match="lacks an available retirement"):
+        governance.validate(REPO_ROOT)
+    monkeypatch.setattr(governance, "load_yaml", unapproved)
     mode[0] = "selection"
     with pytest.raises(governance.GovernanceError, match="selection must be frozen"):
         governance.validate(REPO_ROOT)
@@ -206,7 +237,13 @@ def test_positive_growth_requires_named_approval(
                     row.get("record_type") == "proof_retirement" and row.get("proof_id") == target
                 )
             ]
-        admissions[-1]["compensating_retirement"] = retirements[0]["proof_id"]
+        if lifecycle_mode[0] == "exhausted":
+            # A second budget-funded admission exceeds the one approved leaf.
+            extra = dict(admissions[-1])
+            extra["proof_id"] = extra["replacement"] = extra["proof_id"] + "_again"
+            return [*rows, extra]
+        reused = [row for row in admissions if row["compensating_retirement"] is not None][-1]
+        reused["compensating_retirement"] = retirements[0]["proof_id"]
         return rows
 
     monkeypatch.setattr(governance, "load_ledger", broken_lifecycle)
@@ -214,6 +251,9 @@ def test_positive_growth_requires_named_approval(
         governance.validate(REPO_ROOT)
     lifecycle_mode[0] = "reuse"
     with pytest.raises(governance.GovernanceError, match="retirement budget is reused"):
+        governance.validate(REPO_ROOT)
+    lifecycle_mode[0] = "exhausted"
+    with pytest.raises(governance.GovernanceError, match="exceeds the approved budget"):
         governance.validate(REPO_ROOT)
 
 
@@ -252,6 +292,9 @@ def test_changed_selection_widens_on_an_unmapped_path(tmp_path: Path) -> None:
 def test_report_reproduces_reset_ratios() -> None:
     payload = governance.report(REPO_ROOT)
     assert payload["baseline"] == {"families": 817, "leaves": 1164}
-    assert payload["current"] == {"families": 163, "leaves": 218}
-    assert payload["family_ratio"] <= 0.2
+    assert payload["current"] == {"families": 164, "leaves": 219}
+    # The reset ceiling is 20%; the named approved budget adds exactly one
+    # family and one leaf above it.
+    assert payload["current"]["families"] <= int(817 * 0.2) + 1
+    assert payload["current"]["leaves"] <= int(1164 * 0.2) + 1
     assert payload["leaf_ratio"] <= 0.2

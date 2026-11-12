@@ -435,6 +435,7 @@ def _selection_plan(
     handle: NamespaceHandle, request: dict[str, Any]
 ) -> tuple[dict[str, Any], list[tuple[n.SnapshotRecord, int, bytes]], set[str]]:
     """Compute one closure for strict execution and authorized proposals."""
+    from castle import namespace_store as store
     from castle import namespace_transactions as transactions
 
     n._authorize(handle.session, "excision-inventory")
@@ -472,7 +473,7 @@ def _selection_plan(
         selected_content,
         set(dropped),
         selected_operations,
-        set(handle.db.execute("SELECT * FROM dependencies")),
+        store.dependency_rows(handle),
     )
     selected_operations |= disclosed - {request["operation_id"]}
     count = len(removed | cleared) + len(selected_operations) + len(selected_content) + pairs
@@ -571,7 +572,10 @@ def inventory(handle: NamespaceHandle) -> n.ExcisionInventory:
         collection.append(item)
 
     entries = []
-    for row in handle.db.execute("SELECT * FROM entries ORDER BY entry_id"):
+    for row in handle.db.execute(
+        "SELECT entry_id,kind,parent_id,name,metadata,cas_id,size,changed_revision,live,"
+        "comparison_key FROM entries ORDER BY entry_id"
+    ):
         identity, kind, parent, name, metadata, cas_id, size, changed, live, key = row
         entry = n.EntryRecord(
             identity, kind, parent, name, n._decode(metadata), cas_id, size, changed
@@ -599,7 +603,7 @@ def inventory(handle: NamespaceHandle) -> n.ExcisionInventory:
     ):
         append(operations, n.HistoricalOperation(identity, state))
     dependencies = []
-    for row in handle.db.execute("SELECT * FROM dependencies ORDER BY 1,2,3,4"):
+    for row in sorted(store.dependency_rows(handle)):
         append(dependencies, n.ContentDependency(*row))
     content_ids = []
     for identity in sorted(handle.objects):
@@ -800,6 +804,7 @@ def _scan(handle: NamespaceHandle, request: dict[str, Any], value: dict[str, Any
     """Check retained authority independently before discarding private witnesses."""
     from castle import namespace_replacement as replacement
     from castle import namespace_snapshots as snapshots
+    from castle import namespace_store as store
 
     n._authorize(handle.session, "excise-scan")
     selected = set(request["args"]["selection"]["content_ids"])
@@ -821,7 +826,7 @@ def _scan(handle: NamespaceHandle, request: dict[str, Any], value: dict[str, Any
         handle.connection = original
         authority.close()
     for table, expected in expected_rows.items():
-        if table != "dependencies" and handle.db.execute(
+        if table not in {"dependencies", *store._DERIVED} and handle.db.execute(
             f"SELECT * FROM {table} ORDER BY 1"
         ).fetchall() != sorted(expected):
             replacement.invalid()
@@ -1131,6 +1136,10 @@ def execute(
             )
         try:
             with handle.admitted():
+                # Excision is whole-sequence: keep 0.3.0's full validation at its
+                # admission so damage refuses before any effect (PLAN-F005).
+                handle._cas_check()
+                handle._validate()
                 predecessor, successor = roots(handle.root, handle.cas_root, explicit_roots)
                 info = handle.load_info()
                 if value["namespace_id"] != info.namespace_id:
@@ -1152,6 +1161,12 @@ def execute(
                 operation_available(handle, identity)
                 if successor.exists():
                     n._refuse("namespace-root-unsafe")
+                # The last operation's post-commit steps must be proven done (PLAN-F001).
+                (marked,) = handle.db.execute(
+                    "SELECT unsettled_operation FROM coordinator_state"
+                ).fetchone()
+                if marked is not None and not handle._settled(marked):
+                    n._refuse("namespace-storage-recovery-required")
                 intent = prepare_intent(handle, value, predecessor, successor)
                 started = True
                 handle.failed = True
@@ -1478,13 +1493,8 @@ def _abort(
             ),
         )
         handle.db.execute("UPDATE namespace SET service_state='ready'")
-        handle.db.executemany(
-            "INSERT INTO dependencies VALUES (?,?,?,?)",
-            [
-                ("operation", operation, identity, "request-result")
-                for identity in request["args"]["selection"]["content_ids"]
-            ],
-        )
+        # Receipt and cleanup work follows this commit: mark it unsettled.
+        handle.db.execute("UPDATE coordinator_state SET unsettled_operation=?", (operation,))
         store._commit(handle.db)
         handle.epoch_intervals = replacement.epochs(
             handle.anchor,
@@ -1568,19 +1578,31 @@ def _projection(
     )
     rows["replacement_completion"].sort()
     rows["dependencies"] = []
+    # Derived state of the fresh image: totals over its live entries, no
+    # unsettled operation and an unindexed CAS (first admission rebuilds it).
+    live_rows = [row for row in rows["entries"] if row[8] == 1]
+    rows["tree_totals"] = [
+        store.summarize(
+            {
+                row[0]: n.EntryRecord(row[0], row[1], row[2], row[3], n._decode(row[4]), *row[5:8])
+                for row in live_rows
+            }
+        )
+    ]
+    rows["coordinator_state"] = [(None,)]
+    for table in store._DERIVED:
+        rows[table] = []
     return rows
 
 
 def _image_bytes(
     handle: NamespaceHandle, request: dict[str, Any], value: dict[str, Any], successor: Path
 ) -> bytes:
-    from castle import namespace_snapshots as snapshots
     from castle import namespace_store as store
-    from castle import namespace_transactions as tx
 
     rows = _projection(handle, request, value)
     original = handle.connection
-    old_root, old_binding, old_objects = handle.cas_root, handle.binding, handle.objects
+    old_root, old_binding, old_objects = handle.cas_root, handle.binding, handle._objects
     image = sqlite3.connect(":memory:", isolation_level=None)
     try:
         image.execute(f"PRAGMA page_size={value['page_size']}")
@@ -1588,16 +1610,13 @@ def _image_bytes(
         image.execute("PRAGMA synchronous=EXTRA")
         image.execute("PRAGMA fullfsync=ON")
         image.execute("BEGIN IMMEDIATE")
-        for statement in store._TABLES.values():
-            image.execute(statement)
-        image.execute(
-            "CREATE UNIQUE INDEX live_names ON entries(parent_id,comparison_key) WHERE live=1"
-        )
-        image.execute("PRAGMA user_version=1")
+        store.create_schema(image)
         for table in store._TABLES:
             for row in rows[table]:
                 image.execute(f"INSERT INTO {table} VALUES ({','.join('?' for _ in row)})", row)
         handle.connection = image
+        # Touched object proofs read the bound journal; refuse them while swapped.
+        handle.swapped = True
         handle.cas_root = successor
         handle.binding = store_state._identity(value["cas_receipt"]["successor"])
         handle.snapshot_cache.clear()
@@ -1610,8 +1629,7 @@ def _image_bytes(
                 for entry in handle.entries(live=False).values()
                 if entry.cas_id
             }
-            dependencies |= tx.operation_dependencies(handle)
-            dependencies |= snapshots.dependencies(handle, allow_pending=True)
+            # Operation and snapshot dependencies are computed where used, never stored.
             image.executemany("INSERT INTO dependencies VALUES (?,?,?,?)", sorted(dependencies))
             store._commit(image)
             handle._validate(replacement_pending=True)
@@ -1621,6 +1639,7 @@ def _image_bytes(
     finally:
         handle.connection = original
         handle.cas_root, handle.binding, handle.objects = old_root, old_binding, old_objects
+        handle.swapped = False
         handle.snapshot_cache.clear()
         image.close()
 
@@ -2285,7 +2304,6 @@ def _references(
 ) -> None:
     from castle import namespace_content as content
     from castle import namespace_store as store
-    from castle import namespace_transactions as tx
 
     n._authorize(handle.session, "excise-references")
     source = n._info(value["source_info"])
@@ -2319,7 +2337,6 @@ def _references(
     from castle import namespace_content as content_io
 
     outer = {"receipt": handle._ownership(request, source), "cutover": value}
-    snapshot_dependencies = set()
     for descriptor, saved, raw in zip(
         value["recipes"],
         value["publications"],
@@ -2335,13 +2352,6 @@ def _references(
             != item.cas_id
         ):
             n._refuse("namespace-storage-recovery-required")
-        snapshot_id = descriptor["snapshot"]["snapshot_id"]
-        snapshot_dependencies.add(("snapshot", snapshot_id, item.cas_id, "manifest"))
-        snapshot_dependencies.update(
-            ("snapshot", snapshot_id, entry["cas_id"], "member")
-            for entry in manifest["entries"]
-            if entry["cas_id"]
-        )
     handle.db.execute("BEGIN IMMEDIATE")
     for identity in value["closure"]["entry_ids"]:
         handle.db.execute("UPDATE entries SET live=0 WHERE entry_id=?", (identity,))
@@ -2351,6 +2361,14 @@ def _references(
             "THEN ? ELSE changed_revision END WHERE entry_id=?",
             ("{}\n", source.revision + 1, identity),
         )
+    # Whole-sequence rewrite: re-derive touched revisions and totals directly.
+    for identity in value["closure"]["entry_ids"]:
+        handle.db.execute(
+            "UPDATE entries SET touched_revision=? WHERE entry_id=? AND live=0",
+            (source.revision + 1, identity),
+        )
+    handle.db.execute("UPDATE entries SET touched_revision=changed_revision WHERE live=1")
+    store.recompute_totals(handle)
     for identity in value["closure"]["drop_snapshot_ids"]:
         handle.db.execute("DELETE FROM snapshots WHERE snapshot_id=?", (identity,))
     for descriptor, saved in zip(value["recipes"], value["publications"], strict=True):
@@ -2364,14 +2382,11 @@ def _references(
         (source.revision + 1, n.canonical_bytes(binding.to_dict()).decode()),
     )
     removed = set(value["closure"]["entry_ids"])
-    retired = set(value["closure"]["operation_ids"])
     dependencies = {
         ("entry", entry.entry_id, entry.cas_id, "content")
         for entry in handle.entries(live=False).values()
         if entry.cas_id and entry.entry_id not in removed
     }
-    dependencies |= {row for row in tx.operation_dependencies(handle) if row[1] not in retired}
-    dependencies |= snapshot_dependencies
     handle.db.execute("DELETE FROM dependencies")
     handle.db.executemany("INSERT INTO dependencies VALUES (?,?,?,?)", sorted(dependencies))
     handle.db.execute(

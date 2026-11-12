@@ -941,6 +941,53 @@ def test_namespace_transactions_and_admission(
     ](tmp_path, monkeypatch, Case)
 
 
+def test_namespace_incremental_admission(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase 12 touched-record admission, its v2 summaries and the v1 migration."""
+    proofs = runpy.run_path(str(Path(__file__).with_name("test_namespace_incremental.py")))
+    proofs["framing_proof"](tmp_path)
+    proofs["catch_up_proof"](tmp_path, monkeypatch, Case)
+    proofs["provenance_proof"](tmp_path, monkeypatch, Case)
+    proofs["totals_proof"](tmp_path, Case, _id)
+    proofs["api_proof"](tmp_path, Case, _id)
+    proofs["completeness_proof"](tmp_path, monkeypatch, Case, _id)
+    proofs["duplicate_event_proof"](tmp_path, Case)
+    proofs["tripwire_proof"](tmp_path, monkeypatch, Case, _id)
+    proofs["differential_proof"](tmp_path, monkeypatch, Case, _id)
+    proofs["migration_proof"](tmp_path, Case, _id, _migration_child)
+    proofs["damage_proof"](tmp_path, Case, _id)
+    proofs["settled_proof"](tmp_path, monkeypatch, Case, _id)
+    proofs["cost_proof"](tmp_path, monkeypatch, Case, _id)
+    proofs["limits_proof"](tmp_path, monkeypatch, Case, _id)
+    proofs["reader_proof"](tmp_path, monkeypatch, Case, _id)
+
+
+def _migration_child(case: Case, backup: Path, boundary: str) -> subprocess.CompletedProcess:
+    """Run the operator migration in a child that dies at one COMMIT boundary."""
+    code = f"""
+import os,runpy
+from pathlib import Path
+from castle import namespace as n,namespace_store as store,namespace_migrate_v1 as migration
+caller=runpy.run_path({str(_EXAMPLE)!r})
+session=caller['LocalSession'](Path({str(case.root)!r}),Path({str(case.cas_root)!r}),
+ Path({str(case.directory / "domain.lock")!r}))
+commit=store._commit
+def interrupted(connection):
+ if {boundary!r}=='before-commit': os._exit(62)
+ commit(connection)
+ if {boundary!r}=='after-commit': os._exit(62)
+store._commit=interrupted
+migration.migrate_namespace_v1(Path({str(case.root)!r}),Path({str(case.cas_root)!r}),session,
+ Path({str(backup)!r}))
+"""
+    return subprocess.run(
+        [sys.executable, "-c", code],
+        env={**os.environ, "PYTHONPATH": str(Path(cas.__file__).parents[1])},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+
 def _child(case: Case, request: n.MutationRequest, boundary: str) -> subprocess.CompletedProcess:
     payload = json.dumps(asdict(request))
     code = f"""
@@ -1707,10 +1754,21 @@ n.create_namespace(Path({str(root)!r}),Path({str(owner.cas_root)!r}),session,req
             from castle import store_state
 
             (case.cas_root / "store.json").write_bytes(store_state._canonical(metadata))
-        with pytest.raises(
-            n.NamespaceError, match="namespace-(storage-recovery-required|binding-mismatch)"
+        if bad == "epoch":
+            with pytest.raises(n.NamespaceError, match="namespace-binding-mismatch"):
+                case.open()
+            continue
+        # v2 touched-record admission: damage no namespace record touches is not
+        # found by ordinary open; explicit diagnosis and the whole-sequence
+        # recovery pass still refuse it.
+        case.open().close()
+        with (
+            case.open() as handle,
+            pytest.raises(n.NamespaceError, match="^namespace-storage-recovery-required$"),
         ):
-            case.open()
+            handle._diagnose()
+        with pytest.raises(n.NamespaceError, match="namespace-storage-recovery-required"):
+            n.recover_namespace(case.root, case.cas_root, case.session, None)
 
     _new_content_restart(tmp_path, monkeypatch)
     _new_content_refusals(tmp_path, monkeypatch)
@@ -1796,18 +1854,15 @@ def _new_content_semantics(tmp_path, monkeypatch):
         deleted_original = case.apply(handle, "delete-entry", {"entry_id": entry})
         assert cas.object_path(case.cas_root, old["cas_id"]).read_bytes() == first_bytes
         assert cas.object_path(case.cas_root, new["cas_id"]).read_bytes() == next_bytes
-        dependencies = set(
-            handle.db.execute(
-                "SELECT cas_id FROM dependencies WHERE owner_kind='operation' AND owner_id=?",
-                (create.operation_id,),
-            )
-        )
+        dependencies = {
+            (row[2],)
+            for row in store.dependency_rows(handle)
+            if row[0] == "operation" and row[1] == create.operation_id
+        }
         assert dependencies == {(old["cas_id"],), (new["cas_id"],)}
-        assert set(
-            handle.db.execute(
-                "SELECT owner_id,cas_id FROM dependencies WHERE owner_kind='operation'"
-            )
-        ) == {
+        assert {
+            (row[1], row[2]) for row in store.dependency_rows(handle) if row[0] == "operation"
+        } == {
             (create.operation_id, old["cas_id"]),
             (create.operation_id, new["cas_id"]),
             (duplicate.operation_id, old["cas_id"]),

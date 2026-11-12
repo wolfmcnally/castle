@@ -16,6 +16,7 @@
 | [Phase 9](phase-9.md) | Delete and Excise correction and tagged release | ✅ |
 | [Phase 10](phase-10.md) | Read-only namespace access | ✅ |
 | [Phase 11](phase-11.md) | Incremental admission design review | 🚧 |
+| [Phase 12](phase-12.md) | Touched-record namespace admission | ✅ |
 
 Private execution history is excluded. The public package contracts and methodology policies govern future work.
 

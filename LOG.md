@@ -2098,3 +2098,195 @@ Remaining:
 Lessons:
 - imported-manatee filed (methodology/skill): a design-only product phase has no reachable accepted close in primary full-lane mode; decide its terminal form at planning time. One occurrence.
 - Earlier Phase 11 lessons stand: nifty-termite, brilliant-mantis, vociferous-jerboa. lessons validate OK; attractive-lemming remains at three occurrences, graduation stays with the operator.
+
+## 2026-11-11 13:17 — START
+Phase 12 — Touched-record namespace admission
+
+Execution trace: 38dadc176b50437db99241f181ad8022
+
+Planned work:
+- Admission without whole-set rework. Admission keeps every constant-cost check of 0.3.0: store identity, locks, generation and CAS epoch, replacement epoch intervals and marker state, protection, service state and pending-operation state. It no longer re-validates every entry, operation and dependency, or folds the whole CAS journal.
+- Validation of touched records. Each entry that is read or mutated is validated on access. Its ancestry is validated where the tree contract requires it: live and non-live rules differ. Each touched content object's authority records are verified against the current journal bytes, using a derived per-object location table (offset, length and digest of each record line). The table is bound atomically to the CAS position it reflects. An outside append is indexed by parsing only the appended bytes. A record that does not start on a line boundary, a digest mismatch or an unknown position triggers full revalidation. Touched corruption fails closed.
+- Indexed reads and incremental commit. Reads and commits replace whole-namespace scans with indexed lookups and tracked changes. Tree-wide limits and dependency rows are maintained incrementally. Whole-set work stays only in explicit diagnosis, recovery and the operations that already require the whole sequence: publication, snapshot capture, excision, merge and index rebuild.
+- Minimal read surface: a revision probe with a logical store position, which is not a claim about prefix bytes; a targeted entry read; a directory page; change discovery that includes deletions; an explicit full diagnosis that reports the exact whole-journal length and SHA-256.
+- Format change and migration. One namespace format change with a single non-destructive migration, tested on synthetic stores, that keeps an operator-held backup. No live data is migrated.
+- Truthful contract text. The briefs state what moved from per-admission validation to on-touch, whole-sequence or diagnosis detection, and when each kind of damage is detected.
+
+## 2026-11-11 15:14 — PARK
+Phase 12 — Touched-record namespace admission
+
+Execution trace: 38dadc176b50437db99241f181ad8022 (finalized; implementation and root spans closed with outcome error)
+
+The first implementation run is parked as failed and will not be resumed. A fresh corrective run carries the work forward under the root ruling of 2026-11-11T22:07:06Z. Nothing was committed, pushed, tagged or published, no live data was migrated, and the private checkout is untouched.
+
+What happened: the one registered Fable High code critique finished normally at 22:02:37Z with 17 findings. Its findings could not be recorded, because the tree changed while it ran. At 21:53Z, while the read-only critique was in flight, the owner edited two tracked test files (project/tests/test_cli.py and project/tests/test_namespace.py). The evidence tool binds a critique to the candidate it was dispatched against and the candidate at its return. Those differ (dispatch a987c8d076af6e3497cb863633bf499e566f712c06c8de0d3f750929d44e9cb2, return a9af647af30c876f25e393680e01bfc92b0710d3bdb41b5688194f9258b5307c), so the ingest correctly refused. That is the owner's procedural defect, not a product or instrument failure.
+
+What is true now:
+- Review 1 is NONQUALIFYING advisory input. Its report, all 17 findings (CODE-F001 to CODE-F017), its candidates and its lineage are preserved byte-for-byte in the failed run directory and in the ignored design copy (SHA-256 f052ccc66117d3be57a02f892666f80a9a7b705c0aff8fb4d1f3583db810d700). No file was restored, no evidence was edited and nothing was waived.
+- Candidate lineage: the current candidate equals the critique's return candidate (a9af647a…). No restoration was performed, because restoration would misrepresent history.
+- Teardown: no owned processes or jobs remain; the critique watcher exited 0.
+- Failure signature: novel for Phase 12. The same generator occurred once in Phase 11, as a design-file edit during a non-qualifying native review. Resume authority is the operator relay (the root ruling), not the self-resume budget; budget 3 remains, none consumed.
+- Both R1 residuals (coherent-later-missing touch acceptance and other-object-lost duplicate acceptance) stay OPEN with no waiver.
+
+Root ruling, 2026-11-11T22:07:06Z, in substance: proceed with the supported truthful recovery; preserve review 1 as nonqualifying with its exact drift reason; truthful park and a new corrective trace; correct the actual findings and apply the one-time +1 test family and +1 leaf, granted at 21:59Z, for a separately named incremental-admission test; then use the remaining SECOND and FINAL independent Fable High code review once the candidate is stable, with the entire tree frozen while it runs. This is not a third allowance or a budget reset. No publication or live migration.
+
+Resume condition: met by the root ruling. Next: a fresh corrective run carrying review 1's advice; fixes for CODE-F001 to CODE-F017 with named tests; the separate incremental-admission test under the +1/+1 grant with the fold removed; the frozen-tree second and final critique; then the normal acceptance and close.
+
+Lessons:
+- vociferous-jerboa: second occurrence recorded (an edit during an in-flight independent review). For product code, a registered critique binds both candidates, so any tracked write while it runs disqualifies it and spends its allowance. Freeze the whole tree from dispatch until the watcher is terminal, and queue edits outside the tree. lessons validate OK.
+- No operator-input park was opened while the owner waited 21:58Z to 22:11Z for the governance and recovery rulings. That interval is unmeasured, not zero. Covered by the existing kickoff park-open instruction; no new candidate filed.
+
+## 2026-11-11 15:16 — START (resumed)
+Phase 12 — Touched-record namespace admission
+
+Execution trace: 145e48ee241b4728bc03061ada637b8e
+
+Corrective run after the parked run on trace 38dadc176b50437db99241f181ad8022, under the root ruling of 2026-11-11T22:07:06Z. Route: full-cycle follow-up, primary mode. The preserved plan, its single qualifying Fable High plan review and the dispositions carry forward unchanged. Code review 1 is carried as nonqualifying advisory input; its allowance is spent, and the next critique is the second and final one.
+
+Planned work:
+- Correct code-review-1 findings CODE-F001 to CODE-F017, each with a named test or a recorded disposition.
+- Restore a separately named incremental-admission test under the one-time +1 family and +1 leaf grant, remove the fold from the transactions test, and register its proof-estate entry and budget.
+- Assess the R1 options: consumer guarantees versus namespace existence and size callers, the coherent case's actual outputs, and the Phase 13 event-membership index option. Both R1 residuals stay open.
+- Freeze the whole tree, then run the second and final Fable High code critique; then acceptance, both full gates and a local commit of explicit paths.
+
+Phase 12 — Touched-record namespace admission
+
+Execution trace: 145e48ee241b4728bc03061ada637b8e (finalized; acceptance and root spans closed with outcome error)
+
+The corrective run is parked at acceptance and will not be resumed. A fresh run carries the same work forward under the root confirmation of 2026-11-12T00:36:36Z. Nothing was committed, pushed, tagged or published, no live data was migrated, and the private checkout is untouched.
+
+What happened: every correction from the second and final code critique was implemented with a falsifying check, and all four candidate gates passed on product candidate 400006b15ea14e95a3026f14848bb90bb0199055c7ab65419b4d1b269927464b (incremental admission node, the namespace suites, the User Demo script, and ./bin/check all with 197 passed and no warnings). Acceptance validation then refused, correctly: "declared authority changed; re-review in a fresh evidence run". The changed authority is briefs/coordinated-namespace-crud.md. This run captured it at 22:15:54Z (SHA-256 b3859e5f0714d8b595d8771df0e76cdf872340b2a80916517c21b64032c289cd, the brief code review 1 saw). The owner then amended it inside the run twice: the CODE-F015 corrections, which the final critique reviewed (af0cb10b7527a9ebd09fb55087b6b8ff527bd1711e3cf4122ddb07a6b270210d), and the section 24 statements for the final-critique corrections (current, a9871356771a564428f5f4c6ef5f46ff84e6eaf4103bbce53d57a07592076ec0), which no independent review has seen. That is the owner's procedural defect: a planned amendment to a declared authority was made after capture.
+
+What is true now:
+- Both amendments describe implemented, adopted corrections; neither adds an operation, interface, format or contract change. The post-critique amendment is unreviewed review debt and is stated as such; the review allowance (two passes) is spent and was not reset.
+- The refusal text, the captured, reviewed and current hashes and both diffs are preserved outside the tree. No authority file was restored and no evidence was edited.
+- Linux qualification ran on a byte-verified equivalent copy inside the mounted projects directory: Linux 7.0.14-linuxkit aarch64, the same product and full-tree identities, ./bin/check all passed (191 passed, 6 Darwin-only skips).
+- Failure signature: novel. Resume authority is the root confirmation, not the self-resume budget; budget 3 remains, none consumed.
+- Both R1 residuals stay OPEN with no waiver.
+
+Resume condition: met by the root confirmation. Next: a fresh run that captures the current authorities, carries this run's advice with its original identities and spent budget, records the primary decision with a delta assessment naming the unreviewed amendment, reruns the gates on the same candidate, then the accepted close.
+
+Lessons:
+- strict-kudu filed (methodology/skill): a phase that amends its own declared authority must capture it after the last amendment; command zero should warn on drift before gates run.
+- quantum-tuatara filed (methodology/skill): a damage-injection proof must target its intended structure and prove that the intended path was reached; two such test defects were caught and rebuilt in this run.
+- lessons validate OK; attractive-lemming remains at three occurrences, graduation stays with the operator.
+
+## 2026-11-11 17:40 — START (resumed)
+
+Phase 12 — Touched-record namespace admission
+
+Execution trace: 51c6a36ba960459bb55fa1bf168ef72d
+
+Fresh-capture run after the parked acceptance on trace 145e48ee241b4728bc03061ada637b8e, under the root confirmation of 2026-11-12T00:36:36Z. Route: full-cycle follow-up, primary mode. The candidate is unchanged (product 400006b15ea14e95a3026f14848bb90bb0199055c7ab65419b4d1b269927464b). This run captures the current declared authorities, including the amended namespace brief.
+
+Planned work:
+- Carry the prior run's advice with its original report identities and the spent two-pass code-review allowance; no review is run and nothing is reset.
+- Record the primary decision with a delta assessment that names the post-critique brief amendment as unreviewed.
+- Rerun the four candidate gates on the same candidate, then acceptance, the close bookkeeping, the second bare full gate and a local commit of explicit paths.
+
+Phase 12 — Touched-record namespace admission
+
+Execution trace: 51c6a36ba960459bb55fa1bf168ef72d
+
+Phase 12 is accepted on its gates. Ordinary namespace open, admission, reads and metadata changes now cost what they touch rather than the whole namespace or content store: the operator demo shows identical work at 100 and 5000 entries. Touched damage fails closed and stops the handle; damage in untouched records is found when it is touched, by whole-sequence operations (excision, inventory, recovery, migration) or by `diagnose`. An explicit, backed-up v1 to v2 migration is included and is never run automatically. Nothing was pushed, tagged or published, no live data was migrated, and the private checkout is untouched.
+
+Files changed:
+- project/castle/namespace_store.py — touched-record admission, located CAS lookups with per-object witnesses, single-row summaries, latch on corruption and CAS damage, diagnose
+- project/castle/namespace_transactions.py — mutations check only what they change; a damaged touched row refuses as damage; linear request checks; seeking page and emptiness queries; replay proof
+- project/castle/namespace_migrate_v1.py (new) — operator v1 to v2 migration with a backup published by link
+- project/castle/namespace.py, namespace_cli.py, namespace_content.py, namespace_excision.py, namespace_onboarding.py, namespace_snapshots.py — probe, page, changes, diagnose and target reads; touched-record callers
+- project/tests/test_namespace_incremental.py (new), demo_incremental_cost.py (new), test_namespace.py, test_namespace_excision.py, test_namespace_snapshots.py, test_cli.py — proofs, the operator demo and caller updates
+- briefs/coordinated-namespace-crud.md — sections 15, 16 and 24
+- .github/scripts/package-qualify.py — registers the new module and test file
+- bin/kickoff-evidence, bin/README.md, lib/agentic_starter/advisory.py — the tested refund of a launch that never started, with its corrections
+- lib/agentic_starter/test_governance.py, tests/proof-estate.yaml, reports/test-governance/castle-reset.jsonl, tests/test_test_governance.py, tests/test_kickoff_evidence.py — the named-approval budget route and its tests
+- plan/phase-12.md (new), plan/INDEX.md, LOG.md, EXECUTION_LOG.jsonl, lessons/ — phase record and lessons
+
+Build status:
+- Incremental admission test: OK (1 passed)
+- Namespace and CLI suites: OK (14 passed)
+- User Demo script: OK (identical counts at both sizes; diagnose refuses untouched damage)
+- ./bin/check all on the candidate: OK (197 passed, all policy checks, no warnings)
+- Linux ./bin/check all: OK on a byte-verified copy inside the mounted projects directory, Linux 7.0.14-linuxkit aarch64, same product candidate (191 passed, 6 macOS-only skips). Its full-tree identity predates the park's log and lesson entries; the product identity is the same.
+- Handoff gate: runs after this tracked END block; completion is contingent on the ignored receipt from the final bare `./bin/check all`
+
+Review lane (per `policies/review-lanes.md`):
+- full
+
+Evidence lane (per `policies/review-lanes.md`):
+- full
+
+Follow-up route (per `policies/review-lanes.md`):
+- full cycle — high-risk storage admission change; corrections after the final critique implemented by the primary with fresh falsifying checks
+
+Role model/venue (per `policies/role-models.md`) — orchestrated by claude:
+- Preflight: OK (receipt carried from the phase preflight)
+- Planner: primary (inline, opus)
+- Reviewer (plan review): requested model=fable effort=high venue=claude; one qualifying pass
+- Coder: primary (inline, opus)
+- Critic (code review): requested model=fable effort=high venue=claude; pass 1 nonqualifying (tree changed while it ran), pass 2 qualifying; both passes spent
+
+For each role separately: harness_version=unreported, observed_model=unreported, observed_effort=unreported; observation_errors=none.
+
+Role timing (per `policies/role-timeouts.md`):
+- Planner: primary, not separately timed
+- Reviewer (plan review): recorded on an earlier trace of this phase
+- Coder: primary, not separately timed
+- Critic (code review): final pass 847.86 s; success (trace 145e48ee241b4728bc03061ada637b8e)
+
+Execution timing (per `policies/execution-telemetry.md`):
+- This run: makespan 632.70 s; gates 486.72 s; orchestration 619.99 s; intelligence 0 s; wait 0 s; unattributed 12.71 s
+- Earlier traces of this phase: 38dadc176b50437db99241f181ad8022 (parked, review drift) and 145e48ee241b4728bc03061ada637b8e (parked, authority drift), both finalized
+- Awaiting user input: no operator-input park recorded for Phase 12 (phase-summary: none). One earlier wait of about 13 minutes was not parked and is unmeasured, not zero.
+- Timing validation: exact monotonic nanoseconds, overlap-safe unions, trace joins OK
+
+Candidate-bound evidence (per `policies/orchestration-evidence.md`):
+- Candidate: approved=final=400006b15ea14e95a3026f14848bb90bb0199055c7ab65419b4d1b269927464b (final critique reviewed beda4c78ec4b1492a418ba748cd42800a4b1915225e7b05e82ba37272f1b4c05; the difference is the adopted corrections)
+- Findings: plan review 12 and final critique 11, all dispositioned (one deferred, one declined); code review 1's 17 findings dispositioned as nonqualifying input
+- Gates: implementation-final=4, all recorded against the approved candidate=yes
+- Evidence validation: `bin/kickoff-evidence validate --level acceptance` OK
+
+Wall-clock observations:
+- The full suite dominates (about 5 to 7.5 minutes per run). Focused single-proof runs and scratch-copy mutants were used during correction, so the tree was never mutated for a red check and the full suite ran only at gates.
+
+Acceptance (per `policies/human-in-the-loop.md`):
+- Objective (independently reviewed, gate-proved, candidate-bound): cost tests at two sizes; touched-damage, prefix and fallback tests; the migration round trip, backup and refusal; every carried obligation dispositioned; the phase checks then ./bin/check all.
+- Parked for the user: architectural acceptance of the moved-detection statement (brief section 24). Its last amendment, describing the final-critique corrections, has had no independent review, because the two-pass allowance is spent. Filed as user action sincere-jaguar, pending.
+
+Delivery:
+- restricted: "No public push/tag or live data migration now."
+
+Ripple (per `policies/phase-ripple.md`):
+- AUTO: None
+- DECIDE: none — no downstream sketches. The Phase 13 inputs (the duplicate-event window once publication's full check is removed, and the derived CAS membership table, which would amend the CAS contract and add an index-position field) are carried in user action sincere-jaguar, pending.
+
+Lessons (per `policies/lessons.md`):
+- filed: strict-kudu — amend a declared authority only before its capture (methodology, filed at the park)
+- filed: quantum-tuatara — damage-injection proofs must target structure and prove the intended path ran (methodology, filed at the park)
+- filed: important-beluga — the watcher owns the advisory launch claim (methodology)
+- occurrences added: vociferous-jerboa (2 total) — edit during an in-flight review
+- graduation DECIDE: attractive-lemming → existing proposal — three occurrences, unchanged, with the operator
+- recalibration: insufficient samples (no group has 30 successful samples)
+
+User demo (per `policies/user-demo-protocols.md`):
+
+```
+./bin/python project/tests/demo_incremental_cost.py
+```
+
+It builds synthetic namespaces of 100 and 5000 entries in a temporary directory and prints SQL statement and entry-validation counts for open, get-entry, a small listing and set-metadata. Expected: identical counts at both sizes, then `diagnose` refusing after an injected corruption that get-entry did not touch. It removes its temporary data.
+
+Remaining:
+- Both known gaps stay open with no waiver: a coherent edit of a located row and its witness is not detected on touch, and a repeated event id carrying another object's identity after its original row was lost is accepted until that object is touched or `diagnose` runs.
+- Not written as proofs: cost with many retained operations, parse counts for many appended records, and kill points inside expiry and content cleanup.
+- The v1 schema pin was captured by running the released 0.3.0 package from its tag; the migration fixture still downgrades a v2 database.
+- Pending after this block: the plan index marks Phase 12 complete, user action sincere-jaguar is filed, the dashboard report is regenerated, the bare handoff gate runs, then a local commit of explicit paths.
+- Test protocol: the User Demo above.
+
+## 2026-11-11 17:52 — BOOKKEEPING
+
+Phase 12 — Close bookkeeping outcomes
+
+Execution trace: 51c6a36ba960459bb55fa1bf168ef72d
+
+Applied after the accepted close: the plan index marks Phase 12 complete (the recorded transition, verified with the close's handoff check); user action sincere-jaguar is filed, pending, for the moved-detection acceptance and the Phase 13 CAS membership decision. Ripple: none, no downstream sketches. Lessons strict-kudu and quantum-tuatara were filed at the park; lessons validate OK. The dashboard report is regenerated next, then the bare handoff gate. No later tracked write follows a successful handoff gate.

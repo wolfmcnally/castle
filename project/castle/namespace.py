@@ -23,6 +23,7 @@ MAX_ENTRIES = 100000
 MAX_REQUEST_BYTES = 16777216
 MAX_MANIFEST_BYTES = 67108864
 MAX_INTEGER = 9007199254740991
+MAX_PAGE = 10000
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
 _CAS = re.compile(r"sha256:[0-9a-f]{64}")
 _CODES = frozenset(
@@ -408,6 +409,57 @@ class MutationResult:
 
 
 @dataclass(frozen=True)
+class NamespaceProbe:
+    """O(1) facts: the namespace row, the live totals and the indexed journal position."""
+
+    namespace_id: str
+    database_generation: str
+    revision: int
+    cas_binding: StoreIdentity
+    live_entries: int
+    live_files: int
+    journal_length: int
+    event_count: int
+    last_event_id: str | None
+    schema: str = field(default="castle.namespace_probe.v1", init=False)
+
+
+@dataclass(frozen=True)
+class DirectoryPage:
+    entries: list[EntryRecord]
+    next_after: str | None
+
+
+@dataclass(frozen=True)
+class EntryChange:
+    entry: EntryRecord
+    live: bool
+    touched_revision: int
+
+
+@dataclass(frozen=True)
+class ChangePage:
+    changes: list[EntryChange]
+    next_revision: int | None
+    next_entry_id: str | None
+
+
+@dataclass(frozen=True)
+class NamespaceDiagnosis:
+    namespace_id: str
+    database_generation: str
+    revision: int
+    journal_length: int
+    journal_sha256: str
+    live_entries: int
+    live_files: int
+    retained_entries: int
+    operations: int
+    objects: int
+    schema: str = field(default="castle.namespace_diagnosis.v1", init=False)
+
+
+@dataclass(frozen=True)
 class ReadResult:
     namespace_id: str
     revision: int
@@ -420,6 +472,10 @@ class ReadResult:
         | ExportReceipt
         | ExcisionInventory
         | ExcisionPreview
+        | NamespaceProbe
+        | DirectoryPage
+        | ChangePage
+        | NamespaceDiagnosis
     )
     schema: str = field(default="castle.namespace_read.v1", init=False)
 
@@ -432,6 +488,20 @@ class OperationStatus:
     result: MutationResult | None
     error_code: str | None
     next_action: str
+
+
+@dataclass(frozen=True)
+class OperationTarget:
+    """Status plus the primary entry a committed operation acted on, when it has one."""
+
+    namespace_id: str
+    operation_id: str
+    state: str
+    result: MutationResult | None
+    error_code: str | None
+    next_action: str
+    primary_entry_id: str | None
+    schema: str = field(default="castle.namespace_operation_target.v1", init=False)
 
 
 @dataclass(frozen=True)
@@ -573,6 +643,10 @@ def read_namespace(
 
 def namespace_operation(handle: NamespaceHandle, operation_id: str) -> OperationStatus:
     return handle.operation(operation_id)
+
+
+def namespace_operation_target(handle: NamespaceHandle, operation_id: str) -> OperationTarget:
+    return handle.operation_target(operation_id)
 
 
 def recover_namespace(

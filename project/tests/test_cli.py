@@ -636,11 +636,16 @@ def _assert_namespace_parser_surface(parser: argparse.ArgumentParser) -> None:
         "read",
         "list",
         "resolve",
+        "target",
+        "probe",
+        "page",
+        "changes",
+        "diagnose",
     }
     assert set(verbs) == expected
     for name, verb in verbs.items():
         options = {"-h", "--help"}
-        if name not in {"identity", "info", "status"}:
+        if name not in {"identity", "info", "status", "target"}:
             options.add("--request-file")
         if name in {"create-file", "replace-content", "import-folder"}:
             options.update({"--content", "--content-file"})
@@ -648,7 +653,7 @@ def _assert_namespace_parser_surface(parser: argparse.ArgumentParser) -> None:
             options.add("--out")
         assert _realized_option_strings(verb) == frozenset(options)
         assert [a.dest for a in verb._actions if not a.option_strings] == (
-            ["operation_id"] if name == "status" else []
+            ["operation_id"] if name in {"status", "target"} else []
         )
 
 

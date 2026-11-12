@@ -17,6 +17,12 @@ from castle import namespace_replacement as replacement
 from castle import store_state
 
 
+def _fold(handle):
+    """v2: the whole CAS fold exists only after an explicit full check."""
+    handle._cas_check()
+    return handle.objects
+
+
 def identity(number):
     return f"{number:08x}-1111-4111-8111-111111111111"
 
@@ -323,7 +329,9 @@ def recipe_proof(tmp_path, monkeypatch, Case):
                 transactions._row(handle, row[0])
                 for row in handle.db.execute("SELECT operation_id FROM operations").fetchall()
             ]
-            dependencies = set(handle.db.execute("SELECT * FROM dependencies"))
+            from castle import namespace_store as store
+
+            dependencies = store.dependency_rows(handle)
             disclosed = cutover.operation_disclosures(
                 rows,
                 {file_id},
@@ -405,7 +413,7 @@ def recipe_proof(tmp_path, monkeypatch, Case):
         assert set(handle.entries()) == {case.initial.root_id, parent, innocent}
         assert file_id not in handle.entries(live=False)
         assert handle.entries()[innocent].metadata == {"private": "Removed-only metadata sentinel"}
-        assert set(handle.objects) == {case.stored.cas_id} | {
+        assert set(_fold(handle)) == {case.stored.cas_id} | {
             row[0] for row in handle.db.execute("SELECT cas_id FROM snapshots")
         }
         for record_row in handle.db.execute(
@@ -543,7 +551,7 @@ def workflow_proof(tmp_path, monkeypatch, Case):
         assert n.execute_namespace(handle, keep_request, {}) == keep_result
         assert n.namespace_operation(handle, keep_request.operation_id).result == keep_result
         assert n.namespace_operation(handle, benign_delete_request.operation_id).state == "retired"
-        assert benign_capture.snapshot.cas_id in handle.objects
+        assert benign_capture.snapshot.cas_id in _fold(handle)
         assert set(handle.entries()) == {case.initial.root_id, keep_request.args["entry_id"]}
         assert handle.info().database_generation != initial_generation
         assert file_id not in handle.entries(live=False) and shared_id not in handle.entries(
@@ -1116,7 +1124,7 @@ def delete_excise_proof(tmp_path, monkeypatch, Case):
     with n.open_namespace(case.root, destination, session) as handle:
         assert set(handle.entries(live=False)) == {case.initial.root_id, clear_id}
         assert handle.entries()[clear_id].metadata == {}
-        assert not (set(contents) & set(handle.objects))
+        assert not (set(contents) & set(_fold(handle)))
         assert all(event["cas_id"] not in contents for event in journal.read_journal(destination))
         assert (
             cas.require_object(destination, case.stored.cas_id).read_bytes()
@@ -1208,7 +1216,7 @@ def delete_excise_proof(tmp_path, monkeypatch, Case):
         assert preview.request.args["selection"]["content_ids"] == []
         assert set(preview.entry_ids) == {parent.args["entry_id"], child.args["entry_id"]}
         old_objects = {
-            key: cas.require_object(case.cas_root, key).read_bytes() for key in handle.objects
+            key: cas.require_object(case.cas_root, key).read_bytes() for key in _fold(handle)
         }
         destination = case.directory / "successor"
         n.execute_namespace(
@@ -1697,7 +1705,7 @@ def metadata_proof(tmp_path, Case):
         )
         assert deleted not in handle.entries()
         assert handle.entries(live=False)[deleted] == replace(old_deleted, metadata={})
-        assert handle.objects == {}
+        assert _fold(handle) == {}
         assert (
             b"Removed-only metadata owner sentinel"
             not in (case.root / "namespace.sqlite").read_bytes()
@@ -2540,7 +2548,7 @@ def restart_proof(tmp_path, monkeypatch, Case):
             assert set(handle.entries()) == {case.initial.root_id}, point
             assert handle.info().revision == 3
             assert n.namespace_operation(handle, request.operation_id).result.revision_after == 3
-            assert cas_id not in handle.objects and snapshot.cas_id not in handle.objects
+            assert cas_id not in _fold(handle) and snapshot.cas_id not in _fold(handle)
             assert selected_id not in handle.entries(live=False)
             assert all(n.namespace_operation(handle, op).state == "retired" for op in operations)
         removed_sentinels = [
