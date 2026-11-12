@@ -519,7 +519,42 @@ RELEASED_V1_INDEXES = {
 }
 
 
-def _downgrade_to_v1(case) -> None:
+def _receipts_as_released(db, cas_root: Path, *, tamper: bool = False) -> int:
+    """Rewrite publication receipts into 0.3.0's whole-prefix shape; count them.
+
+    Independent of the migration: 0.3.0 bound journal_length and the SHA-256 of
+    the journal prefix ending with the publication's own line.
+    """
+    import hashlib
+
+    from castle import namespace_content as content
+
+    raw = (cas_root / journal.JOURNAL_FILENAME).read_bytes()
+    converted = 0
+    rows = db.execute(
+        "SELECT operation_id, ownership_receipt FROM operations WHERE ownership_receipt IS NOT NULL"
+    ).fetchall()
+    for operation_id, text in rows:
+        value = content.decode_recipe(text)
+        if not isinstance(value, dict) or not isinstance(value.get("publication"), list):
+            continue
+        for saved in value["publication"]:
+            receipt = saved["receipt"]
+            if receipt is None:
+                continue
+            end = receipt.pop("event_offset") + receipt.pop("event_length")
+            receipt.pop("event_sha256")
+            digest = hashlib.sha256(raw[:end]).hexdigest()
+            receipt.update(journal_length=end, journal_sha256=("0" * 64 if tamper else digest))
+            converted += 1
+        db.execute(
+            "UPDATE operations SET ownership_receipt=? WHERE operation_id=?",
+            (content.encode_recipe(value), operation_id),
+        )
+    return converted
+
+
+def _downgrade_to_v1(case, *, tamper: bool = False) -> int:
     """Rewrite a v2 database into the exact 0.3.0 v1 shape, as 0.3.0 stored it."""
     from castle import namespace_migrate_v1 as migration
 
@@ -537,10 +572,12 @@ def _downgrade_to_v1(case) -> None:
         db.execute("DELETE FROM dependencies")
         db.executemany("INSERT INTO dependencies VALUES (?,?,?,?)", dependencies)
         db.execute("PRAGMA user_version=1")
+        converted = _receipts_as_released(db, case.cas_root, tamper=tamper)
         db.execute("COMMIT")
         assert migration._schema(db) == (RELEASED_V1_TABLES, RELEASED_V1_INDEXES, 1, [])
     finally:
         db.close()
+    return converted
 
 
 def _state(case):
@@ -605,7 +642,9 @@ def migration_proof(tmp_path: Path, Case: type, identity, child) -> None:
     )
     case = populated("migration-exact")
     before = _state(case)
-    _downgrade_to_v1(case)
+    # Committed publications keep 0.3.0 receipts; the migration rebinds each
+    # to its own line after verifying the released whole-prefix SHA-256.
+    assert _downgrade_to_v1(case) > 0
     source_sha = store.hashlib.sha256((case.root / "namespace.sqlite").read_bytes()).hexdigest()
     with pytest.raises(n.NamespaceError, match="^namespace-format-unsupported$"):
         case.open()  # no silent migration at open
@@ -630,6 +669,17 @@ def migration_proof(tmp_path: Path, Case: type, identity, child) -> None:
         assert _totals(h) == _independent(h)
     rerun = migration.migrate_namespace_v1(case.root, case.cas_root, case.session, backup)
     assert not rerun.migrated and rerun.backup_sha256 == source_sha
+
+    # A released receipt whose whole-prefix SHA-256 does not verify refuses
+    # before commit, leaving the v1 database byte-identical.
+    case = populated("migration-receipt-mismatch")
+    assert _downgrade_to_v1(case, tamper=True) > 0
+    image = (case.root / "namespace.sqlite").read_bytes()
+    with pytest.raises(n.NamespaceError, match="^namespace-storage-recovery-required$"):
+        migration.migrate_namespace_v1(
+            case.root, case.cas_root, case.session, case.directory / "mismatch.backup"
+        )
+    assert (case.root / "namespace.sqlite").read_bytes() == image
 
     # A different existing backup refuses before any change.
     case = populated("migration-wrong-backup")
@@ -1101,6 +1151,15 @@ def _differential(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, Case: type, i
     content = {"cas_id": case.stored.cas_id, "size": case.source.stat().st_size}
     root = case.initial.root_id
     rng = random.Random(20261111)
+    # Entry ids order import entries: random uuid4 ids made this fixed-seed
+    # sequence's refusal classes vary between runs (about 1 in 40 at 2a26514).
+    id_source = random.Random(20261112)
+
+    def identity() -> str:
+        import uuid
+
+        return str(uuid.UUID(int=id_source.getrandbits(128), version=4))
+
     names = ["a", "A", "b", "B", "c", "é", "é"]
     outcomes: dict[str | None, int] = {}
     with case.open() as h:
@@ -1996,3 +2055,767 @@ def reader_proof(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, Case: type, id
     journal_file.write_bytes(journal_file.read_bytes().splitlines(keepends=True)[0])
     with pytest.raises(n.NamespaceError, match="^namespace-storage-recovery-required$"):
         reader()
+
+
+# --------------------------------------------------------------------------
+# Phase 13: touched namespace content publication
+# --------------------------------------------------------------------------
+
+
+def _payload(tag: str) -> bytes:
+    return f"phase 13 touched publication payload {tag:>8}\n".encode()
+
+
+def _content(payload: bytes) -> dict:
+    import hashlib
+
+    return {"cas_id": "sha256:" + hashlib.sha256(payload).hexdigest(), "size": len(payload)}
+
+
+def _create(case, h, payload: bytes, name: str, identity) -> n.MutationResult:
+    content = _content(payload)
+    request = case.request(
+        h,
+        "create-file",
+        dict(
+            entry_id=identity(),
+            parent_id=case.initial.root_id,
+            name=name,
+            metadata={},
+            content=content,
+        ),
+    )
+    return n.execute_namespace(h, request, {content["cas_id"]: payload})
+
+
+def _import(case, h, payloads: list[bytes], identity) -> n.MutationResult:
+    entries = sorted(
+        (
+            dict(
+                entry_id=identity(),
+                kind="file",
+                parent_id=case.initial.root_id,
+                name=f"imported-{index}",
+                metadata={},
+                **_content(payload),
+            )
+            for index, payload in enumerate(payloads)
+        ),
+        key=lambda item: item["entry_id"],
+    )
+    request = case.request(
+        h, "import-folder", dict(parent_id=case.initial.root_id, entries=entries)
+    )
+    return n.execute_namespace(h, request, {_content(p)["cas_id"]: p for p in payloads})
+
+
+def _evidence(case) -> list[Path]:
+    operations = case.root / "operations"
+    return sorted(operations.rglob("publication.*")) if operations.exists() else []
+
+
+def _rewrite(file: Path, data: bytes) -> None:
+    mode = file.stat().st_mode & 0o777
+    file.chmod(0o644)
+    file.write_bytes(data)
+    file.chmod(mode)
+
+
+def _refuses(case, action, *, label: str) -> None:
+    """Recovery-required, with no publication evidence and unchanged journal bytes."""
+    journal_file = case.cas_root / journal.JOURNAL_FILENAME
+    before = journal_file.read_bytes()
+    with pytest.raises(n.NamespaceError) as refused:
+        action()
+    assert refused.value.code == "namespace-storage-recovery-required", label
+    assert journal_file.read_bytes() == before, label
+    assert not _evidence(case), label
+
+
+def _lines(case) -> list[bytes]:
+    return (case.cas_root / journal.JOURNAL_FILENAME).read_bytes().splitlines(keepends=True)
+
+
+def _flip_relpath(line: bytes) -> bytes:
+    """The same line, well formed and the same length, naming another relpath."""
+    marker = b'"original_relpath":"'
+    at = line.index(marker) + len(marker)
+    return line[:at] + (b"_" if line[at : at + 1] == b"~" else b"~") + line[at + 1 :]
+
+
+def _unseal(file: Path) -> None:
+    import stat
+
+    if getattr(file.stat(), "st_flags", 0) & getattr(stat, "UF_IMMUTABLE", 0):
+        os.chflags(file, 0)
+    file.chmod(0o644)
+
+
+def _direct(directory: Path, payload: bytes, identity, *, prior: bool):
+    """A store, an operation directory and one immutable stage, without a namespace.
+
+    Returns the publication arguments and the touched proof a namespace's
+    located index would supply, derived independently from the journal bytes.
+    """
+    from castle import cas_recovery as publication
+    from castle import store_state
+
+    directory.mkdir()
+    cas_root = directory / "cas"
+    seed = directory / "seed"
+    seed.write_bytes(payload if prior else b"seed for the direct publication harness\n")
+    cas.ingest_file(cas_root, seed, "seed")
+    operation_id = str(identity())
+    operation = directory / "operations" / operation_id
+    operation.mkdir(parents=True)
+    stage_id = str(identity())
+    (operation / stage_id).write_bytes(payload)
+    (operation / stage_id).chmod(0o444)
+    binding = store_state.read_store_identity(cas_root)
+    cas_id = _content(payload)["cas_id"]
+    request = publication.PublicationRequest(
+        str(identity()), operation_id, str(identity()), binding, cas_id, len(payload), stage_id
+    )
+    data = (cas_root / journal.JOURNAL_FILENAME).read_bytes()
+    spans = store._frame(data)
+    last = spans[-1]
+    position = ("binding", len(data), len(spans), *last[:3], last[3]["at"], last[3]["event_id"])
+    records = tuple(span[3] for span in spans if span[3]["cas_id"] == cas_id)
+    row = cas.expected_index_rows(list(records))[0][cas_id] if records else None
+    return (cas_root, operation, binding, request), publication.TouchedPublication(
+        position, records, row
+    )
+
+
+def _run_direct(arguments, touched, *, recover: bool = False):
+    from castle import cas_recovery as publication
+
+    try:
+        with journal._stable_lock(arguments[0]):
+            return publication._run_locked(*arguments, recover=recover, touched=touched)
+    except (OSError, sqlite3.Error, journal.CastleError, ValueError, TypeError, KeyError):
+        # The namespace caller's own conversion (namespace_content.publish).
+        n._refuse("namespace-storage-recovery-required")
+
+
+def publication_cost_proof(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, Case: type, identity
+) -> None:
+    """One namespace publication costs the same at 20 and 400 prior objects.
+
+    Counts every whole-store primitive (object hashes, tree walks, index
+    images, whole-journal reads, whole-index rebuilds) and the journal bytes
+    read positionally, through commit and cleanup of a two-payload import.
+    """
+    from castle import cas_recovery as publication
+
+    def measure(size: int) -> tuple[dict[str, int], int, int]:
+        case = Case(tmp_path / f"publication-cost-{size}")
+        for index in range(size):
+            source = case.directory / f"prior-{index:05}"
+            source.write_bytes(f"prior object {index:05}\n".encode())
+            cas.ingest_file(case.cas_root, source, "prior", original_relpath=f"prior/{index:05}")
+        counts = {
+            "sha256_file": 0,
+            "authority_paths": 0,
+            "tree_inventory": 0,
+            "inspection_image": 0,
+            "read_authority_journal": 0,
+            "journal_read_bytes": 0,
+            "full_index": 0,
+            "index_record": 0,
+        }
+        pread = {"bytes": 0}
+
+        def counted(name, function):
+            def wrapper(*args, **kwargs):
+                counts[name] += 1
+                return function(*args, **kwargs)
+
+            return wrapper
+
+        read_bytes, real_pread = Path.read_bytes, os.pread
+
+        def counted_read_bytes(self):
+            if self.name == journal.JOURNAL_FILENAME:
+                counts["journal_read_bytes"] += 1
+            return read_bytes(self)
+
+        def counted_pread(fd, length, offset):
+            data = real_pread(fd, length, offset)
+            pread["bytes"] += len(data)
+            return data
+
+        with case.open() as h:
+            h.info()  # catch the located index up to the prior ingests first
+            with monkeypatch.context() as patch:
+                patch.setattr(cas, "sha256_file", counted("sha256_file", cas.sha256_file))
+                patch.setattr(
+                    cas, "_authority_paths", counted("authority_paths", cas._authority_paths)
+                )
+                patch.setattr(
+                    cas, "_tree_inventory", counted("tree_inventory", cas._tree_inventory)
+                )
+                patch.setattr(
+                    cas, "_inspection_image", counted("inspection_image", cas._inspection_image)
+                )
+                patch.setattr(
+                    journal,
+                    "_read_authority_journal",
+                    counted("read_authority_journal", journal._read_authority_journal),
+                )
+                patch.setattr(publication, "_index", counted("full_index", publication._index))
+                patch.setattr(cas, "_index_record", counted("index_record", cas._index_record))
+                patch.setattr(Path, "read_bytes", counted_read_bytes)
+                patch.setattr(os, "pread", counted_pread)
+                _import(case, h, [_payload(f"a{size}"), _payload(f"b{size}")], identity)
+        assert cas.verify(case.cas_root).ok
+        journal_size = (case.cas_root / journal.JOURNAL_FILENAME).stat().st_size
+        return counts, pread["bytes"], journal_size
+
+    (small, small_read, _), (large, large_read, large_journal) = measure(20), measure(400)
+    assert small == large, {"20": small, "400": large}
+    for name in (
+        "authority_paths",
+        "tree_inventory",
+        "inspection_image",
+        "read_authority_journal",
+        "journal_read_bytes",
+        "full_index",
+    ):
+        assert large[name] == 0, (name, large)
+    assert large["index_record"] == 2, large
+    # Positional journal reads are the tail and the publications' own lines:
+    # bounded by request size, never a share of the journal.
+    assert large_read <= small_read + 1024, (small_read, large_read)
+    assert large_read * 4 < large_journal, (large_read, large_journal)
+
+
+def publication_damage_proof(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, Case: type, identity
+) -> None:
+    """Touched damage refuses before evidence; untouched damage waits for diagnosis."""
+    import hashlib
+
+    from castle import cas_recovery as publication
+    from castle import namespace_content as content
+
+    payload = _payload("damage")
+    cas_id = _content(payload)["cas_id"]
+
+    def tail(case):
+        lines = _lines(case)
+        return case.cas_root / journal.JOURNAL_FILENAME, b"".join(lines[:-1]), lines[-1]
+
+    def damage(case, kind):
+        file, head, last = tail(case)
+        index = case.cas_root / cas.INDEX_FILENAME
+        if kind == "tail":
+            _rewrite(file, head + b"[" + last[1:])
+        elif kind == "tail-without-lf":
+            _rewrite(file, head + last[:-1])
+        elif kind == "tail-ending-in-cr":
+            _rewrite(file, head + last[:-1] + b"\r")
+        elif kind == "unframed-append":
+            _rewrite(file, head + last + b"not a journal record\n")
+        elif kind == "index-missing":
+            index.unlink()
+        elif kind == "index-symlink":
+            real = case.directory / "outside.sqlite"
+            index.rename(real)
+            index.symlink_to(real)
+        elif kind == "index-hardlink":
+            os.link(index, case.directory / "alias.sqlite")
+        elif kind in {"objects-row", "names-row"}:
+            with closing(sqlite3.connect(index)) as db, db:
+                if kind == "objects-row":
+                    db.execute(
+                        "INSERT INTO objects VALUES (?,?,?,?,?,?)",
+                        (
+                            cas_id,
+                            len(payload),
+                            "text/plain",
+                            cas.object_relpath(cas_id).as_posix(),
+                            "2000-01-01T00:00:00Z",
+                            None,
+                        ),
+                    )
+                else:
+                    db.execute(
+                        "INSERT INTO names VALUES (?,?,?,?)",
+                        (cas_id, "elsewhere", "stray", "2000-01-01T00:00:00Z"),
+                    )
+        elif kind == "unjournaled-object":
+            destination = cas.object_path(case.cas_root, cas_id)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(payload)
+            destination.chmod(0o444)
+        else:
+            raise AssertionError(kind)
+
+    kinds = (
+        "tail",
+        "tail-without-lf",
+        "tail-ending-in-cr",
+        "unframed-append",
+        "index-missing",
+        "index-symlink",
+        "index-hardlink",
+        "objects-row",
+        "names-row",
+        "unjournaled-object",
+    )
+    for kind in kinds:
+        case = Case(tmp_path / f"publication-damage-{kind}")
+        with case.open() as h:
+            h.info()
+        damage(case, kind)
+
+        def attempt(case=case):
+            with case.open() as h:
+                _create(case, h, payload, "damaged", identity)
+
+        _refuses(case, attempt, label=kind)
+
+    # The tail must end in LF: without the check the publication's line is
+    # written onto the unterminated tail, two records on one physical line.
+    case = Case(tmp_path / "publication-damage-mutant-lf")
+    with case.open() as h:
+        h.info()
+    damage(case, "tail-without-lf")
+
+    def without_lf(descriptor, size, offset, length, digest):
+        try:
+            return store._span(descriptor, size, offset, length, digest)
+        except store._Framing:
+            n._refuse("namespace-storage-recovery-required")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(publication, "_line", without_lf)
+        try:
+            with case.open() as h:
+                _create(case, h, payload, "damaged", identity)
+        except n.NamespaceError:
+            pass
+    with pytest.raises(journal.JournalError):
+        journal._read_authority_journal(case.cas_root)
+
+    # Without the pre-evidence row comparison the drift is found only after
+    # effects: evidence is saved and the journal has grown.
+    case = Case(tmp_path / "publication-damage-mutant-rows")
+    with case.open() as h:
+        h.info()
+    damage(case, "objects-row")
+    before = (case.cas_root / journal.JOURNAL_FILENAME).read_bytes()
+    from collections import Counter
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            publication, "_touched_rows", lambda connection, identity: (Counter(), Counter())
+        )
+        with pytest.raises(n.NamespaceError), case.open() as h:
+            _create(case, h, payload, "damaged", identity)
+    assert _evidence(case) and (case.cas_root / journal.JOURNAL_FILENAME).read_bytes() != before
+
+    # A touched identity's own located lines are re-proven by the caller's
+    # touched proof (handle.object), which falls to full revalidation.
+    case = Case(tmp_path / "publication-damage-own-line")
+    with case.open() as h:
+        h.info()
+    file, head, last = tail(case)
+    assert json.loads(last)["cas_id"] == case.stored.cas_id
+    with case.open() as h, h.admitted():
+        request = publication.PublicationRequest(
+            str(identity()),
+            str(identity()),
+            str(identity()),
+            h.binding,
+            case.stored.cas_id,
+            case.source.stat().st_size,
+            str(identity()),
+        )
+        content._touched(h, request)  # proven before the damage
+        _rewrite(file, head + _flip_relpath(last))
+        with pytest.raises(n.NamespaceError) as refused:
+            content._touched(h, request)
+    assert refused.value.code == "namespace-storage-recovery-required"
+
+    # Untouched damage (another object's bytes) does not refuse publication;
+    # diagnosis refuses that store.
+    case = Case(tmp_path / "publication-damage-untouched")
+    other = cas.object_path(case.cas_root, case.stored.cas_id)
+    with case.open() as h:
+        h.info()
+    original = other.read_bytes()
+    _unseal(other)
+    other.write_bytes(bytes([original[0] ^ 1]) + original[1:])
+    other.chmod(0o444)
+    with case.open() as h:
+        _create(case, h, payload, "untouched", identity)
+    with pytest.raises(n.NamespaceError, match="^namespace-storage-recovery-required$"):
+        with case.open() as h:
+            h._diagnose()
+
+    # Existing identity (the dedup branch): its object's bytes are hashed.
+    arguments, touched = _direct(tmp_path / "publication-dedup", payload, identity, prior=True)
+    existing = cas.object_path(arguments[0], cas_id)
+    inode = existing.stat().st_ino
+    receipt = _run_direct(arguments, touched)
+    assert existing.stat().st_ino == inode
+    assert journal.read_journal(arguments[0])[-1]["outcome"] == "dedup"
+    raw = (arguments[0] / journal.JOURNAL_FILENAME).read_bytes()
+    assert receipt.event_offset + receipt.event_length == len(raw)
+    assert receipt.event_sha256 == hashlib.sha256(raw[receipt.event_offset :]).hexdigest()
+    assert cas.verify(arguments[0]).ok
+
+    def rewritten(label: str):
+        arguments, touched = _direct(tmp_path / label, payload, identity, prior=True)
+        file = cas.object_path(arguments[0], cas_id)
+        _unseal(file)
+        file.write_bytes(bytes([payload[0] ^ 1]) + payload[1:])
+        file.chmod(0o444)
+        return arguments, touched
+
+    arguments, touched = rewritten("publication-dedup-rewritten")
+    before = (arguments[0] / journal.JOURNAL_FILENAME).read_bytes()
+    with pytest.raises(n.NamespaceError, match="^namespace-storage-recovery-required$"):
+        _run_direct(arguments, touched)
+    assert (arguments[0] / journal.JOURNAL_FILENAME).read_bytes() == before
+    assert not list(arguments[1].glob("publication.*"))
+    arguments, touched = rewritten("publication-dedup-mutant")
+    with monkeypatch.context() as patch:
+        patch.setattr(cas, "_validate_authority_objects", lambda *args: None)
+        _run_direct(arguments, touched)  # the mutant publishes over rewritten bytes
+
+
+def touched_guard_proof(tmp_path: Path, Case: type, identity) -> None:
+    """Each pre-evidence guard refuses a stale or wrong caller proof (CODE-F003).
+
+    The touched path trusts the caller's located proof only as far as these
+    checks re-establish it: every case refuses with no evidence and unchanged
+    journal bytes.
+    """
+    from dataclasses import replace
+
+    from castle import cas_recovery as publication
+
+    payload = _payload("guards")
+
+    def refused(label: str, mutate, *, prior: bool = False) -> None:
+        arguments, touched = _direct(tmp_path / f"guard-{label}", payload, identity, prior=prior)
+        touched = mutate(arguments, touched)
+        journal_file = arguments[0] / journal.JOURNAL_FILENAME
+        before = journal_file.read_bytes()
+        with pytest.raises(n.NamespaceError, match="^namespace-storage-recovery-required$"):
+            _run_direct(arguments, touched)
+        assert journal_file.read_bytes() == before, label
+        assert not list(arguments[1].glob("publication.*")), label
+
+    def position(touched, **changes):
+        names = ("identity", "length", "count", "offset", "span", "digest", "at", "event")
+        fields = dict(zip(names, touched.position, strict=True)) | changes
+        return replace(touched, position=tuple(fields[name] for name in names))
+
+    refused("length", lambda a, t: position(t, length=t.position[1] + 1))
+    refused("tail-digest", lambda a, t: position(t, digest="0" * 64))
+    refused("tail-event", lambda a, t: position(t, event="uuid:" + str(identity())))
+    refused(
+        "empty-count",
+        lambda a, t: position(t, count=0, offset=None, span=None, digest=None, at=None, event=None),
+    )
+
+    def foreign(arguments, touched):
+        seed = journal.read_journal(arguments[0])[0]
+        return replace(touched, records=(seed,))
+
+    refused("foreign-record", foreign)
+    refused(
+        "row",
+        lambda a, t: replace(t, row=(*t.row[:2], "application/x-other", *t.row[3:])),
+        prior=True,
+    )
+
+    def own_relpath(arguments, touched):
+        request = arguments[3]
+        record = dict(
+            touched.records[0],
+            source_root_id=f"namespace:{request.namespace_id}",
+            original_relpath=f"{request.operation_id}/{request.publication_id}",
+        )
+        return replace(touched, records=(record,))
+
+    refused("own-relpath", own_relpath, prior=True)
+
+    def cross_object(arguments, touched):
+        request = arguments[3]
+        with closing(sqlite3.connect(arguments[0] / cas.INDEX_FILENAME)) as db, db:
+            db.execute(
+                "INSERT INTO names VALUES (?,?,?,?)",
+                (
+                    journal.read_journal(arguments[0])[0]["cas_id"],
+                    f"namespace:{request.namespace_id}",
+                    f"{request.operation_id}/{request.publication_id}",
+                    "2000-01-01T00:00:00Z",
+                ),
+            )
+        return touched
+
+    refused("cross-object-relpath", cross_object)
+
+    def leftover(arguments, touched):
+        temporary = publication._temporary(arguments[0], arguments[3])
+        temporary.parent.mkdir(parents=True, exist_ok=True)
+        temporary.write_bytes(b"left by a killed writer")
+        return touched
+
+    refused("leftover-temporary", leftover)
+
+
+def publication_crash_proof(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, Case: type, identity
+) -> None:
+    """Honest faults: crash replay, duplicate append, state loss, restored journal."""
+    import types
+
+    def published(label: str):
+        case = Case(tmp_path / f"publication-crash-{label}")
+        with case.open() as h:
+            _create(case, h, _payload("first"), "first", identity)
+        return case, _lines(case)[-1]
+
+    def append(case, data: bytes) -> None:
+        file = case.cas_root / journal.JOURNAL_FILENAME
+        _rewrite(file, file.read_bytes() + data)
+
+    def lose_rows(case, line: bytes) -> None:
+        record = json.loads(line)
+        with closing(sqlite3.connect(case.root / "namespace.sqlite")) as db, db:
+            db.execute("DELETE FROM cas_records WHERE event_id=?", (record["event_id"],))
+            db.execute("DELETE FROM cas_objects WHERE cas_id=?", (record["cas_id"],))
+
+    def second(case):
+        def attempt():
+            with case.open() as h:
+                _create(case, h, _payload("second"), "second", identity)
+
+        return attempt
+
+    # A saved event appended again after a crash (the same bytes twice).
+    case, line = published("replay")
+    append(case, line)
+    _refuses(case, second(case), label="replay")
+
+    # The same replay after the namespace lost its own located row and
+    # witness: canonical ordering alone refuses it.
+    case, line = published("state-loss")
+    append(case, line)
+    lose_rows(case, line)
+    _refuses(case, second(case), label="state-loss")
+
+    # A rolled-back namespace image plus the replay: the appended range
+    # repeats an id within itself.
+    case = Case(tmp_path / "publication-crash-rollback")
+    with case.open() as h:
+        h.info()
+    image = (case.root / "namespace.sqlite").read_bytes()
+    with case.open() as h:
+        _create(case, h, _payload("first"), "first", identity)
+    append(case, _lines(case)[-1])
+    (case.root / "namespace.sqlite").write_bytes(image)
+    for sidecar in ("namespace.sqlite-wal", "namespace.sqlite-shm"):
+        (case.root / sidecar).unlink(missing_ok=True)
+    _refuses(case, second(case), label="rollback")
+
+    # Appending onto a restored older journal copy: the indexed tail moved.
+    case = Case(tmp_path / "publication-crash-restored")
+    older = (case.cas_root / journal.JOURNAL_FILENAME).read_bytes()
+    with case.open() as h:
+        _create(case, h, _payload("first"), "first", identity)
+    _rewrite(case.cas_root / journal.JOURNAL_FILENAME, older)
+    _refuses(case, second(case), label="restored")
+
+    # Either guard alone refuses the replay; dropping both accepts it.
+    class Unordered(types.SimpleNamespace):
+        counter = 0
+
+        def journal_sort_key(self, record):
+            Unordered.counter += 1
+            return (
+                journal.parse_journal_timestamp("9999-01-01T00:00:00Z", "mutant"),
+                f"{Unordered.counter:012}",
+            )
+
+    unordered = Unordered()
+    for name in dir(journal):
+        if not name.startswith("__") and name != "journal_sort_key":
+            setattr(unordered, name, getattr(journal, name))
+    outcomes = {}
+    for mutant in ("no-known-id", "no-ordering", "neither"):
+        case, line = published(f"mutant-{mutant}")
+        append(case, line)
+        lose = mutant == "neither"
+        if lose:
+            lose_rows(case, line)
+        with monkeypatch.context() as patch:
+            if mutant in {"no-known-id", "neither"}:
+                patch.setattr(store.NamespaceHandle, "_known_event", lambda self, event: False)
+            if mutant in {"no-ordering", "neither"}:
+                patch.setattr(store, "journal", unordered)
+            try:
+                second(case)()
+                outcomes[mutant] = "accepted"
+            except n.NamespaceError as error:
+                outcomes[mutant] = error.code
+    assert outcomes == {
+        "no-known-id": "namespace-storage-recovery-required",
+        "no-ordering": "namespace-storage-recovery-required",
+        "neither": "accepted",
+    }, outcomes
+
+    # An ordinary ingest killed between its append and its index commit: the
+    # appended line is located and an unrelated publication proceeds, as the
+    # touched-only approval allows; verification reports the index gap.
+    case = Case(tmp_path / "publication-crash-ingest")
+    with case.open() as h:
+        h.info()
+    interrupted = case.directory / "interrupted"
+    interrupted.write_bytes(b"ordinary ingest interrupted before its index commit\n")
+
+    def killed(*args, **kwargs):
+        raise OSError("killed before the index commit")
+
+    with monkeypatch.context() as patch, pytest.raises(Exception):
+        patch.setattr(cas, "_index_record", killed)
+        cas.ingest_file(case.cas_root, interrupted, "interrupted")
+    with case.open() as h:
+        _create(case, h, _payload("second"), "second", identity)
+    assert not cas.verify(case.cas_root).ok
+    cas.rebuild_index(case.cas_root)
+    assert cas.verify(case.cas_root).ok
+
+
+def publication_recovery_proof(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, Case: type, identity
+) -> None:
+    """Interrupted touched publications finish exactly once through recovery."""
+    from castle import cas_recovery as publication
+    from castle import namespace_content as content
+
+    def killer(point: str, *, skip: int = 0):
+        target = {
+            "before-copy": (publication, "_copy_object"),
+            "before-append": (publication, "_write_events"),
+            "before-index": (publication, "_index_touched"),
+            "before-completion": (publication, "_appended"),
+            "before-receipt": (content, "save_receipt"),
+        }[point]
+        original = getattr(*target)
+        calls = {"count": 0}
+
+        def interrupted(*args, **kwargs):
+            calls["count"] += 1
+            if calls["count"] > skip:
+                raise OSError(f"killed {point}")
+            return original(*args, **kwargs)
+
+        return target, interrupted
+
+    def exactly_once(case, payloads: list[bytes]) -> None:
+        records = journal.read_journal(case.cas_root)
+        for payload in payloads:
+            ours = [r for r in records if r["cas_id"] == _content(payload)["cas_id"]]
+            assert len(ours) == 1, (payload, ours)
+        assert cas.verify(case.cas_root).ok
+        assert not _evidence(case)
+
+    for point in (
+        "before-copy",
+        "before-append",
+        "before-index",
+        "before-completion",
+        "before-receipt",
+    ):
+        # Two payloads: the kill lands on the second publication (the receipt
+        # save is once per operation, after both).
+        second = 0 if point == "before-receipt" else 1
+        for payloads, skip in (
+            ([_payload(point)], 0),
+            ([_payload("x" + point), _payload("y" + point)], second),
+        ):
+            case = Case(tmp_path / f"publication-recovery-{point}-{len(payloads)}")
+            target, interrupted = killer(point, skip=skip)
+            with monkeypatch.context() as patch, case.open() as h:
+                patch.setattr(*target, interrupted)
+                with pytest.raises(n.NamespaceError, match="^namespace-storage-recovery-required$"):
+                    if len(payloads) == 1:
+                        _create(case, h, payloads[0], "recovered", identity)
+                    else:
+                        _import(case, h, payloads, identity)
+            n.recover_namespace(case.root, case.cas_root, case.session, None)
+            exactly_once(case, payloads)
+
+    # Recovery refuses a moved tail (the evidence's prefix_tail no longer
+    # names the line before its stream); a mutant that skips it accepts.
+    for mutant in (False, True):
+        arguments, _ = _direct(
+            tmp_path / f"publication-recovery-moved-{mutant}",
+            _payload("moved"),
+            identity,
+            prior=False,
+        )
+        target, interrupted = killer("before-append")
+        with monkeypatch.context() as patch, pytest.raises(n.NamespaceError):
+            patch.setattr(*target, interrupted)
+            _run_direct(arguments, None)
+        file = arguments[0] / journal.JOURNAL_FILENAME
+        _rewrite(file, _flip_relpath(file.read_bytes()))
+        record = publication._record_file(arguments[1], arguments[3])
+        saved = record.read_bytes()
+        with monkeypatch.context() as patch:
+            if mutant:
+                patch.setattr(publication, "_tail", lambda raw: json.loads(saved)["prefix_tail"])
+                _run_direct(arguments, None, recover=True)
+                continue
+            with pytest.raises(n.NamespaceError, match="^namespace-storage-recovery-required$"):
+                _run_direct(arguments, None, recover=True)
+        assert record.read_bytes() == saved
+
+
+def receipt_proof(tmp_path: Path, Case: type, identity) -> None:
+    """A receipt binds its own line where it says; unrelated earlier lines are diagnosis's."""
+    from castle import namespace_content as content
+    from castle import namespace_transactions as transactions
+
+    def check(label: str, damage) -> None:
+        case = Case(tmp_path / f"receipt-{label}")
+        with case.open() as h:
+            operation = _create(case, h, _payload("receipt"), "receipt", identity).operation_id
+        file = case.cas_root / journal.JOURNAL_FILENAME
+        with case.open() as h:
+            row = transactions._row(h, operation)
+            value, requests = content.recipe(h, row)
+            lines = file.read_bytes().splitlines(keepends=True)
+            if damage is not None:
+                _rewrite(file, damage(lines))
+            with content.journal_descriptor(case.cas_root) as (descriptor, size):
+                content.validate_receipt(
+                    h, row, requests[0], value["publication"][0]["receipt"], descriptor, size
+                )
+        return case
+
+    check("valid", None)
+    for label, damage in (
+        ("own-line-changed", lambda lines: b"".join(lines[:-1]) + _flip_relpath(lines[-1])),
+        ("own-line-moved", lambda lines: lines[0] + b"\n" + b"".join(lines[1:])),
+        ("own-line-off-boundary", lambda lines: lines[0][:-1] + b" " + b"".join(lines[1:])),
+        ("own-line-removed", lambda lines: b"".join(lines[:-1])),
+    ):
+        with pytest.raises(n.NamespaceError, match="^namespace-storage-recovery-required$"):
+            check(label, damage)
+
+    # An unrelated earlier line rewritten in place stays well formed: the
+    # receipt still proves its own line; diagnosis refuses the store.
+    case = check("unrelated", lambda lines: _flip_relpath(lines[0]) + b"".join(lines[1:]))
+    with pytest.raises(n.NamespaceError, match="^namespace-storage-recovery-required$"):
+        with case.open() as h:
+            h._diagnose()

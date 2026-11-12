@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import os
 import sqlite3
+import stat
 import uuid
-from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -136,8 +137,9 @@ def check_capacity(value: dict[str, Any]) -> None:
                     "cas_id": request["cas_id"],
                     "size": request["size"],
                     "event_ids": ["v1:" + "9" * 16 + ":sha256:" + "f" * 64],
-                    "journal_length": n.MAX_INTEGER,
-                    "journal_sha256": "f" * 64,
+                    "event_offset": n.MAX_INTEGER,
+                    "event_length": n.MAX_INTEGER,
+                    "event_sha256": "f" * 64,
                 },
             }
         )
@@ -232,8 +234,9 @@ def _receipt(
             "cas_id",
             "size",
             "event_ids",
-            "journal_length",
-            "journal_sha256",
+            "event_offset",
+            "event_length",
+            "event_sha256",
         }:
             raise ValueError("closed receipt")
         fields = dict(value)
@@ -245,7 +248,8 @@ def _receipt(
         fields["event_ids"] = tuple(events)
         result = publication.PublicationReceipt(**fields)
         n._integer(result.size)
-        n._integer(result.journal_length)
+        n._integer(result.event_offset)
+        n._integer(result.event_length)
         if (
             (
                 result.publication_id,
@@ -261,9 +265,9 @@ def _receipt(
                 request.cas_id,
                 request.size,
             )
-            or not result.journal_length
-            or not isinstance(result.journal_sha256, str)
-            or n._CAS.fullmatch("sha256:" + result.journal_sha256) is None
+            or not result.event_length
+            or not isinstance(result.event_sha256, str)
+            or n._CAS.fullmatch("sha256:" + result.event_sha256) is None
         ):
             raise ValueError("receipt binding")
         return result
@@ -379,12 +383,14 @@ def publish(handle: NamespaceHandle, row: dict[str, Any]) -> list[publication.Pu
         for i in order:
             request = requests[i]
             store, operation = publication._roots(handle.cas_root, directory, request)
+            resume = publication._record_file(operation, request).exists()
             receipts[i] = publication._run_locked(
                 store,
                 operation,
                 handle.binding,
                 request,
-                recover=publication._record_file(operation, request).exists(),
+                recover=resume,
+                touched=None if resume else _touched(handle, request),
             )
         return [receipts[i] for i in range(len(requests))]
     except (
@@ -398,6 +404,19 @@ def publish(handle: NamespaceHandle, row: dict[str, Any]) -> list[publication.Pu
         RecursionError,
     ):
         n._refuse("namespace-storage-recovery-required")
+
+
+def _touched(
+    handle: NamespaceHandle, request: publication.PublicationRequest
+) -> publication.TouchedPublication:
+    """Catch the located index up to the journal, then prove this identity's records."""
+    handle._cas_position()
+    row = handle.object(request.cas_id)
+    records = tuple(handle._object_records(request.cas_id))
+    position = handle._position()
+    if position is None:
+        n._refuse("namespace-storage-recovery-required")
+    return publication.TouchedPublication(tuple(position), records, row)
 
 
 def save_receipt(
@@ -417,26 +436,36 @@ def save_receipt(
     )
 
 
+@contextmanager
+def journal_descriptor(cas_root: Path) -> Iterator[tuple[int, int]]:
+    """The CAS journal opened once: no link, a regular file, one link; with its size."""
+    descriptor = os.open(cas_root / journal.JOURNAL_FILENAME, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            n._refuse("namespace-storage-recovery-required")
+        yield descriptor, info.st_size
+    finally:
+        os.close(descriptor)
+
+
 def validate_receipt(
     handle: NamespaceHandle,
     row: dict[str, Any],
     request: publication.PublicationRequest,
     encoded: dict[str, Any],
-    raw_journal: bytes,
-) -> None:
+    descriptor: int,
+    size: int,
+) -> publication.PublicationReceipt:
+    """Prove the receipt's own journal line where it says it is, and its object."""
     if row["state"] != "committed":
         n._refuse("namespace-storage-recovery-required")
     receipt = _receipt(encoded, request)
-    prefix = raw_journal[: receipt.journal_length]
-    if (
-        len(prefix) != receipt.journal_length
-        or hashlib.sha256(prefix).hexdigest() != receipt.journal_sha256
-    ):
+    event = publication._line(
+        descriptor, size, receipt.event_offset, receipt.event_length, receipt.event_sha256
+    )
+    if receipt.event_ids != (event["event_id"],):
         n._refuse("namespace-storage-recovery-required")
-    records = publication._records(prefix)
-    if not records or receipt.event_ids != (records[-1]["event_id"],):
-        n._refuse("namespace-storage-recovery-required")
-    event = records[-1]
     if any(
         event[k] != v
         for k, v in {
@@ -451,6 +480,7 @@ def validate_receipt(
     file = cas.object_path(handle.cas_root, request.cas_id)
     if file.stat().st_size != request.size or cas.sha256_file(file) != request.cas_id:
         n._refuse("namespace-storage-recovery-required")
+    return receipt
 
 
 def cleanup(handle: NamespaceHandle, row: dict[str, Any]) -> None:
@@ -462,30 +492,42 @@ def cleanup(handle: NamespaceHandle, row: dict[str, Any]) -> None:
         ):
             n._refuse("namespace-storage-recovery-required")
         return  # Historical terminal evidence stays byte-identical; no old CAS replay.
-    raw_journal = (handle.cas_root / journal.JOURNAL_FILENAME).read_bytes() if requests else b""
-    remotes = Counter(cas._snapshot_remotes(handle.cas_root)) if requests else Counter()
+    if not requests:
+        return
+    with journal_descriptor(handle.cas_root) as (descriptor, size):
+        _cleanup(handle, row, value, requests, directory, descriptor, size)
+
+
+def _cleanup(
+    handle: NamespaceHandle,
+    row: dict[str, Any],
+    value: dict[str, Any],
+    requests: list[publication.PublicationRequest],
+    directory: Path,
+    descriptor: int,
+    size: int,
+) -> None:
     for request, saved in zip(requests, value["publication"], strict=True):
         stage = directory / request.staged_file_id
         record = publication._record_file(directory, request)
         temporary = directory / f"publication.{request.publication_id}.tmp"
         if row["state"] == "committed":
-            validate_receipt(handle, row, request, saved["receipt"], raw_journal)
+            validate_receipt(handle, row, request, saved["receipt"], descriptor, size)
             if stage.exists():
                 publication._stage(directory, request)
                 if not record.exists():
                     n._refuse("namespace-storage-recovery-required")
             if record.exists():
                 evidence = publication._load(handle.cas_root, directory, handle.binding, request)
-                raw = raw_journal
                 boundary = evidence["journal_prefix_length"]
+                stream = publication._stream(evidence)
                 if (
                     evidence["state"] != "complete"
-                    or hashlib.sha256(raw[:boundary]).hexdigest()
-                    != evidence["journal_prefix_sha256"]
-                    or not raw[boundary:].startswith(publication._stream(evidence))
-                    or remotes != Counter(tuple(v) for v in evidence["remotes"])
+                    or os.pread(descriptor, len(stream), boundary) != stream
                 ):
                     n._refuse("namespace-storage-recovery-required")
+                if evidence["prefix_tail"] is not None:
+                    publication._line(descriptor, size, *evidence["prefix_tail"])
                 if temporary.exists():
                     publication._regular(temporary)
                     raw_temporary = temporary.read_bytes()
@@ -504,9 +546,9 @@ def cleanup(handle: NamespaceHandle, row: dict[str, Any]) -> None:
             if error["code"] != "namespace-input-unfrozen" or record.exists() or temporary.exists():
                 n._refuse("namespace-storage-recovery-required")
             if stage.exists():
-                size = publication._regular(stage).st_size
-                if size > request.size or (
-                    size == request.size and cas.sha256_file(stage) != request.cas_id
+                stage_size = publication._regular(stage).st_size
+                if stage_size > request.size or (
+                    stage_size == request.size and cas.sha256_file(stage) != request.cas_id
                 ):
                     n._refuse("namespace-storage-recovery-required")
         else:

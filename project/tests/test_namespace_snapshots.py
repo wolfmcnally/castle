@@ -731,8 +731,9 @@ def bound_proof():
     }
     receipt.update(
         event_ids=["v1:" + "9" * 16 + ":sha256:" + "f" * 64],
-        journal_length=n.MAX_INTEGER,
-        journal_sha256="f" * 64,
+        event_offset=n.MAX_INTEGER,
+        event_length=n.MAX_INTEGER,
+        event_sha256="f" * 64,
     )
     assert set(request) == {field.name for field in fields(publication.PublicationRequest)}
     assert set(receipt) == {field.name for field in fields(publication.PublicationReceipt)}

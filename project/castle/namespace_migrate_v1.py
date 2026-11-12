@@ -12,6 +12,7 @@ v2 computes them.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import sqlite3
 import stat
@@ -131,6 +132,57 @@ def _backup_matches_v1(backup: Path, namespace_id: str) -> bool:
     ]
 
 
+def _upgrade_receipts(db: sqlite3.Connection, cas_root: Path) -> None:
+    """Rebind 0.3.0 whole-prefix publication receipts to their own journal line.
+
+    0.3.0 receipts carry journal_length and journal_sha256 over the journal
+    prefix ending with the publication's line. Each is verified against the
+    current journal before it is converted to event_offset, event_length and
+    event_sha256 of that last line; a mismatch refuses before commit.
+    """
+    from castle import cas_recovery as publication
+    from castle import journal
+    from castle import namespace_content as content
+
+    raw: bytes | None = None
+    rows = db.execute(
+        "SELECT operation_id, ownership_receipt FROM operations WHERE ownership_receipt IS NOT NULL"
+    ).fetchall()
+    for operation_id, text in rows:
+        value = content.decode_recipe(text)
+        publications = value.get("publication") if isinstance(value, dict) else None
+        if not isinstance(publications, list):
+            continue
+        changed = False
+        for saved in publications:
+            receipt = saved.get("receipt") if isinstance(saved, dict) else None
+            if not isinstance(receipt, dict) or "journal_sha256" not in receipt:
+                continue
+            if raw is None:
+                raw = (cas_root / journal.JOURNAL_FILENAME).read_bytes()
+            length, digest = receipt.pop("journal_length"), receipt.pop("journal_sha256")
+            prefix = raw[:length] if type(length) is int and length > 0 else b""
+            tail = publication._tail(prefix) if len(prefix) == length else None
+            try:
+                event = json.loads(prefix[tail[0] :]) if tail is not None else None
+            except ValueError:
+                event = None
+            if (
+                not isinstance(event, dict)
+                or hashlib.sha256(prefix).hexdigest() != digest
+                or not prefix.endswith(b"\n")
+                or [event.get("event_id")] != receipt.get("event_ids")
+            ):
+                n._refuse("namespace-storage-recovery-required")
+            receipt.update(event_offset=tail[0], event_length=tail[1], event_sha256=tail[2])
+            changed = True
+        if changed:
+            db.execute(
+                "UPDATE operations SET ownership_receipt=? WHERE operation_id=?",
+                (content.encode_recipe(value), operation_id),
+            )
+
+
 def run(handle: store.NamespaceHandle, backup: Path) -> None:
     """Called by the handle under domain ownership, coordinator.lock and the stable CAS lock."""
     from castle import namespace_replacement as replacement
@@ -235,6 +287,7 @@ def run(handle: store.NamespaceHandle, backup: Path) -> None:
         db.execute("INSERT INTO tree_totals VALUES (?,?,?)", store.summarize(handle.entries()))
         db.execute("INSERT INTO coordinator_state VALUES (NULL)")
         db.execute("DELETE FROM dependencies WHERE owner_kind!='entry'")
+        _upgrade_receipts(db, handle.cas_root)
         # Validate the complete v2 state before COMMIT (PLAN-F008).
         if _schema(db) != (store._TABLES, store._INDEXES, store._USER_VERSION, []):
             n._refuse("namespace-format-unsupported")

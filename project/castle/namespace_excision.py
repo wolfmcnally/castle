@@ -931,7 +931,6 @@ def _remove_directory(directory: Path, commitments: list[dict[str, Any]]) -> Non
 
 def _dispose(handle: NamespaceHandle, request: dict[str, Any], value: dict[str, Any]) -> None:
     from castle import cas_recovery as publication
-    from castle import namespace_content as content
     from castle import namespace_replacement as replacement
     from castle import namespace_store as store
 
@@ -953,6 +952,14 @@ def _dispose(handle: NamespaceHandle, request: dict[str, Any], value: dict[str, 
         {"name": item["file_id"], "size": item["size"], "digest": item["digest"]}
         for item in value["recipes"]
     )
+    recorded = [
+        saved
+        for saved in value["publications"]
+        if publication._record_file(directory, _publication(saved, value)).exists()
+    ]
+    if recorded:
+        cas._validated_authority(handle.cas_root, derived=True)
+        _receipts_witnessed(handle, value, recorded)
     for saved in value["publications"]:
         item = _publication(saved, value)
         commitments.append(
@@ -968,13 +975,6 @@ def _dispose(handle: NamespaceHandle, request: dict[str, Any], value: dict[str, 
             evidence = publication._load(handle.cas_root, directory, handle.binding, item)
             if evidence["state"] != "complete":
                 replacement.invalid()
-            content.validate_receipt(
-                handle,
-                {"state": "committed"},
-                item,
-                saved["receipt"],
-                (handle.cas_root / journal.JOURNAL_FILENAME).read_bytes(),
-            )
             commitments.append(_closed_file(record))
             if temporary.exists():
                 replacement.regular(temporary)
@@ -2152,7 +2152,13 @@ def _publication(saved: dict[str, Any], value: dict[str, Any]):
     from castle import cas_recovery as publication
     from castle import namespace_replacement as replacement
 
-    if not isinstance(saved, dict) or set(saved) != {"request", "receipt"}:
+    if not isinstance(saved, dict) or set(saved) != {"request", "receipt", "journal_sha256"}:
+        replacement.invalid()
+    witness = saved["journal_sha256"]
+    if (saved["receipt"] is None) != (witness is None) or (
+        witness is not None
+        and (not isinstance(witness, str) or n._CAS.fullmatch("sha256:" + witness) is None)
+    ):
         replacement.invalid()
     fields = dict(saved["request"])
     fields["cas_binding"] = store_state._identity(fields["cas_binding"])
@@ -2254,7 +2260,9 @@ def _publish_snapshots(
                 len(raw),
                 _fresh(used),
             )
-            value["publications"].append({"request": asdict(item), "receipt": None})
+            value["publications"].append(
+                {"request": asdict(item), "receipt": None, "journal_sha256": None}
+            )
         value["stage"] = "publishing"
         _save_intent(handle, operation, value)
     if len(value["publications"]) != len(payloads):
@@ -2293,16 +2301,54 @@ def _publish_snapshots(
             saved = asdict(receipt)
             saved["event_ids"] = list(receipt.event_ids)
             content._receipt(saved, item)
-            if value["publications"][i]["receipt"] not in (None, saved):
+            witness = _journal_witness(successor, receipt)
+            if value["publications"][i]["receipt"] not in (None, saved) or value["publications"][i][
+                "journal_sha256"
+            ] not in (None, witness):
                 replacement.invalid()
             value["publications"][i]["receipt"] = saved
+            value["publications"][i]["journal_sha256"] = witness
             _save_intent(handle, operation, value)
+
+
+def _journal_witness(root: Path, receipt: Any, raw: bytes | None = None) -> str:
+    """Excision's own whole-journal witness through a publication's line.
+
+    The touched receipt binds only its own line. Excision is a whole-sequence
+    operation: between its publications and its reference check an honest
+    canonical re-sort (a union merge or rebuild) could move earlier lines, so
+    it keeps 0.3.0's whole-prefix SHA-256 in its own intent.
+    """
+    if raw is None:
+        raw = (root / journal.JOURNAL_FILENAME).read_bytes()
+    end = receipt.event_offset + receipt.event_length
+    if len(raw) < end:
+        n._refuse("namespace-storage-recovery-required")
+    return hashlib.sha256(raw[:end]).hexdigest()
+
+
+def _receipts_witnessed(
+    handle: NamespaceHandle, value: dict[str, Any], publications: list[dict[str, Any]]
+) -> None:
+    """Each named receipt's own line and excision's whole-prefix witness for it."""
+    from castle import namespace_content as content
+
+    with content.journal_descriptor(handle.cas_root) as (descriptor, size):
+        raw = os.pread(descriptor, size, 0)
+        if len(raw) != size:
+            n._refuse("namespace-storage-recovery-required")
+        for saved in publications:
+            item = _publication(saved, value)
+            receipt = content.validate_receipt(
+                handle, {"state": "committed"}, item, saved["receipt"], descriptor, size
+            )
+            if _journal_witness(handle.cas_root, receipt, raw) != saved["journal_sha256"]:
+                n._refuse("namespace-storage-recovery-required")
 
 
 def _references(
     handle: NamespaceHandle, request: dict[str, Any], value: dict[str, Any], successor: Path
 ) -> None:
-    from castle import namespace_content as content
     from castle import namespace_store as store
 
     n._authorize(handle.session, "excise-references")
@@ -2313,15 +2359,10 @@ def _references(
             n._refuse("namespace-binding-mismatch")
         records, _, _ = cas._validated_authority(successor, derived=True)
         objects, _ = cas.expected_index_rows(records)
-        raw_journal = (successor / journal.JOURNAL_FILENAME).read_bytes()
         prior_root, prior_binding = handle.cas_root, handle.binding
         try:
             handle.cas_root, handle.binding = successor, binding
-            for saved in value["publications"]:
-                item = _publication(saved, value)
-                content.validate_receipt(
-                    handle, {"state": "committed"}, item, saved["receipt"], raw_journal
-                )
+            _receipts_witnessed(handle, value, value["publications"])
         finally:
             handle.cas_root, handle.binding = prior_root, prior_binding
     if any(

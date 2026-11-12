@@ -2290,3 +2290,183 @@ Phase 12 — Close bookkeeping outcomes
 Execution trace: 51c6a36ba960459bb55fa1bf168ef72d
 
 Applied after the accepted close: the plan index marks Phase 12 complete (the recorded transition, verified with the close's handoff check); user action sincere-jaguar is filed, pending, for the moved-detection acceptance and the Phase 13 CAS membership decision. Ripple: none, no downstream sketches. Lessons strict-kudu and quantum-tuatara were filed at the park; lessons validate OK. The dashboard report is regenerated next, then the bare handoff gate. No later tracked write follows a successful handoff gate.
+
+## 2026-11-11 18:23 — START
+Phase 13 — Incremental namespace content publication
+
+Execution trace: 4bcb22c1d2c94ef3a91c13d033dced68
+
+Planned work:
+- Touched-object publication: publication validates the object it publishes, the journal bytes it appends after and the index rows it changes, and no longer hashes untouched objects, re-parses the whole journal or rebuilds the whole index on the ordinary path.
+- Journal position without trusting stamps: publication appends after a verified position, extended by parsing only appended bytes; touched and appended authority is checked against current bytes, kept apart from the approved delayed detection of untouched prefix damage, with no resumable whole-prefix hash claimed.
+- Duplicate-event guarantee kept: a repeated event id is refused at publication as today, with no derived table treated as authority.
+- Incremental index commit: the index changes only the rows the publication adds; rebuild, verify and diagnosis still fold the whole journal.
+- Truthful contract text: the namespace brief and the CAS contract state which publication checks moved, to where, and when each kind of damage is detected.
+
+## 2026-11-11 22:34 — PARK
+Phase 13 — Incremental namespace content publication
+
+Execution trace: 4bcb22c1d2c94ef3a91c13d033dced68 (finalized; root outcome interrupted at the planned preparation park)
+
+Planned park after governing-prose preparation, before any implementation. The run is parked so that a fresh run captures the amended phase file and namespace brief before code is written, the route lesson strict-kudu records.
+
+What is true now:
+- One registered Fable High plan review ran (17 findings: 5 high, 9 medium, 2 low, 1 informational) and is ingested. The plan-review allowance is spent (1 of 1). No second plan review was launched.
+- The plan went through four captured versions, the last at 203 lines, with no growth beyond the one-third limit. Every finding has a recorded disposition. One earlier justification ("a repeated id requires a forger") was withdrawn at the coordinator's correction and is kept, marked superseded.
+- No product source, test, schema, store, release, tag or push change was made, and no implementation started.
+
+Operator rulings (relayed by the coordinator, preserved verbatim):
+- 2026-11-12: "In general we are not implementing Byzantine fault tolerance anywhere in our stack. So no, we should not scan the whole journal except as part of a doctor diagnosis/recovery procedure/tool."
+- Root disposition: continue under that ruling with the simple touched and appended path, demonstrating that it handles ordinary crash replay, duplicate append and state loss with the required integrity and recovery tests. No speculative new index. No weakening of unrelated excision checks. The no-Byzantine boundary is not a claim that accidental faults or duplicate replay cannot occur.
+
+Preparation written (uncommitted, captured by the next run): plan/phase-13.md records the ruling and the resolved decisions and corrects its review-route sentence. briefs/coordinated-namespace-crud.md gains a section 17 pointer, a section 24 note and a new section 25. briefs/cas-api.md is unchanged.
+
+Operator-input parks: one decision park, closed; 3h39m48.9s (exact monotonic). A 60-minute decision dialog opened during it expired unanswered (not consent). The ruling arrived through the coordinator afterwards.
+
+Resume condition: a fresh run initialized against the amended authorities, carrying this run's advice with its identity and spent allowance, then implementation, the one code critique and the gates.
+
+Remaining:
+- Implementation of plan v4, its focused proofs, the code critique, both full gates and Linux qualification.
+- Recorded status of the two Phase 12 residuals: proposed as threat-model exclusions under the ruling, not as defects fixed; the operator owns the final record.
+
+Lessons:
+- apricot-dinosaur filed (methodology): before dropping a check under a narrowed threat model, enumerate the honest faults it also catches. One occurrence.
+- indigo-galago filed (methodology): in a coordinated session, check who owns operator communication before raising a user-visible decision surface. One occurrence.
+- Observation, not filed: an unquoted shell heredoc carrying Markdown backticks made zsh try to execute identifiers; every attempt failed and no file changed. This is already covered by the operator's global shell rules, so no duplicate candidate was filed.
+- lessons validate OK; attractive-lemming remains at three occurrences, graduation stays with the operator.
+
+## 2026-11-11 22:36 — START (resumed)
+Phase 13 — Incremental namespace content publication
+
+Execution trace: 21ca5e77448f4907889140157c0ae5c2
+
+Fresh capture after the governing-prose preparation park (trace 4bcb22c1d2c94ef3a91c13d033dced68). Advice is carried with its original identity, and the plan-review allowance stays spent (1 of 1). Plan v4 (b342664e5d309c61c578665fe4114f96e2060ce8085b04b3538e65c2921bcd50) is carried under the operator's no-Byzantine ruling.
+
+Planned work:
+- Touched-object namespace publication with no whole-journal read: the tail, the appended bytes and the object's own located lines; touched rows and paths checked before evidence; an incremental index commit.
+- Honest repeated-id refusal on the appended range by canonical ordering and known ids, including after a lost namespace row.
+- Receipt and evidence bound to the publication's own line and the verified tail; excision keeps its whole-journal witness and full check; interrupted-publication recovery keeps the full path.
+- Cost, damage, crash, recovery and receipt proofs; the operator demo row.
+
+## 2026-11-11 23:09 — END
+Phase 13 — Incremental namespace content publication
+
+Execution trace: 21ca5e77448f4907889140157c0ae5c2
+
+Phase 13 is accepted on its gates. A namespace content upload now checks only what it touches: the journal's last line, the upload's own journal line, its index rows and its own object file. It reads no whole journal, walks no object tree and rewrites no whole index; the operator demo shows identical work at 100 and 1000 prior objects. Honest faults that repeat an event id (a crash replay, a duplicate append, a namespace that lost its own record, a restored older journal) are still refused, by the canonical order of the appended range. Content excision keeps its own whole-journal witness. The v1 migration now converts 0.3.0 upload receipts after verifying them.
+
+Operator ruling (2026-11-12, relayed by the coordinator, verbatim): "In general we are not implementing Byzantine fault tolerance anywhere in our stack. So no, we should not scan the whole journal except as part of a doctor diagnosis/recovery procedure/tool." Root disposition: continue with the simple touched and appended path, demonstrating that it handles ordinary crash replay, duplicate append and state loss; no speculative new index; no weakening of unrelated excision checks; the no-Byzantine boundary is not a claim that accidental faults or duplicate replay cannot occur.
+
+Files changed:
+- project/castle/cas_recovery.py — the touched publication path (TouchedPublication, pre-evidence touched checks, one-record index commit, own-line completion check); evidence prefix_tail replaces the whole-prefix SHA-256 and holds no remotes; receipts carry event_offset, event_length and event_sha256
+- project/castle/namespace_content.py — per-request touched proof, own-line receipt validation, cleanup by offset
+- project/castle/namespace_excision.py — excision's own whole-journal witness saved beside each receipt and compared on resume, at references and at disposal; disposal also runs the full authority check
+- project/castle/namespace_store.py — catch-up refuses an appended record that sorts at or before the tail (was: before)
+- project/castle/namespace_transactions.py — post-publication identity-only check
+- project/castle/namespace_migrate_v1.py — verified conversion of 0.3.0 publication receipts
+- project/tests/test_namespace_incremental.py, test_namespace.py, test_namespace_excision.py, test_cas_recovery.py, test_namespace_snapshots.py, demo_incremental_cost.py — new proofs, fixtures and the demo row
+- briefs/coordinated-namespace-crud.md (§17 pointer, §24 note, new §25), plan/phase-13.md, plan/INDEX.md, LOG.md, EXECUTION_LOG.jsonl, lessons/ — prepared at the planned park of run 1 and captured by this run
+
+Build status:
+- Incremental admission test with the Phase 13 proofs: OK (1 passed in 47.71 s)
+- Focused CAS, recovery and namespace suites plus onboarding, consumer and CLI suites: OK (35 passed in 160.42 s)
+- Operator demo: OK (identical at both sizes for both tables)
+- ./bin/check all on the candidate: OK (197 passed in 292.02 s, all policy checks, no warnings)
+- Linux ./bin/check all: OK on a byte-verified copy with the same product and full-tree identity, Linux 7.0.14-linuxkit aarch64 (191 passed, 6 macOS-only skips, 248.26 s; the only warning is uv's hardlink-to-copy fallback during setup)
+- Handoff gate: runs after this tracked END block; completion is contingent on the ignored receipt from the final bare `./bin/check all`
+
+Review lane (per `policies/review-lanes.md`):
+- full
+
+Evidence lane (per `policies/review-lanes.md`):
+- full
+
+Follow-up route (per `policies/review-lanes.md`):
+- N/A (initial implementation, resumed in a fresh run after the planned governing-prose park)
+
+Role model/venue (per `policies/role-models.md`) — orchestrated by claude:
+- Preflight: OK (fresh receipt for this run)
+- Planner: primary (inline, opus)
+- Reviewer (plan review): requested model=fable effort=high venue=claude; one pass, on run 1's trace; advice carried with its identity
+- Coder: primary (inline, opus)
+- Critic (code review): requested model=fable effort=high venue=claude; one pass
+
+For each role separately: harness_version=unreported, observed_model=unreported, observed_effort=unreported; observation_errors=none.
+
+Role timing (per `policies/role-timeouts.md`):
+- Planner: primary, not separately timed
+- Reviewer (plan review): recorded on run 1's trace 4bcb22c1d2c94ef3a91c13d033dced68
+- Coder: primary, not separately timed
+- Critic (code review): 645.84 s; success (one pass)
+
+Execution timing (per `policies/execution-telemetry.md`):
+- This run: makespan 5620.45 s; gates 567.26 s; intelligence 645.84 s; wait 645.35 s; failed work 50.36 s (acceptance attempt 1); unattributed 0.49 s. The implementation stage (4912.76 s) includes the coordinator-owned context compaction between 05:38Z and 06:12Z, which was not an operator park.
+- Earlier trace of this phase: 4bcb22c1d2c94ef3a91c13d033dced68 (run 1, parked at the planned governing-prose preparation, finalized)
+- Awaiting user input: one decision park, 2026-11-12T01:46:55Z → 05:26:44Z, 3h39m48.9s (exact monotonic; phase-summary)
+- Timing validation: exact monotonic nanoseconds, overlap-safe unions, trace joins OK
+
+Candidate-bound evidence (per `policies/orchestration-evidence.md`):
+- Candidate: reviewed=782e35551b7e1e04b98341d274219672ebf078533f0b2b8610b106adb1c79655 approved=final=b9b4c4bc1fa8e5379fe86ffddcda88a1fea665f56224bdb36d53f2d75db1f90e (the difference from the reviewed candidate is the adopted corrections)
+- Findings: plan review 17 (run 1; 14 adopted, 3 declined under the ruling) and code critique 6 (4 adopted, 2 deferred to this record), all dispositioned through accept-primary
+- Gates: implementation-final=4, all recorded against the approved candidate=yes
+- Stage order: run 2's planning-stage work (advice carry and plan capture) ran inside setup; command zero refused acceptance attempt 1 for a missing planning stage, which closed as an error; a planning stage then re-verified the captured plan (b342664e…, identical to run 1) and acceptance attempt 2 proceeded
+- Transient paths: two new lesson drafts existed at repo-root lessons/ from 07:01:55Z to 07:02:04Z, during gate.focused-suites only (./bin/test over project/tests, rootdir project/); nothing under project/ references lessons/, and the product and full-tree ids match before and after every gate; no rerun was required
+- Evidence validation: `bin/kickoff-evidence validate --level acceptance` OK
+
+Code critique dispositions:
+- CODE-F001 (high), excision witness unproven: adopted; witness_proof shows the witness refusing on resumed publication before the retained-authority scan, and as the only refusal at disposal, each with a falsifying mutant
+- CODE-F002 (medium), the v1 migration would refuse 0.3.0 receipts: adopted; verified conversion inside the isolated migration, with the round trip and a tampered-receipt refusal
+- CODE-F003 (medium), untested touched guards: adopted; touched_guard_proof covers nine stale-proof cases
+- CODE-F004 (low): deferred to this record. Between saving evidence and saving excision's intent witness, a resumed excision publication checks the tail line rather than the whole prefix; only a same-length well-formed prefix rewrite (an excluded case) passes there. Brief §25 does not yet say so; amending a captured authority needs a rebind, so the note is a follow-up
+- CODE-F005 (low): deferred to this record as deviations. The demo uses 100 and 1000 prior objects, not 5000 (setup by ingest is quadratic: 2000 objects took 197 s), and counts rebuilds rather than rows; the cost proof publishes two new payloads, because a namespace upload only publishes identities the journal lacks, and the existing-identity branch is proved in the direct harness
+- CODE-F006 (low): adopted (variable rename)
+
+Also corrected: the Phase 12 differential proof drew entry ids from uuid4 despite its fixed seed, so its refusal coverage varied (1 failure in 40 at 2a26514); its ids are now seeded.
+
+Moved checks (truthful): remote custody rows are no longer upload evidence; the full path snapshots them within its own rebuild, and verify and diagnose still check them. A recovery that previously refused after remote rows changed between a crash and the resume now proceeds and keeps the current rows.
+
+Acceptance (per `policies/human-in-the-loop.md`):
+- Objective (independently reviewed, gate-proved, candidate-bound): upload cost at two sizes with zero whole-journal reads; touched damage refusing before evidence; honest repeated-id and crash refusal with guard mutants; recovery at five kill points; own-line receipts; the excision witness; v1 migration of released receipts; the phase checks then ./bin/check all on macOS and Linux.
+- Parked for the user: the recorded status of the two Phase 12 residuals. They are proposed as threat-model exclusions under the ruling (a coherent edit of a located row and its witness; a forged repeated event id with a later timestamp), not as defects fixed.
+
+Delivery:
+- authorized by the user's later all-project commit-and-push direction and the 2026-11-12 "deliver Castle ASAP" instruction, reconciled by root: commit and fast-forward push of master after the handoff gate; the release tag and GitHub release follow a separate gated release-preparation step.
+
+Ripple (per `policies/phase-ripple.md`):
+- AUTO: None
+- DECIDE: none — no downstream sketches.
+
+Lessons:
+- filed: apricot-dinosaur and indigo-galago (methodology, filed at run 1's park)
+- pending after this block: mighty-ammonite (methodology) — a fresh run resumed after a planned park needs its own planning stage or the continuation route; agate-phoenix (local) — a fixed-seed proof must seed generated identifiers too
+- graduation DECIDE: attractive-lemming — three occurrences, unchanged, with the operator
+- recalibration: insufficient samples (no group has 30 successful samples)
+
+User demo (per `policies/user-demo-protocols.md`):
+
+```
+./bin/python project/tests/demo_incremental_cost.py
+```
+
+It builds synthetic namespaces and content stores in a temporary directory. Expected: identical namespace step counts at 100 and 5000 entries, diagnose refusing an untouched corruption, and one content upload spending identical whole-store work at 100 and 1000 prior objects with zero whole-journal reads. It removes its temporary data.
+
+Remaining:
+- The two Phase 12 residuals stay open until the operator records their status.
+- Brief §25 note on the narrowed excision resume window (CODE-F004).
+- Pending after this block: the plan index marks Phase 13 complete, the two lessons are filed, the dashboard report is regenerated, the bare handoff gate runs, then a commit of explicit paths and a fast-forward push.
+
+## 2026-11-12 00:10 — BOOKKEEPING
+
+Phase 13 — Close bookkeeping outcomes
+
+Execution trace: 21ca5e77448f4907889140157c0ae5c2
+
+Applied after the accepted close: the plan index marks Phase 13 complete (the recorded transition, verified with the close's handoff check). Lessons mighty-ammonite (methodology) and agate-phoenix (local) are filed; apricot-dinosaur and indigo-galago were filed at run 1's park; lessons validate OK. Ripple: none, no downstream sketches. The dashboard report is regenerated next, then the bare handoff gate, then a commit of explicit paths and a fast-forward push of master. No later tracked write follows a successful handoff gate.
+
+## 2026-11-12 00:17 — BOOKKEEPING
+
+Phase 13 — Bounded current-close field formatting repair
+
+Execution trace: 21ca5e77448f4907889140157c0ae5c2
+
+The first bare handoff gate failed only its log policy check: "LOG-PREFIX REFUSED terminal block lacks Lessons: witness". The uncommitted Phase 13 END block headed its lessons field "Lessons (per `policies/lessons.md`):" instead of the literal "Lessons:" line. One mechanical repair renamed that single heading line in the uncommitted block, validated before application, applied atomically and byte-verified under the bounded repair rule. The committed log prefix, every other byte of the record and the product were not changed. The accepted close evidence keeps the original block (SHA-256 7ec9a2a3d152e1b506bf89f7d133b3b12ca9602265b61354ea136d9fcbbf2631). The log prefix, chronology and terminal-lessons checks now pass. The failed handoff gate stays recorded as failed; the bare handoff gate runs again next. No tracked write follows a successful handoff gate.

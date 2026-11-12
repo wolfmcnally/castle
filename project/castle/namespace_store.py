@@ -1001,7 +1001,7 @@ class NamespaceHandle:
         )
         additions: dict[str, list[dict[str, Any]]] = {}
         for _, _, _, record in spans:
-            if (previous is not None and journal.journal_sort_key(record) < previous) or (
+            if (previous is not None and journal.journal_sort_key(record) <= previous) or (
                 self._known_event(record["event_id"])
             ):
                 raise _Framing("appended record precedes or repeats indexed events")

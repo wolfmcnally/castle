@@ -2413,13 +2413,196 @@ def concurrency_proof(tmp_path, monkeypatch, Case):
                     finish.set()
 
 
-def restart_proof(tmp_path, monkeypatch, Case):
+def _killed(tmp_path, Case, point, label=None, *, retained=0):
+    """One public excision run in a child process killed at one named boundary."""
     import subprocess
     import sys
     from pathlib import Path
 
+    case = Case(tmp_path / ("excision-kill-" + (label or point)))
+    from castle import cas
+
+    for index in range(retained):
+        kept = case.directory / f"retained-{index}"
+        kept.write_bytes(f"retained content {index}\n".encode())
+        cas.ingest_file(case.cas_root, kept, "retained")
+    with case.open() as handle:
+        selected_id = identity(70)
+        data = b"Independently chosen removed-only content sentinel for restart qualification.\n"
+        cas_id = "sha256:" + hashlib.sha256(data).hexdigest()
+        created_request = case.request(
+            handle,
+            "create-file",
+            {
+                "entry_id": selected_id,
+                "parent_id": case.initial.root_id,
+                "name": "Removed-only restart name sentinel",
+                "metadata": {"secret": "Removed-only restart metadata sentinel"},
+                "content": {"cas_id": cas_id, "size": len(data)},
+            },
+        )
+        n.execute_namespace(handle, created_request, {cas_id: data})
+        snapshot = case.apply(handle, "snapshot", {"snapshot_id": identity(71)}).snapshot
+        operations = [row[0] for row in handle.db.execute("SELECT operation_id FROM operations")]
+        request = case.request(
+            handle,
+            "excise",
+            {
+                "selection": {
+                    "content_ids": [cas_id, snapshot.cas_id],
+                    "entry_ids": [selected_id],
+                    "metadata_entry_ids": [],
+                    "operation_ids": operations,
+                },
+                "snapshot_actions": [
+                    {
+                        "snapshot_id": snapshot.snapshot_id,
+                        "action": "replace",
+                        "remove_entry_ids": [selected_id],
+                        "clear_metadata_entry_ids": [],
+                    }
+                ],
+            },
+        )
+    destination = case.directory / "successor"
+    payload = {
+        "root": str(case.root),
+        "source": str(case.cas_root),
+        "destination": str(destination),
+        "domain": str(case.directory / "domain.lock"),
+        "caller": str(Path(__file__).parents[1] / "examples" / "namespace_demo.py"),
+        "request": asdict(request),
+        "point": point,
+    }
+    child = subprocess.run(
+        [sys.executable, "-c", _KILL_CHILD, json.dumps(payload)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert child.returncode == 97, (point, child.returncode, child.stdout, child.stderr)
+    return (
+        case,
+        request,
+        destination,
+        selected_id,
+        cas_id,
+        snapshot,
+        operations,
+        created_request,
+        data,
+    )
+
+
+def witness_proof(tmp_path, monkeypatch, Case):
+    """Excision keeps its own whole-journal witness through each publication's line.
+
+    An earlier retained successor line is rewritten in place, well formed and
+    the same length, with the derived index made to agree, so every receipt's
+    own line still proves. Resuming publication, the witness refuses before
+    the retained-authority scan (without it, the later scan is what refuses);
+    at disposal the witness is the only check that refuses.
+    """
+    import sqlite3
+
+    from castle import cas
+    from castle import namespace_content as content
+    from castle.journal import JOURNAL_FILENAME
+
+    def rewrite_earlier_line(destination):
+        journal_file = destination / JOURNAL_FILENAME
+        lines = journal_file.read_bytes().splitlines(keepends=True)
+        assert len(lines) >= 3  # the rewritten line is neither a receipt's nor a tail
+        first = json.loads(lines[0])
+        marker = b'"original_relpath":"'
+        at = lines[0].index(marker) + len(marker)
+        changed = lines[0][:at] + b"~" + lines[0][at + 1 :]
+        assert len(changed) == len(lines[0]) and changed != lines[0]
+        mode = journal_file.stat().st_mode & 0o777
+        journal_file.chmod(0o644)
+        journal_file.write_bytes(changed + b"".join(lines[1:]))
+        journal_file.chmod(mode)
+        with sqlite3.connect(destination / cas.INDEX_FILENAME) as db:
+            db.execute(
+                "UPDATE names SET original_relpath=? WHERE cas_id=? AND original_relpath=?",
+                (
+                    json.loads(changed)["original_relpath"],
+                    first["cas_id"],
+                    first["original_relpath"],
+                ),
+            )
+
+    def intent_witnesses(case, request):
+        with sqlite3.connect(case.root / "namespace.sqlite") as db:
+            (raw,) = db.execute(
+                "SELECT ownership_receipt FROM operations WHERE operation_id=?",
+                (request.operation_id,),
+            ).fetchone()
+        return {
+            saved["receipt"]["event_offset"]: saved["journal_sha256"]
+            for saved in json.loads(raw)["cutover"]["publications"]
+        }
+
+    def receipts_only(handle, value, publications):
+        with content.journal_descriptor(handle.cas_root) as (descriptor, size):
+            for saved in publications:
+                item = cutover._publication(saved, value)
+                content.validate_receipt(
+                    handle, {"state": "committed"}, item, saved["receipt"], descriptor, size
+                )
+
+    def recover(case, request, destination):
+        recovery = {
+            "predecessor_root": case.cas_root,
+            "successor_root": destination,
+            "expected_predecessor": request.expected_cas,
+            "operation_id": request.operation_id,
+            "action": "resume",
+        }
+        return n.recover_namespace(case.root, case.cas_root, case.session, recovery)
+
+    refused = "^namespace-(replacement-invalid|storage-recovery-required)$"
+    for mutant in (False, True):
+        point = "after-publication-receipt"
+        case, request, destination, *_ = _killed(
+            tmp_path, Case, point, f"witness-publish-{mutant}", retained=2
+        )
+        rewrite_earlier_line(destination)
+        scanned = []
+        scan = cutover._scan
+        with monkeypatch.context() as patch:
+            patch.setattr(cutover, "_scan", lambda *a, **k: (scanned.append(1), scan(*a, **k)))
+            if mutant:
+                witnesses = intent_witnesses(case, request)
+                patch.setattr(
+                    cutover,
+                    "_journal_witness",
+                    lambda root, receipt, raw=None: witnesses[receipt.event_offset],
+                )
+            with pytest.raises(n.NamespaceError, match=refused):
+                recover(case, request, destination)
+        assert bool(scanned) == mutant, (mutant, scanned)
+
+    for mutant in (False, True):
+        point = "after-cleanup-scanned"
+        case, request, destination, *_ = _killed(
+            tmp_path, Case, point, f"witness-dispose-{mutant}", retained=2
+        )
+        rewrite_earlier_line(destination)
+        with monkeypatch.context() as patch:
+            if mutant:
+                patch.setattr(cutover, "_receipts_witnessed", receipts_only)
+                assert recover(case, request, destination).state == "ready"
+                continue
+            with pytest.raises(n.NamespaceError, match="^namespace-storage-recovery-required$"):
+                recover(case, request, destination)
+
+
+def restart_proof(tmp_path, monkeypatch, Case):
+
     fault_proof(tmp_path, monkeypatch, Case)
     content_free_restart_proof(tmp_path, monkeypatch, Case)
+    witness_proof(tmp_path, monkeypatch, Case)
     for point in (
         "before-intent",
         "after-intent",
@@ -2455,66 +2638,17 @@ def restart_proof(tmp_path, monkeypatch, Case):
         "after-complete",
         "response",
     ):
-        case = Case(tmp_path / ("excision-kill-" + point))
-        with case.open() as handle:
-            selected_id = identity(70)
-            data = (
-                b"Independently chosen removed-only content sentinel for restart qualification.\n"
-            )
-            cas_id = "sha256:" + hashlib.sha256(data).hexdigest()
-            created_request = case.request(
-                handle,
-                "create-file",
-                {
-                    "entry_id": selected_id,
-                    "parent_id": case.initial.root_id,
-                    "name": "Removed-only restart name sentinel",
-                    "metadata": {"secret": "Removed-only restart metadata sentinel"},
-                    "content": {"cas_id": cas_id, "size": len(data)},
-                },
-            )
-            n.execute_namespace(handle, created_request, {cas_id: data})
-            snapshot = case.apply(handle, "snapshot", {"snapshot_id": identity(71)}).snapshot
-            operations = [
-                row[0] for row in handle.db.execute("SELECT operation_id FROM operations")
-            ]
-            request = case.request(
-                handle,
-                "excise",
-                {
-                    "selection": {
-                        "content_ids": [cas_id, snapshot.cas_id],
-                        "entry_ids": [selected_id],
-                        "metadata_entry_ids": [],
-                        "operation_ids": operations,
-                    },
-                    "snapshot_actions": [
-                        {
-                            "snapshot_id": snapshot.snapshot_id,
-                            "action": "replace",
-                            "remove_entry_ids": [selected_id],
-                            "clear_metadata_entry_ids": [],
-                        }
-                    ],
-                },
-            )
-        destination = case.directory / "successor"
-        payload = {
-            "root": str(case.root),
-            "source": str(case.cas_root),
-            "destination": str(destination),
-            "domain": str(case.directory / "domain.lock"),
-            "caller": str(Path(__file__).parents[1] / "examples" / "namespace_demo.py"),
-            "request": asdict(request),
-            "point": point,
-        }
-        child = subprocess.run(
-            [sys.executable, "-c", _KILL_CHILD, json.dumps(payload)],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        assert child.returncode == 97, (point, child.returncode, child.stdout, child.stderr)
+        (
+            case,
+            request,
+            destination,
+            selected_id,
+            cas_id,
+            snapshot,
+            operations,
+            created_request,
+            data,
+        ) = _killed(tmp_path, Case, point)
         if point == "before-intent":
             assert n.recover_namespace(case.root, case.cas_root, case.session, None).revision == 2
             with case.open() as handle:

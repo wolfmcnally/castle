@@ -942,7 +942,7 @@ def test_namespace_transactions_and_admission(
 
 
 def test_namespace_incremental_admission(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Phase 12 touched-record admission, its v2 summaries and the v1 migration."""
+    """Touched-record admission, v2 summaries, the v1 migration and touched publication."""
     proofs = runpy.run_path(str(Path(__file__).with_name("test_namespace_incremental.py")))
     proofs["framing_proof"](tmp_path)
     proofs["catch_up_proof"](tmp_path, monkeypatch, Case)
@@ -959,6 +959,12 @@ def test_namespace_incremental_admission(tmp_path: Path, monkeypatch: pytest.Mon
     proofs["cost_proof"](tmp_path, monkeypatch, Case, _id)
     proofs["limits_proof"](tmp_path, monkeypatch, Case, _id)
     proofs["reader_proof"](tmp_path, monkeypatch, Case, _id)
+    proofs["publication_cost_proof"](tmp_path, monkeypatch, Case, _id)
+    proofs["publication_damage_proof"](tmp_path, monkeypatch, Case, _id)
+    proofs["touched_guard_proof"](tmp_path, Case, _id)
+    proofs["publication_crash_proof"](tmp_path, monkeypatch, Case, _id)
+    proofs["publication_recovery_proof"](tmp_path, monkeypatch, Case, _id)
+    proofs["receipt_proof"](tmp_path, Case, _id)
 
 
 def _migration_child(case: Case, backup: Path, boundary: str) -> subprocess.CompletedProcess:

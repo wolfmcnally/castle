@@ -6,20 +6,25 @@ It builds synthetic namespaces of 100 and 5000 entries in a temporary
 directory, prints the SQL statements and entry validations spent by open, a
 path lookup, a small directory page and a metadata change of the directory
 holding almost every entry, then corrupts an entry no ordinary step touched:
-the lookup still succeeds and the explicit diagnosis refuses. The temporary
+the lookup still succeeds and the explicit diagnosis refuses. Last, it
+publishes one new file into stores holding 100 and 1000 prior objects and
+prints the whole-store work that publication spent: object hashes, tree walks,
+index images, whole-journal reads and whole-index rebuilds. The temporary
 data is removed afterwards. Nothing outside the temporary directory is read
 or written.
 """
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 import tempfile
 import unicodedata
 import uuid
 from pathlib import Path
 
-from castle import cas, store_state
+from castle import cas, journal, store_state
+from castle import cas_recovery as publication
 from castle import namespace as n
 from castle import namespace_store as store
 from castle.namespace_environment import LocalSession
@@ -160,6 +165,66 @@ def _measure(demo: _Store, ids: dict[str, str]) -> dict[str, tuple[int, int]]:
     return result
 
 
+def _publication(directory: Path, prior: int) -> dict[str, int]:
+    """Whole-store work spent by one namespace content publication."""
+    demo = _Store(directory)
+    source = directory / "prior"
+    source.mkdir()
+    for index in range(prior):
+        (source / f"prior-{index:05}").write_bytes(f"prior object {index:05}\n".encode())
+    cas.ingest(demo.cas_root, source, "prior")
+    payload = b"one newly published file\n"
+    content = {"cas_id": "sha256:" + hashlib.sha256(payload).hexdigest(), "size": len(payload)}
+    counts = {
+        "file hashes": 0,
+        "tree walks": 0,
+        "index images": 0,
+        "whole-journal reads": 0,
+        "whole-index rebuilds": 0,
+    }
+    targets = {
+        "file hashes": (cas, "sha256_file"),
+        "tree walks": (cas, "_authority_paths"),
+        "index images": (cas, "_inspection_image"),
+        "whole-journal reads": (journal, "_read_authority_journal"),
+        "whole-index rebuilds": (publication, "_index"),
+    }
+    originals = {label: getattr(*target) for label, target in targets.items()}
+
+    def counted(label):
+        def wrapper(*args, **kwargs):
+            counts[label] += 1
+            return originals[label](*args, **kwargs)
+
+        return wrapper
+
+    with demo.open() as handle:
+        handle.info()
+        info = handle.info()
+        request = n.MutationRequest(
+            info.namespace_id,
+            info.cas,
+            info.revision,
+            _id(),
+            "create-file",
+            {
+                "entry_id": _id(),
+                "parent_id": demo.initial.root_id,
+                "name": "published",
+                "metadata": {},
+                "content": content,
+            },
+        )
+        for label, (module, name) in targets.items():
+            setattr(module, name, counted(label))
+        try:
+            n.execute_namespace(handle, request, {content["cas_id"]: payload})
+        finally:
+            for label, (module, name) in targets.items():
+                setattr(module, name, originals[label])
+    return counts
+
+
 def main() -> None:
     sizes = (100, 5000)
     with tempfile.TemporaryDirectory(prefix="castle-demo-") as raw:
@@ -187,6 +252,14 @@ def main() -> None:
                 print("diagnose: UNEXPECTEDLY PASSED")
             except n.NamespaceError as error:
                 print(f"diagnose: refused {error.code}")
+
+        priors = (100, 1000)
+        work = {count: _publication(Path(raw) / f"p{count}", count) for count in priors}
+        print("\nWhole-store work for one content publication")
+        print(f"{'work':<24}" + "".join(f"{str(count) + ' objects':>16}" for count in priors))
+        for label in work[priors[0]]:
+            print(f"{label:<24}" + "".join(f"{work[count][label]:>16}" for count in priors))
+        print("identical at both sizes:", "yes" if work[priors[0]] == work[priors[1]] else "NO")
     print("temporary data removed")
 
 

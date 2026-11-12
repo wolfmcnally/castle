@@ -740,7 +740,7 @@ def finish(handle: store.NamespaceHandle, operation_id: str) -> n.MutationResult
             if publication_receipt is None:
                 publication_receipt = content_io.publish(handle, row)
             handle.publication_receipts[operation_id] = publication_receipt
-            handle._cas_check(full=False)
+            handle._cas_check(identity_only=True)
             # Locate the appended lines; drop proofs taken before publication.
             handle._cas_position()
             handle.forget_touched()

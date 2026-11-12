@@ -142,10 +142,11 @@ def _assert_authority(store, operation, identity, request, payload, remote):
     assert event["cas_id"] == "sha256:" + hashlib.sha256(payload).hexdigest()
     assert event["size"] == len(payload)
     assert receipt.event_ids == (event["event_id"],)
-    assert receipt.journal_length == (store / "journal.jsonl").stat().st_size
-    assert (
-        receipt.journal_sha256 == hashlib.sha256((store / "journal.jsonl").read_bytes()).hexdigest()
-    )
+    raw = (store / "journal.jsonl").read_bytes()
+    line = raw.splitlines(keepends=True)[1]
+    assert receipt.event_offset + receipt.event_length == len(raw)
+    assert raw[receipt.event_offset :] == line
+    assert receipt.event_sha256 == hashlib.sha256(line).hexdigest()
     assert set(asdict(receipt)) == {
         "publication_id",
         "operation_id",
@@ -153,8 +154,9 @@ def _assert_authority(store, operation, identity, request, payload, remote):
         "cas_id",
         "size",
         "event_ids",
-        "journal_length",
-        "journal_sha256",
+        "event_offset",
+        "event_length",
+        "event_sha256",
     }
     assert Counter(cas._snapshot_remotes(store)) == Counter([remote, remote])
     with sqlite3.connect(store / cas.INDEX_FILENAME) as connection:
@@ -223,7 +225,7 @@ def test_owned_publication_recovery_protocol(tmp_path: Path, monkeypatch: pytest
         receipt = recovery.recover_namespace_publication(store, operation, identity, request)
     assert calls and (store / "journal.jsonl").read_bytes() == before
     assert len(journal.read_journal(store)) == 3
-    assert receipt.journal_length < len(before)
+    assert receipt.event_offset + receipt.event_length < len(before)
     assert Counter(cas._snapshot_remotes(store)) == Counter([remote, remote])
 
     # Dedup does not rewrite a preexisting object and uses opaque provenance.
@@ -389,7 +391,9 @@ def test_owned_publication_recovery_protocol(tmp_path: Path, monkeypatch: pytest
             assert not temporary.exists(), point
         current_journal = (store / "journal.jsonl").read_bytes()
         prefix = current_journal[: saved["journal_prefix_length"]]
-        assert hashlib.sha256(prefix).hexdigest() == saved["journal_prefix_sha256"]
+        offset, length, digest = saved["prefix_tail"]
+        assert offset + length == len(prefix)
+        assert hashlib.sha256(prefix[offset:]).hexdigest() == digest
         appended = point in {
             "journal-sync",
             "index-sync",
@@ -454,7 +458,6 @@ def test_owned_publication_recovery_protocol(tmp_path: Path, monkeypatch: pytest
         "stage",
         "unknown-temp",
         "epoch",
-        "remote-change",
         "missing-evidence",
     ):
         store, operation, identity, request, *_ = _fixture(tmp_path / ("refuse-" + fault))
@@ -515,9 +518,6 @@ def test_owned_publication_recovery_protocol(tmp_path: Path, monkeypatch: pytest
                 identity, **{("epoch_id" if fault == "epoch" else "store_id"): _id()}
             )
             request = replace(request, cas_binding=identity)
-        elif fault == "remote-change":
-            with sqlite3.connect(store / cas.INDEX_FILENAME) as connection:
-                connection.execute("DELETE FROM remotes")
         else:
             recovery._record_file(operation, request).unlink()
         original_bytes = witness.read_bytes()
@@ -526,6 +526,16 @@ def test_owned_publication_recovery_protocol(tmp_path: Path, monkeypatch: pytest
         assert witness.read_bytes() == original_bytes
         if fault != "missing-evidence":
             assert evidence.read_bytes() == saved_bytes
+
+    # Remote custody rows are not publication evidence (never rewritten by
+    # publication): recovery keeps the rows the index holds when it runs.
+    store, operation, identity, request, *_ = _fixture(tmp_path / "remote-change")
+    _kill(store, operation, request, "prepared")
+    with sqlite3.connect(store / cas.INDEX_FILENAME) as connection:
+        connection.execute("DELETE FROM remotes")
+    recovery.recover_namespace_publication(store, operation, identity, request)
+    assert cas._snapshot_remotes(store) == []
+    assert cas.verify(store).ok
 
     # Ordinary CAS admission still refuses the deterministic transient name.
     store, operation, identity, request, *_ = _fixture(tmp_path / "strict-temp")

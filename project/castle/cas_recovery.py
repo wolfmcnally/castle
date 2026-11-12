@@ -15,7 +15,7 @@ import stat
 from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from castle import cas, journal
 from castle import namespace as n
@@ -41,8 +41,23 @@ class PublicationReceipt:
     cas_id: str
     size: int
     event_ids: tuple[str, ...]
-    journal_length: int
-    journal_sha256: str
+    event_offset: int
+    event_length: int
+    event_sha256: str
+
+
+@dataclass(frozen=True)
+class TouchedPublication:
+    """A namespace caller's proof of one publication's touched CAS authority.
+
+    `position` is the namespace's verified `cas_index_position` row after
+    catch-up; `records` are the identity's located journal records, re-proven
+    in that admission; `row` is their folded objects row, or None.
+    """
+
+    position: tuple[Any, ...]
+    records: tuple[dict[str, Any], ...]
+    row: tuple[Any, ...] | None
 
 
 _FIELDS = {
@@ -57,14 +72,13 @@ _FIELDS = {
     "cas_temporary_relpath",
     "prior_object_present",
     "journal_prefix_length",
-    "journal_prefix_sha256",
+    "prefix_tail",
     "events",
-    "remotes",
     "state",
 }
 
 
-def _blocked() -> None:
+def _blocked() -> NoReturn:
     n._refuse("namespace-storage-recovery-required")
 
 
@@ -230,13 +244,24 @@ def _load(
     ):
         _blocked()
     n._integer(value["journal_prefix_length"])
-    if (
-        not isinstance(value["journal_prefix_sha256"], str)
-        or len(value["journal_prefix_sha256"]) != 64
+    tail = value["prefix_tail"]
+    if (tail is None) != (value["journal_prefix_length"] == 0) or (
+        tail is not None
+        and (
+            not isinstance(tail, list)
+            or len(tail) != 3
+            or type(tail[0]) is not int
+            or type(tail[1]) is not int
+            or tail[0] < 0
+            or tail[1] <= 0
+            or tail[0] + tail[1] != value["journal_prefix_length"]
+            or not isinstance(tail[2], str)
+            or n._CAS.fullmatch("sha256:" + tail[2]) is None
+        )
     ):
         _blocked()
-    events, remotes = value["events"], value["remotes"]
-    if not isinstance(events, list) or len(events) != 1 or not isinstance(remotes, list):
+    events = value["events"]
+    if not isinstance(events, list) or len(events) != 1:
         _blocked()
     event = journal.parse_journal_record(events[0], "publication")
     if any(
@@ -252,12 +277,142 @@ def _load(
         }.items()
     ):
         _blocked()
-    if any(
-        not isinstance(row, list) or len(row) != 5 or any(not isinstance(item, str) for item in row)
-        for row in remotes
-    ) or remotes != sorted(remotes):
-        _blocked()
     return value
+
+
+def _tail(raw: bytes) -> list[Any] | None:
+    """[offset, length, SHA-256] of the final framed line, as the namespace locates it."""
+    if not raw:
+        return None
+    line = raw.decode("utf-8").splitlines(keepends=True)[-1].encode("utf-8")
+    return [len(raw) - len(line), len(line), hashlib.sha256(line).hexdigest()]
+
+
+def _line(descriptor: int, size: int, offset: int, length: int, digest: str) -> dict[str, Any]:
+    """One LF-terminated framed journal line at a recorded span, or refuse."""
+    from castle import namespace_store as located
+
+    try:
+        record = located._span(descriptor, size, offset, length, digest)
+    except located._Framing:
+        _blocked()
+    if os.pread(descriptor, 1, offset + length - 1) != b"\n":
+        _blocked()
+    return record
+
+
+def _open_index(store: Path) -> sqlite3.Connection:
+    """The existing derived index only: never created, never followed."""
+    current = store / cas.INDEX_FILENAME
+    _regular(current)
+    return sqlite3.connect(f"{current.as_uri()}?mode=rw", uri=True, timeout=0)
+
+
+def _pragmas(connection: sqlite3.Connection) -> None:
+    if connection.execute("PRAGMA journal_mode=WAL").fetchone()[0] != "wal":
+        _blocked()
+    connection.execute("PRAGMA synchronous=FULL")
+    connection.execute("PRAGMA fullfsync=ON")
+    connection.execute("PRAGMA foreign_keys=ON")
+    if (
+        connection.execute("PRAGMA synchronous").fetchone()[0] != 2
+        or connection.execute("PRAGMA fullfsync").fetchone()[0] != 1
+        or connection.execute("PRAGMA foreign_keys").fetchone()[0] != 1
+    ):
+        _blocked()
+
+
+def _touched_rows(
+    connection: sqlite3.Connection, cas_id: str
+) -> tuple[Counter[tuple[Any, ...]], Counter[tuple[Any, ...]]]:
+    objects = connection.execute(
+        "SELECT cas_id, size, media_type, stored_relpath, first_seen_utc, batch "
+        "FROM objects WHERE cas_id = ?",
+        (cas_id,),
+    ).fetchall()
+    names = connection.execute(
+        "SELECT cas_id, source_root_id, original_relpath, recorded_utc FROM names WHERE cas_id = ?",
+        (cas_id,),
+    ).fetchall()
+    return Counter(objects), Counter(names)
+
+
+def _expected_rows(
+    records: list[dict[str, Any]], cas_id: str
+) -> tuple[Counter[tuple[Any, ...]], Counter[tuple[Any, ...]]]:
+    objects, names = cas.expected_index_rows(records)
+    return Counter([objects[cas_id]] if cas_id in objects else []), Counter(names)
+
+
+def _touched_state(
+    store: Path, request: PublicationRequest, touched: TouchedPublication
+) -> tuple[int, list[Any] | None, dict[str, Any] | None]:
+    """Pre-evidence checks of exactly the touched authority (no CAS change).
+
+    Returns the journal length, its tail span and the tail record. Whole-store
+    agreement is left to rebuild, verify, merge, migration, excision, recovery
+    and diagnosis.
+    """
+    position = touched.position
+    _, length, count, last_offset, last_length, last_digest, last_at, last_event = position
+    descriptor = os.open(store / journal.JOURNAL_FILENAME, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != length:
+            _blocked()
+        tail, previous = None, None
+        if count:
+            tail = [last_offset, last_length, last_digest]
+            previous = _line(descriptor, length, last_offset, last_length, last_digest)
+            if last_offset + last_length != length or (
+                previous["at"],
+                previous["event_id"],
+            ) != (last_at, last_event):
+                _blocked()
+        elif length:
+            _blocked()
+    finally:
+        os.close(descriptor)
+    records = list(touched.records)
+    if any(record["cas_id"] != request.cas_id for record in records):
+        _blocked()
+    objects, _ = cas.expected_index_rows(records)
+    if objects.get(request.cas_id) != touched.row:
+        _blocked()
+    root = f"namespace:{request.namespace_id}"
+    relpath = f"{request.operation_id}/{request.publication_id}"
+    if any(
+        record["source_root_id"] == root and record["original_relpath"] == relpath
+        for record in records
+    ):
+        _blocked()
+    connection = _open_index(store)
+    try:
+        if _touched_rows(connection, request.cas_id) != _expected_rows(records, request.cas_id):
+            _blocked()
+        # The derived names row answers the cross-object reuse question; this
+        # object's own located records answered it authoritatively above.
+        if connection.execute(
+            "SELECT 1 FROM names WHERE original_relpath = ? AND source_root_id = ?",
+            (relpath, root),
+        ).fetchone():
+            _blocked()
+    finally:
+        connection.close()
+    destination = cas.object_path(store, request.cas_id)
+    if os.path.lexists(_temporary(store, request)):
+        _blocked()
+    if touched.row is None:
+        if os.path.lexists(destination):
+            _blocked()
+    else:
+        if touched.row[1] != request.size:
+            _blocked()
+        _regular(destination)
+        cas._validate_authority_objects(
+            store, {request.cas_id: destination}, {request.cas_id: touched.row}
+        )
+    return length, tail, previous
 
 
 def _validate_state(
@@ -267,12 +422,11 @@ def _validate_state(
     raw = (store / journal.JOURNAL_FILENAME).read_bytes()
     boundary = value["journal_prefix_length"]
     prefix, suffix = raw[:boundary], raw[boundary:]
-    if (
-        len(prefix) != boundary
-        or hashlib.sha256(prefix).hexdigest() != value["journal_prefix_sha256"]
-    ):
+    if len(prefix) != boundary:
         _blocked()
     previous = _records(prefix)
+    if _tail(prefix) != value["prefix_tail"]:
+        _blocked()
     stream = _stream(value)
     complete = suffix.startswith(stream)
     if not complete and not stream.startswith(suffix):
@@ -299,11 +453,7 @@ def _validate_state(
             _blocked()
     cas._validate_authority_objects(store, paths, objects)
     current = store / cas.INDEX_FILENAME
-    if not current.exists() and value["remotes"]:
-        _blocked()
-    if Counter(cas._snapshot_remotes(store)) != Counter(tuple(row) for row in value["remotes"]):
-        _blocked()
-    if any(row[0] not in prior for row in value["remotes"]):
+    if not current.exists() and boundary:
         _blocked()
     return raw, complete
 
@@ -374,25 +524,19 @@ def _index_commit(connection: sqlite3.Connection) -> None:
     connection.commit()
 
 
-def _index(store: Path, value: dict[str, Any]) -> None:
+def _index(store: Path) -> None:
+    """Whole-index rebuild for the full path; remote rows are kept within this call."""
     records = journal._read_authority_journal(store)
     objects, names = cas.expected_index_rows(records)
+    remotes = Counter(cas._snapshot_remotes(store))
+    if any(row[0] not in objects for row in remotes):
+        _blocked()
     connection = sqlite3.connect(store / cas.INDEX_FILENAME, timeout=0)
     try:
-        if connection.execute("PRAGMA journal_mode=WAL").fetchone()[0] != "wal":
-            _blocked()
-        connection.execute("PRAGMA synchronous=FULL")
-        connection.execute("PRAGMA fullfsync=ON")
-        connection.execute("PRAGMA foreign_keys=ON")
-        if (
-            connection.execute("PRAGMA synchronous").fetchone()[0] != 2
-            or connection.execute("PRAGMA fullfsync").fetchone()[0] != 1
-            or connection.execute("PRAGMA foreign_keys").fetchone()[0] != 1
-        ):
-            _blocked()
+        _pragmas(connection)
         connection.executescript(cas._SCHEMA)
         remote_rows = connection.execute(f"SELECT {cas._REMOTES_COLUMNS} FROM remotes").fetchall()
-        if Counter(remote_rows) != Counter(tuple(row) for row in value["remotes"]):
+        if Counter(remote_rows) != remotes:
             _blocked()
         connection.execute("BEGIN IMMEDIATE")
         connection.execute("DELETE FROM names")
@@ -407,15 +551,53 @@ def _index(store: Path, value: dict[str, Any]) -> None:
         connection.close()
     _sync_file(store / cas.INDEX_FILENAME)
     _fsync_directory(store)
-    if cas._index_errors(store, objects, names) or Counter(cas._snapshot_remotes(store)) != Counter(
-        tuple(row) for row in value["remotes"]
-    ):
+    if cas._index_errors(store, objects, names) or Counter(cas._snapshot_remotes(store)) != remotes:
         _blocked()
 
 
-def _receipt(store: Path, request: PublicationRequest, value: dict[str, Any]) -> PublicationReceipt:
-    raw = (store / journal.JOURNAL_FILENAME).read_bytes()
-    length = value["journal_prefix_length"] + len(_stream(value))
+def _index_touched(store: Path, value: dict[str, Any], touched: TouchedPublication) -> None:
+    """Apply only this publication's record to the derived index and read it back."""
+    record = value["events"][0]
+    expected = _expected_rows([*touched.records, record], record["cas_id"])
+    connection = _open_index(store)
+    try:
+        _pragmas(connection)
+        connection.execute("BEGIN IMMEDIATE")
+        cas._index_record(connection, record, media_refinement=None)
+        _index_commit(connection)
+        checkpoint = connection.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        if checkpoint[0] != 0 or checkpoint[1] != checkpoint[2]:
+            _blocked()
+        if _touched_rows(connection, record["cas_id"]) != expected:
+            _blocked()
+    finally:
+        connection.close()
+    _sync_file(store / cas.INDEX_FILENAME)
+    _fsync_directory(store)
+
+
+def _appended(store: Path, value: dict[str, Any]) -> None:
+    """The publication's own line is exactly the journal's new final line."""
+    stream = _stream(value)
+    offset = value["journal_prefix_length"]
+    descriptor = os.open(store / journal.JOURNAL_FILENAME, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            _blocked()
+        if info.st_size != offset + len(stream):
+            _blocked()
+        record = _line(
+            descriptor, info.st_size, offset, len(stream), hashlib.sha256(stream).hexdigest()
+        )
+    finally:
+        os.close(descriptor)
+    if record != value["events"][0]:
+        _blocked()
+
+
+def _receipt(request: PublicationRequest, value: dict[str, Any]) -> PublicationReceipt:
+    stream = _stream(value)
     return PublicationReceipt(
         request.publication_id,
         request.operation_id,
@@ -423,8 +605,9 @@ def _receipt(store: Path, request: PublicationRequest, value: dict[str, Any]) ->
         request.cas_id,
         request.size,
         tuple(event["event_id"] for event in value["events"]),
-        length,
-        hashlib.sha256(raw[:length]).hexdigest(),
+        value["journal_prefix_length"],
+        len(stream),
+        hashlib.sha256(stream).hexdigest(),
     )
 
 
@@ -435,8 +618,13 @@ def _run_locked(
     request: PublicationRequest,
     *,
     recover: bool,
+    touched: TouchedPublication | None = None,
 ) -> PublicationReceipt:
-    """For a coordinator already holding domain admission then the CAS lock."""
+    """For a coordinator already holding domain admission then the CAS lock.
+
+    `touched` selects the namespace's touched path for a new publication; None
+    keeps the full path (public entry points, excision, resumed evidence).
+    """
     _request(request, expected)
     if read_store_identity(store) != expected:
         _blocked()
@@ -452,62 +640,71 @@ def _run_locked(
             # Fresh evidence write establishes this retry's acknowledgment;
             # the complete record was reachable only after successful CAS sync.
             _save(operation, request, value, new=False)
-            return _receipt(store, request, value)
+            return _receipt(request, value)
         # Reestablish possibly sync-uncertain saved evidence before CAS effects.
         _save(operation, request, value, new=False)
     else:
         if recover:
             _blocked()
-        records, paths, remotes = cas._validated_authority(store, derived=True)
-        raw = (store / journal.JOURNAL_FILENAME).read_bytes()
-        _records(raw)
-        if any(
-            record["source_root_id"] == f"namespace:{request.namespace_id}"
-            and record["original_relpath"] == f"{request.operation_id}/{request.publication_id}"
-            for record in records
-        ):
-            _blocked()
-        objects, _ = cas.expected_index_rows(records)
-        prior = request.cas_id in paths
+        if touched is None:
+            records, paths, _ = cas._validated_authority(store, derived=True)
+            raw = (store / journal.JOURNAL_FILENAME).read_bytes()
+            _records(raw)
+            if any(
+                record["source_root_id"] == f"namespace:{request.namespace_id}"
+                and record["original_relpath"] == f"{request.operation_id}/{request.publication_id}"
+                for record in records
+            ):
+                _blocked()
+            objects, _ = cas.expected_index_rows(records)
+            row = objects.get(request.cas_id) if request.cas_id in paths else None
+            length, tail, previous = len(raw), _tail(raw), records[-1] if records else None
+        else:
+            row = touched.row
+            length, tail, previous = _touched_state(store, request, touched)
+        prior = row is not None
         event = {
             "schema": journal.CAS_JOURNAL_EVENT_SCHEMA,
             "event_id": journal.new_event_id(),
-            "at": journal.monotonic_journal_timestamp(records[-1] if records else None),
+            "at": journal.monotonic_journal_timestamp(previous),
             "event": "ingest",
             "cas_id": request.cas_id,
             "size": request.size,
-            "media_type": objects[request.cas_id][2] if prior else cas.classify_media_type(stage),
+            "media_type": row[2] if row is not None else cas.classify_media_type(stage),
             "source_root_id": f"namespace:{request.namespace_id}",
             "original_relpath": f"{request.operation_id}/{request.publication_id}",
             "batch": request.operation_id,
             "outcome": "dedup" if prior else "stored",
         }
-        if prior and objects[request.cas_id][1] != request.size:
+        if row is not None and row[1] != request.size:
             _blocked()
         value = dict(
             asdict(request),
             schema="castle.namespace_publication.v1",
             cas_temporary_relpath=_temporary(store, request).relative_to(store).as_posix(),
             prior_object_present=prior,
-            journal_prefix_length=len(raw),
-            journal_prefix_sha256=hashlib.sha256(raw).hexdigest(),
+            journal_prefix_length=length,
+            prefix_tail=tail,
             events=[event],
-            remotes=sorted([list(row) for row in remotes]),
             state="prepared",
         )
         _sync_file(stage)
         _fsync_directory(operation)
         _save(operation, request, value, new=True)
-        # The same held lock covers the initial full authority validation;
-        # saving caller-owned evidence has made no CAS change to revalidate.
+        # The same held lock covers the initial authority validation; saving
+        # caller-owned evidence has made no CAS change to revalidate.
         complete = False
     _copy_object(store, operation, request, value)
     _write_events(store, value, complete)
-    _index(store, value)
-    cas._validated_authority(store, derived=True)
+    if touched is None:
+        _index(store)
+        cas._validated_authority(store, derived=True)
+    else:
+        _index_touched(store, value, touched)
+        _appended(store, value)
     value["state"] = "complete"
     _save(operation, request, value, new=False)
-    return _receipt(store, request, value)
+    return _receipt(request, value)
 
 
 def _call(
