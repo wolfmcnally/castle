@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- Make ordinary namespace work cost what it touches. Open, admission, reads, metadata changes and content uploads validate only the records, rows and files they touch, so their work no longer grows with the namespace or the content store. Touched damage refuses and stops the handle; damage elsewhere is found when touched, by whole-sequence operations (excision, inventory, recovery, migration) or by explicit diagnosis.
+- Add bounded reads: a revision probe with the store position, path resolution, paged directory listing, change discovery including deletions, explicit diagnosis and operation targets.
+- Keep honest-fault protection on the upload path: a crash replay, a duplicate append, a lost namespace record or a restored older journal that repeats an event id is refused. Content excision keeps its whole-journal check. Deliberate tampering (a forged later-timestamped duplicate, a well-formed in-place rewrite of earlier journal lines, a coherent edit of an index row and its witness) is outside the threat model and is not claimed as detected on touch.
+- Change the namespace database to format v2. A 0.3.0 namespace refuses `namespace-format-unsupported` until the operator runs the explicit migration `castle.namespace_migrate_v1.migrate_namespace_v1(namespace_root, cas_root, session, backup)`, which writes a verified backup, converts 0.3.0 publication receipts after verifying them and validates the whole result before commit. Ordinary open never migrates. Content-store journal and object formats are unchanged.
+- Qualify on native macOS and arm64 Linux. Protected custody, hardware power loss and live-store adoption remain separate.
+
 ## 0.3.0
 
 - Add explicit validated read-only namespace opening and reference shared-reader sessions, supporting existing reads and immutable snapshot inspection.

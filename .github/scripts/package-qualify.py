@@ -18,7 +18,7 @@ import tarfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 MODULES = frozenset(
     [
@@ -48,6 +48,7 @@ TESTS = frozenset(
     [
         "__init__",
         "conftest",
+        "demo_incremental_cost",
         "test_cas",
         "test_cas_recovery",
         "test_cli",

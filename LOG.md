@@ -2470,3 +2470,13 @@ Phase 13 — Bounded current-close field formatting repair
 Execution trace: 21ca5e77448f4907889140157c0ae5c2
 
 The first bare handoff gate failed only its log policy check: "LOG-PREFIX REFUSED terminal block lacks Lessons: witness". The uncommitted Phase 13 END block headed its lessons field "Lessons (per `policies/lessons.md`):" instead of the literal "Lessons:" line. One mechanical repair renamed that single heading line in the uncommitted block, validated before application, applied atomically and byte-verified under the bounded repair rule. The committed log prefix, every other byte of the record and the product were not changed. The accepted close evidence keeps the original block (SHA-256 7ec9a2a3d152e1b506bf89f7d133b3b12ca9602265b61354ea136d9fcbbf2631). The log prefix, chronology and terminal-lessons checks now pass. The failed handoff gate stays recorded as failed; the bare handoff gate runs again next. No tracked write follows a successful handoff gate.
+
+## 2026-11-12 00:27 — RELEASE
+
+Release 0.4.0 — Touched-record namespace release preparation
+
+Authority: the operator's standing direction that agents commit and push qualified work, and the 2026-11-12 instruction "OK let's keep those moving and deliver Castle ASAP", reconciled by root to include this repository's ordinary tag and GitHub release at the established destination. No PyPI, live-store migration, new grant or caller adoption.
+
+Changes: version 0.4.0 in project/pyproject.toml, project/castle/__init__.py, project/uv.lock and both package scripts; the 0.4.0 changelog entry, including the explicit backed-up v1 to v2 namespace migration that existing 0.3.0 namespaces need before they open; README and RELEASE.md scope. One correction: .github/scripts/package-qualify.py now allowlists tests/demo_incremental_cost.py, which Phase 12 added to the package's test directory without registering it, so the sdist qualification refused it. The release commit carries that fix.
+
+Qualification before commit: macOS package qualification passed (exact wheel castle-0.4.0-py3-none-any.whl ca0da81b9f4b893bcaf338d203c4dd17138ac8a358e1e09885f90ba25db75b2c, sdist castle-0.4.0.tar.gz c9e088c51518cc1bc3c79fd07bf75c4ed4af6cfd333317e597a760ed3e90dde9, byte-identical sdist-rebuilt wheel, installed smokes). Pending after this block: the macOS and Linux full gates and Linux package qualification on this exact tree, the commit, master CI, the annotated v0.4.0 tag and its CI, then the GitHub release with only the inspected wheel, sdist and SHA256SUMS, and verification of the downloaded assets and unchanged earlier releases. No outcome is claimed before it happens.
