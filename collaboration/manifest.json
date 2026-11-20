@@ -2,7 +2,7 @@
   "active_imports": [
     "11"
   ],
-  "adopted": false,
+  "adopted": true,
   "format": "starter.multioperator.v1",
   "migration_tool_sha256": "23bee483da3fed98d00883735a3f2ef99796b5395cdede00e02813293c5e3d09",
   "original_log_bytes": 300539,
