@@ -101,6 +101,9 @@ HANDOFF_FORBIDDEN = tuple(
     for pattern in (
         r"/Users/",
         r"[A-Za-z]:\\",
+        # Any absolute POSIX path, wherever it was made: a slash that begins the text or
+        # follows a space, quote or bracket. Relative labels such as reports/x keep slashes.
+        r"(?:^|[\s\"'(\[{=,;])/[^\s/]",
         r"\bprompt\b",
         r"\bresponse\b",
         r"\bsecret\b",

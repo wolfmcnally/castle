@@ -19,6 +19,26 @@
       "with": ""
     }
   },
+  "pytest:project/tests/test_journal.py::test_lock_survives_atomic_replacement_of_the_journal": {
+    "command": "./bin/test 'project/tests/test_journal.py::test_lock_survives_atomic_replacement_of_the_journal' -q",
+    "defect": "The journal lock never calls flock, so the waiter is not excluded.",
+    "expect": "the waiter entered the critical section while the lock was held",
+    "plant": {
+      "path": "project/castle/journal.py",
+      "replace": "            fcntl.flock(descriptor, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)\n",
+      "with": "            (fcntl.LOCK_SH if shared else fcntl.LOCK_EX)\n"
+    }
+  },
+  "pytest:project/tests/test_journal.py::test_two_processes_never_overlap_in_the_critical_section": {
+    "command": "./bin/test 'project/tests/test_journal.py::test_two_processes_never_overlap_in_the_critical_section' -q",
+    "defect": "The journal lock never calls flock, so the waiter is not excluded.",
+    "expect": "the waiter entered the critical section while the lock was held",
+    "plant": {
+      "path": "project/castle/journal.py",
+      "replace": "            fcntl.flock(descriptor, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)\n",
+      "with": "            (fcntl.LOCK_SH if shared else fcntl.LOCK_EX)\n"
+    }
+  },
   "pytest:tests/test_check.py::test_all_is_default_locked_ordered_and_cwd_independent": {
     "defect": "Route the gate's test lane back to the uncached full suite",
     "expect": "GATE OMITTED OR REORDERED REQUIRED COMMAND",
@@ -463,12 +483,12 @@
   },
   "pytest:tests/test_execution_dashboard.py::test_payload_reports_each_operator_park_and_nonexact_total": {
     "command": "./bin/test 'tests/test_execution_dashboard.py::test_payload_reports_each_operator_park_and_nonexact_total' -q",
-    "defect": "Handoff composition substitutes invented project meaning.",
-    "expect": "HANDOFF AUTHORING FAILED",
+    "defect": "The handoff guard no longer refuses absolute POSIX paths outside a macOS home.",
+    "expect": "DID NOT RAISE",
     "plant": {
-      "path": "bin/execution-telemetry",
-      "replace": "        value.update(schema=HANDOFF_SCHEMA, phase_id=args.phase)",
-      "with": "        value.update(schema=HANDOFF_SCHEMA, phase_id=args.phase, project=\"Invented\")"
+      "path": "lib/agentic_starter/execution_dashboard.py",
+      "replace": "        r\"(?:^|[\\s\\\"'(\\[{=,;])/[^\\s/]\",\n",
+      "with": ""
     }
   },
   "pytest:tests/test_execution_dashboard.py::test_regeneration_repairs_a_changed_history_whole_or_not_at_all": {

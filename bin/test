@@ -190,7 +190,8 @@ run_selected() {
       python "$repo_root/lib/agentic_starter/test_runner.py" -m pytest -q "${selectors[@]}" \
       || return $?
   fi
-  for selected in "${command_selectors[@]}"; do
+  # bash 3.2 (macOS /bin/bash) treats an empty array expansion as unset under set -u.
+  for selected in ${command_selectors[@]+"${command_selectors[@]}"}; do
     read -r -a command_words <<< "$selected"
     "$repo_root/bin/test" "${command_words[@]}" || return $?
   done

@@ -149,6 +149,26 @@ def test_payload_reports_each_operator_park_and_nonexact_total(tmp_path: Path) -
     assert refused.returncode != 0 and target.read_bytes() == original, (
         "HANDOFF REFUSAL MUTATED EVIDENCE"
     )
+    # The refusal above names this checkout's own path, whatever platform made it. Any
+    # absolute POSIX path is private, so a Linux runner's checkout refuses as a macOS
+    # home does, while relative labels keep their slashes.
+    for private in (
+        "/home/runner/work/castle/castle",
+        "/Users/operator/castle",
+        "/srv/build",
+        "Built in /tmp/case",
+        "Checkout (/var/lib/ci)",
+    ):
+        value = copy.deepcopy(sample_handoff())
+        value["project"] = private
+        with pytest.raises(telemetry.ValidationError, match="out-of-scope"):
+            dashboard.validate_handoff(value, phase_id="31.2")
+    for label in ("Sample Project", "reports/execution", "Read and/or write", "Pages 1/2"):
+        value = copy.deepcopy(sample_handoff())
+        value["project"] = label
+        assert dashboard.validate_handoff(value, phase_id="31.2")["project"] == label, (
+            "HANDOFF REFUSED A RELATIVE LABEL"
+        )
 
 
 def test_render_is_byte_identical_and_recovers_interrupted_replacement(

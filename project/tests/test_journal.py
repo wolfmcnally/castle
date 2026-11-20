@@ -23,7 +23,6 @@ from __future__ import annotations
 import ast
 import json
 import os
-import statistics
 import subprocess
 import sys
 import time
@@ -320,17 +319,16 @@ def test_append_refuses_a_torn_tail_line(tmp_path: Path) -> None:
 # Process-level machinery: constants, child scripts, and shared helpers
 # --------------------------------------------------------------------------
 
-_BARRIER_DEADLINE_S = 10.0
-_EXCLUSION_WINDOW_FLOOR_S = 0.5
-_EXCLUSION_WINDOW_CAP_S = 2.0
-_CALIBRATION_MULTIPLE = 200
-_BLOCKED_MULTIPLE = 50
+#: A liveness bound only: a loaded machine makes every handshake slower, never
+#: different, so no deadline here is evidence of exclusion or of its absence.
+_HANG_DEADLINE_S = 60.0
+_BARRIER_DEADLINE_S = _HANG_DEADLINE_S
 _MIN_HEARTBEATS = 5
 _MIN_PACER_CYCLES = 10
 _HEARTBEAT_INTERVAL_S = 0.01
 _POLL_INTERVAL_S = 0.02
-_HOLD_DEADLINE_S = 20.0
-_CHILD_JOIN_TIMEOUT_S = 30.0
+_HOLD_DEADLINE_S = 3 * _HANG_DEADLINE_S
+_CHILD_JOIN_TIMEOUT_S = _HANG_DEADLINE_S
 _GIL_PROBE_S = 0.2
 _MIN_GIL_LOOP_ITERATIONS = 10_000
 
@@ -583,6 +581,10 @@ def _await_marker(path: Path, *, message: str, diagnostics: Callable[[], str]) -
         time.sleep(_POLL_INTERVAL_S)
 
 
+def _stamps_after(lines: Sequence[str], after: float) -> list[float]:
+    return [stamp for stamp in (float(line.split()[-1]) for line in lines) if stamp > after]
+
+
 def _observe_exclusion(
     waiter: subprocess.Popen[bytes],
     pacer: subprocess.Popen[bytes],
@@ -591,40 +593,22 @@ def _observe_exclusion(
     pacer_paths: dict[str, Path],
     diagnostics: Callable[[], str],
     also_alive: Sequence[tuple[str, subprocess.Popen[bytes]]] = (),
-    window_floor: float = _EXCLUSION_WINDOW_FLOOR_S,
-) -> tuple[float, float]:
-    """Prove the waiter is excluded, over a window measured during this run.
+    hang_deadline: float = _HANG_DEADLINE_S,
+) -> float:
+    """Prove the waiter is excluded by handshakes and counted progress.
 
-    Returns ``(t_free, window)``: the uncontended acquisition latency the pacer
-    measured concurrently, and the exclusion window derived from it.
+    The handshake is the waiter's own ``flock-calls`` stamp, written by its
+    recorder immediately before the real ``fcntl.flock(LOCK_EX)``. After that
+    stamp the waiter's heartbeat thread must advance ``_MIN_HEARTBEATS`` times
+    and the control process must complete ``_MIN_PACER_CYCLES`` free-lock
+    acquisitions, each stamped after the waiter's call, while the waiter never
+    enters. Progress is counted, not timed against a calibration: a loaded
+    machine only takes longer, up to *hang_deadline*, which bounds liveness and
+    is never evidence.
+
+    Returns the waiter's ``flock`` call stamp.
     """
-    limit = time.perf_counter() + _BARRIER_DEADLINE_S
-    while True:
-        reached = bool(_complete_lines(waiter_paths["flock_calls"]))
-        cycles = _parse_pacer_cycles(pacer_paths["events"])
-        if reached and cycles:
-            break
-        if time.perf_counter() > limit:
-            problems = []
-            if not reached:
-                problems.append("the waiter never reached `fcntl.flock`")
-            if not cycles:
-                problems.append("the control process never acquired a free lock")
-            pytest.fail("; ".join(problems) + diagnostics())
-        time.sleep(_POLL_INTERVAL_S)
-
-    t_free = statistics.median([entered - called for _, called, entered in cycles])
-    window = max(window_floor, _CALIBRATION_MULTIPLE * t_free)
-    if window > _EXCLUSION_WINDOW_CAP_S:
-        pytest.fail(
-            "could not establish an evidentially meaningful exclusion window: "
-            f"uncontended acquisition measured {t_free:.6f}s, which needs a "
-            f"{window:.3f}s window, above the {_EXCLUSION_WINDOW_CAP_S}s cap." + diagnostics()
-        )
-
-    window_start = time.perf_counter()
-    heartbeats_at_start = len(_complete_lines(waiter_paths["heartbeat"]))
-    cycles_at_start = len(cycles)
+    limit = time.perf_counter() + hang_deadline
     watched = [("waiter", waiter), ("pacer", pacer), *also_alive]
     while True:
         assert not waiter_paths["events"].exists(), (
@@ -635,35 +619,29 @@ def _observe_exclusion(
                 f"the {label} process died inside the exclusion window"
                 f" (exit {process.returncode}){diagnostics()}"
             )
-        elapsed = time.perf_counter() - window_start
-        heartbeat_gain = len(_complete_lines(waiter_paths["heartbeat"])) - heartbeats_at_start
-        cycle_gain = len(_parse_pacer_cycles(pacer_paths["events"])) - cycles_at_start
-        # Acquisition latency omits the control's full cycle (including event
-        # writes and sleeping). Qualify that actual progress in this same
-        # continuously observed interval, without retrying or lowering counts.
-        assert elapsed <= _EXCLUSION_WINDOW_CAP_S, (
-            "control progress did not qualify within the exclusion window cap" + diagnostics()
-        )
-        if elapsed >= window and (
-            heartbeat_gain >= _MIN_HEARTBEATS and cycle_gain >= _MIN_PACER_CYCLES
-        ):
-            window = elapsed
-            break
+        calls = _complete_lines(waiter_paths["flock_calls"])
+        if calls:
+            called = float(calls[0].split()[-1])
+            beats = _stamps_after(_complete_lines(waiter_paths["heartbeat"]), called)
+            cycles = [
+                cycle for cycle in _parse_pacer_cycles(pacer_paths["events"]) if cycle[1] > called
+            ]
+            if len(beats) >= _MIN_HEARTBEATS and len(cycles) >= _MIN_PACER_CYCLES:
+                # Read after the counted progress: the waiter had not entered
+                # once its own thread and a second process had both moved on.
+                assert not waiter_paths["events"].exists(), (
+                    "the waiter entered the critical section while the lock was held"
+                    + diagnostics()
+                )
+                return called
+        if time.perf_counter() > limit:
+            problem = (
+                "control progress did not qualify before the hang deadline"
+                if calls
+                else "the waiter never reached `fcntl.flock`"
+            )
+            pytest.fail(f"{problem} (waited {hang_deadline}s){diagnostics()}")
         time.sleep(_POLL_INTERVAL_S)
-
-    heartbeat_gain = len(_complete_lines(waiter_paths["heartbeat"])) - heartbeats_at_start
-    cycle_gain = len(_parse_pacer_cycles(pacer_paths["events"])) - cycles_at_start
-    assert heartbeat_gain >= _MIN_HEARTBEATS, (
-        f"the waiter's heartbeat advanced only {heartbeat_gain} times in {window:.3f}s,"
-        " so its failure to acquire is not evidence of exclusion — the process was"
-        f" not demonstrably running{diagnostics()}"
-    )
-    assert cycle_gain >= _MIN_PACER_CYCLES, (
-        f"the control process completed only {cycle_gain} free-lock acquisitions in"
-        f" {window:.3f}s, so the waiter completing zero is not a meaningful"
-        f" comparison{diagnostics()}"
-    )
-    return t_free, window
 
 
 # --------------------------------------------------------------------------
@@ -690,7 +668,12 @@ def _journal_module_tree() -> ast.Module:
 
 def _qualify_exclusion_window(tmp_path: Path) -> None:
     """Exercise complete control progress and independent exclusion refusals."""
-    for label, interval in (("delayed", 0.075), ("unlocked", 0.01), ("cap", 0.35), ("dead", 0.01)):
+    for label, interval in (
+        ("delayed", 0.075),
+        ("unlocked", 0.01),
+        ("stalled", 0.35),
+        ("dead", 0.01),
+    ):
         root = tmp_path / label
         root.mkdir()
         store, pacer_store = root / "store", root / "pacer-store"
@@ -746,12 +729,20 @@ def _qualify_exclusion_window(tmp_path: Path) -> None:
                     waiter_paths=waiter_paths, pacer_paths=pacer_paths, diagnostics=diagnostics
                 )
                 if label == "delayed":
-                    _, window = _observe_exclusion(waiter, pacer, **arguments)
-                    assert _EXCLUSION_WINDOW_FLOOR_S < window <= _EXCLUSION_WINDOW_CAP_S
+                    called = _observe_exclusion(waiter, pacer, **arguments)
+                    calls = _complete_lines(waiter_paths["flock_calls"])
+                    assert called == float(calls[0].split()[-1])
+                elif label == "stalled":
+                    # Ten control cycles sleep at least 3.15s, so a 1s bound can
+                    # never qualify, however fast or slow the machine is.
+                    with pytest.raises(
+                        pytest.fail.Exception,
+                        match="control progress did not qualify before the hang deadline",
+                    ):
+                        _observe_exclusion(waiter, pacer, **arguments, hang_deadline=1.0)
                 else:
                     expected = {
                         "unlocked": "waiter entered the critical section",
-                        "cap": "control progress did not qualify within the exclusion window cap",
                         "dead": "pacer process died",
                     }[label]
                     with pytest.raises(AssertionError, match=expected):
@@ -866,9 +857,10 @@ def test_two_processes_never_overlap_in_the_critical_section(tmp_path: Path) -> 
     The residual, named honestly: an implementation that *calls* ``flock`` but
     does not exclude is caught by observation rather than by determinism. For
     this test to be green against one, the OS would have to starve the waiter's
-    main thread for the whole measured window while freely running its sibling
-    heartbeat thread in the same process and a second process besides. That is
-    a scheduler-fairness violation, not an unlucky interleaving.
+    main thread across counted beats of its sibling heartbeat thread in the same
+    process and counted cycles of a second process besides. That is a
+    scheduler-fairness violation, not an unlucky interleaving, and no machine
+    load turns it into one: load only slows every party to the handshakes.
     """
     store = tmp_path / "store"
     pacer_store = tmp_path / "pacer-store"
@@ -936,7 +928,7 @@ def test_two_processes_never_overlap_in_the_critical_section(tmp_path: Path) -> 
             _HOLD_DEADLINE_S,
             out_path=pacer_out,
         )
-        t_free, window = _observe_exclusion(
+        _observe_exclusion(
             waiter,
             pacer,
             waiter_paths=waiter_paths,
@@ -967,11 +959,17 @@ def test_two_processes_never_overlap_in_the_critical_section(tmp_path: Path) -> 
         waiter_entered = _stamp(waiter_lines, "enter")
         holder_exit = _stamp(holder_lines, "exit")
 
-        blocked_for = waiter_entered - waiter_flock_called
-        assert blocked_for >= _BLOCKED_MULTIPLE * t_free, (
-            f"the waiter's acquisition took {blocked_for:.6f}s, under the"
-            f" {_BLOCKED_MULTIPLE}x margin over the {t_free:.6f}s an uncontended"
-            f" acquisition took during this run (window {window:.3f}s)"
+        blocked_beats = [
+            stamp
+            for stamp in _stamps_after(
+                _complete_lines(waiter_paths["heartbeat"]), waiter_flock_called
+            )
+            if stamp < waiter_entered
+        ]
+        assert len(blocked_beats) >= _MIN_HEARTBEATS, (
+            f"the waiter's heartbeat advanced only {len(blocked_beats)} times between"
+            " its flock call and its entry, so its acquisition is not shown to have"
+            f" blocked while the process ran{diagnostics()}"
         )
         assert waiter_flock_called < holder_exit < waiter_entered, (
             "the waiter did not call flock before the holder left its section and"
