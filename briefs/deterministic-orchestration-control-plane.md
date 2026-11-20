@@ -1,20 +1,13 @@
 ---
 title: Deterministic Orchestration Control Plane
-date: 2026-08-28
+date: 2026-10-27
 status: methodology
-scope: methodology
+scope: Deterministic command authority, custody and evidence for orchestration, and where scripts end and judgment begins.
 ---
 
 # Deterministic Orchestration Control Plane
 
-## Primary ownership and independent advice
-
-As of 2026-09-07, the primary use case is a configured SOTA instance that owns orchestration, planning, implementation and acceptance. A comparable or stronger model in another permitted provider's harness normally supplies independent plan and code advice; a single-provider environment uses fresh instances of the primary model. One comprehensive pass per stage is normal, a second needs recorded cause, and two is the maximum. Advisers report evidence and severity without veto; the primary decides corrections and records consequential dispositions. Objective requirements and both full gates remain binding.
-
-A constrained primary uses separate planner/coder roles and the established approval-gated reviewer/critic loops. Detailed references to mandatory reviewer approval or four-role delegation below describe that constrained product branch. Eligibility is maintained configuration, not a benchmark claim. Backend and handling restrictions prevail over preferred routing. Optional kickoff usage checks refuse a primary at >=95% of any applicable limit and substitute the primary for a secondary above 95% weekly; absent tooling does not prevent execution.
-
-All methodology work itself, including teach/learn knowledge transfer, is always one-shot by the invoking primary across harnesses and capability tiers, without delegated production or independent review. The primary owns adaptation, self-checks, required gates, commit and fast-forward push within authorized scope. This standing delivery grant does not expand scope or waive custody and human decisions. No product phase or repeated approval ceremony is needed for authorized methodology work.
-
+Primary ownership, independent advice and the one-shot route for methodology work are stated once, in [the methodology brief](methodology.md#primary-ownership-and-independent-advice).
 
 ## Decision
 
@@ -62,8 +55,8 @@ run composition should cost seconds rather than an entire full gate.
 
 A predictable echoed sentinel proves only that a venue can repeat prompt text.
 Preflight instead creates unpredictable ASCII text in an isolated directory, names the file without disclosing its contents, and requires the venue to read and return the exact text. The manager validates the response and computes the file SHA-256 for the receipt. This proves read access using the declared read tools, without requiring binary decoding, model-side hashing, or additional shell permission.
-The receipt binds the resolved venue targets and the routing-configuration
-digest. An all-native run receives the same receipt shape with an empty target
+The receipt binds the resolved venue targets, the executable and version each
+resolved to, and the routing-configuration digest. An all-native run receives the same receipt shape with an empty target
 set. Starter's separate write-enabled coder toolchain probe remains in force.
 
 ## Two candidate identities
@@ -71,38 +64,16 @@ set. Starter's separate write-enabled coder toolchain probe remains in force.
 The full-tree candidate remains the delivery and handoff identity. It includes
 all tracked and nonignored-untracked files.
 
-The root `candidate-partition.yaml` supplies the active/bookkeeping boundary. Product identity binds review and implementation evidence; full-tree identity proves gate non-mutation and the delivered tree. The declaration remains active and is digest-bound. Unclassified tracked paths refuse; unclassified nonignored untracked paths remain included as active. Bookkeeping-only edits preserve product identity without an exception ledger. Declared-authority checks and full snapshots for explicitly reviewed bookkeeping prevent an exclusion from hiding a meaningful change. Both full close gates remain mandatory. The repair tools retain their narrower permissions.
+The root `candidate-partition.yaml` supplies the active/bookkeeping boundary. Product identity binds review and implementation evidence; full-tree identity proves gate non-mutation and the delivered tree. The declaration remains active and is digest-bound. Unclassified tracked paths refuse; unclassified nonignored untracked paths remain included as active. Bookkeeping-only edits preserve product identity without an exception ledger. Declared-authority checks and full snapshots for explicitly reviewed bookkeeping prevent an exclusion from hiding a meaningful change. Both close gates remain mandatory. The repair tools retain their narrower permissions.
 
 
 ## Append-only construction evidence
 
-`LOG.md` has one writer and two independent readers:
-
-- `bin/log-append` appends a complete block at true EOF;
-- `bin/check-log-prefix` proves the candidate starts with the exact committed
-  bytes; and
-- `bin/check-log-monotonic` proves effective chronology.
-
-Stable block digests authenticate relocation and later chronology corrections.
-A committed timestamp is never edited: a later correction record binds the
-target block digest, repeats its recorded anchor, and moves its effective anchor
-forward. Terminal END and PARK blocks carry a `Lessons:` witness.
+`log/entries/` holds immutable activity bodies and per-writer predecessor chains. `bin/multioperator append` publishes one new attributed body; `validate` verifies every body digest, sequence, predecessor and timezone-aware timestamp. Indexed validation also refuses committed history rewrites and verifies retained acceptance inputs against indexed tracked bytes. A later correction is a new attributed entry, never an edit or relocation of published history. Terminal END and PARK bodies retain their `Lessons:` witness.
 
 ## Bounded deterministic repair
 
-One novel bookkeeping failure may receive one repair when the complete result
-is mechanically derivable. The tool constructs and validates the replacement
-in memory, makes one atomic write, and verifies the exact bytes afterward.
-Implementation/product identity must remain unchanged.
-
-The admitted repairs are:
-
-- relocating one uncommitted log block by unique block identity; and
-- normalizing the final newline of `LOG.md`, `EXECUTION_LOG.jsonl`, or
-  `plan/INDEX.md`.
-
-An ambiguous target, contextual patch, recurring signature, second attempt,
-substantive change, or failed byte verification parks for the operator.
+The shared final-newline repair is limited to `EXECUTION_LOG.jsonl` under the declared bookkeeping contract. Phase discovery context and immutable activity entries are outside that repair set. Preserve original failed or incomplete evidence and use the owning supported append-only correction or interruption path; never normalize away qualifying history or infer success from missing bytes. An ambiguous target, substantive change or failed byte verification parks the affected action for the owner.
 
 ## Recipient-local adaptation
 

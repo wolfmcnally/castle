@@ -6,7 +6,7 @@ Every path embedded in a committed file is **repo-relative**. Absolute paths (`/
 
 - Source code that names file paths.
 - Configuration files (`pyproject.toml`, `package.json`, `tsconfig.json`, etc.).
-- Markdown documents (briefs, policies, plan files, README, CLAUDE.md, LOG.md, etc.).
+- Markdown documents (briefs, policies, plan files, README, AGENTS.md, LOG.md, etc.).
 - Sample data, fixtures, test inputs.
 - Test scripts and shell scripts checked into the repo.
 
@@ -32,24 +32,23 @@ Every path embedded in a committed file is **repo-relative**. Absolute paths (`/
 
 ## Verification
 
-A quick sweep, runnable from the repo root:
+In the starter template, `bin/check-anonymization.sh` enforces this rule mechanically over every tracked file, and `./bin/check all` runs it:
 
 ```bash
-# Find absolute Unix-style paths in committed text files (excluding state dirs)
-grep -RIn '/Users/\|/home/\|/var/\|/etc/' \
-  --include='*.md' --include='*.py' --include='*.toml' \
-  --include='*.json' --include='*.yaml' --include='*.yml' \
-  --exclude-dir=.git --exclude-dir=.venv --exclude-dir=node_modules \
-  . | grep -v '^.claude/scheduled_tasks.lock' || echo "no absolute paths found"
+bin/check-anonymization.sh
 ```
 
-A clean repo prints `no absolute paths found`.
+Its first pass is this policy's check: it matches real `/Users/<user>/`, `/home/<user>/`, `C:\Users\<user>\`, and home-relative forms, excludes the placeholder spellings this policy itself recommends (`/Users/me/`, `<your-clone>/`), and reports a hit against this policy by name.
+
+That script exists because the starter is public, so it is starter-only and does not propagate. A project derived from the template carries this policy without that checker; there the rule is enforced by the code critic's policy-adherence pass, which greps for the same absolute-path prefixes. A derived project that wants the mechanical check can adopt the script deliberately — but it is not part of the universal bundle, and its absence is not a gap in the gate.
+
+**Do not hand-write a `grep` for this rule.** The token it would search for is the token this policy, its catalog entry, the code critic's checklist, the sanitizer that strips such paths, and the tests asserting their absence all legitimately contain — so such a grep reports hits on a clean repository and can never print a clean result. That is the detector defect [`verification-discipline.md`](verification-discipline.md) § "A grep lead is not a finding" names: never key a detector solely on a token the subject itself legitimately emits. The checker's exclusion list is what makes the same question answerable.
 
 ## Exception: documented scratch roots
 
 A project may declare a documented scratch root (e.g., `/tmp/<project-name>/auditions/`) for ephemeral artifacts. References to that root in committed files are allowed *only* when:
 
-- The scratch root is documented in `CLAUDE.md`'s conventions section.
+- The scratch root is documented in `AGENTS.md`'s conventions section.
 - Nothing under the scratch root is ever committed.
 - The path is conventional (not user-specific): `/tmp/<project-name>/...` is acceptable; `/Users/<name>/scratch/...` is not.
 

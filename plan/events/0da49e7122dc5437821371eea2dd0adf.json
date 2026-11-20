@@ -1,0 +1,11 @@
+{
+  "from": null,
+  "id": "0da49e7122dc5437821371eea2dd0adf",
+  "owner": null,
+  "phase": "bounded-interruption-recovery",
+  "previous": null,
+  "reason": "Imported source state, not a new acceptance or lease",
+  "source_phase": "3",
+  "state": "completed",
+  "writer": "castle-operator"
+}

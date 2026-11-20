@@ -1,24 +1,17 @@
 ---
 title: "Cross-Agent CLI Invocation — Best Current Practices"
-date: 2026-08-23
+date: 2026-10-27
 status: methodology
 scope: BCPs for invoking one coding-agent CLI from inside another (Claude Code ↔ Codex CLI), and the design rationale for the per-role model/venue feature (harness-aware cross-vendor review and pinning).
 ---
 
 # Cross-Agent CLI Invocation — Best Current Practices
 
-## Primary ownership and independent advice
-
-As of 2026-09-07, the primary use case is a configured SOTA instance that owns orchestration, planning, implementation and acceptance. A comparable or stronger model in another permitted provider's harness normally supplies independent plan and code advice; a single-provider environment uses fresh instances of the primary model. One comprehensive pass per stage is normal, a second needs recorded cause, and two is the maximum. Advisers report evidence and severity without veto; the primary decides corrections and records consequential dispositions. Objective requirements and both full gates remain binding.
-
-A constrained primary uses separate planner/coder roles and the established approval-gated reviewer/critic loops. Detailed references to mandatory reviewer approval or four-role delegation below describe that constrained product branch. Eligibility is maintained configuration, not a benchmark claim. Backend and handling restrictions prevail over preferred routing. Optional kickoff usage checks refuse a primary at >=95% of any applicable limit and substitute the primary for a secondary above 95% weekly; absent tooling does not prevent execution.
-
-All methodology work itself, including teach/learn knowledge transfer, is always one-shot by the invoking primary across harnesses and capability tiers, without delegated production or independent review. The primary owns adaptation, self-checks, required gates, commit and fast-forward push within authorized scope. This standing delivery grant does not expand scope or waive custody and human decisions. No product phase or repeated approval ceremony is needed for authorized methodology work.
-
+Primary ownership, independent advice and the one-shot route for methodology work are stated once, in [the methodology brief](methodology.md#primary-ownership-and-independent-advice).
 
 This brief pins the researched best current practices (as of mid-2026) for invoking OpenAI's `codex` CLI from inside Claude Code and Anthropic's `claude` CLI from inside Codex, so future work cites a stable position instead of re-deriving it. It also records the design rationale for **cross-harness review** — an explicit option of the per-role model/venue feature, which pins a separate model and effort per canonical role, scoped by which harness is orchestrating.
 
-Both vendors sanction this interop: OpenAI ships an official Claude Code plugin that delegates to the local Codex CLI, and both CLIs document headless scripting modes. Every mature published pattern is **subprocess-first** — shelling out to the other CLI — rather than MCP-bridged. MCP wrappers exist but add a moving part without changing the fundamentals; for bounded, one-shot delegations the subprocess is the de-facto standard.
+As of 2026-11-07, the preferred route is an available supported cross-harness launcher and communication surface. A shared supported surface can retain exact session identity, correlated handoffs and observable lifecycle across harnesses without each caller reconstructing those connections. Launching and messaging are separate capabilities, and a product name or installed tool alone does not prove either one meets the role execution contract. No particular integration is required. When a supported launch path is unavailable, the direct native or generated watched-CLI recipes below remain the supported fallback with the same model, authority, permissions, budgets and evidence controls. This preference does not authorize installing a service, changing access, bypassing a refusal or duplicating an uncertain launch.
 
 Research authority remains role-based across either transport. Planner and
 reviewer may originate search and retrieve. Coder and critic may retrieve only
@@ -34,7 +27,7 @@ candidate content outbound.
 - **Independent review benefits from an unframed handoff.** Cross-vendor review may expose different failure classes, but its incremental value is a hypothesis to measure. The strongest published experience report (Orr, May 2026) found the bigger lever is *framing*: handing the reviewer a cold artifact (raw diff + requirements, no implementer narrative) produced ~9.4 mean findings vs 2.4–4.0 when the implementer's self-assessment was included — a 3–4× difference — and critical-severity tagging roughly halved with even mild framing.
 - **Review roles are read-only by construction.** Our `plan-reviewer` stance adds WebSearch/WebFetch and `code-critic` adds WebFetch to Read/Grep/Glob, but neither receives a repository write tool. That maps directly onto the external CLIs' sandboxed read-only modes: the external reviewer physically cannot contend for the working tree.
 - **The verdict contract already fits.** The methodology's `## Verdict: APPROVED` / `## Verdict: REVISE` string-match contract is exactly the sentinel-string loop-control pattern the ecosystem converged on independently.
-- **Instruction parity is automatic.** Codex auto-ingests `AGENTS.md` (→ `CLAUDE.md` via symlink); `claude` auto-loads `CLAUDE.md`. An external reviewer invoked from the repo root is bound by the same policies, invariants, and verdict contract as a native subagent, with no extra plumbing.
+- **Instruction parity is automatic.** Both harnesses use the regular primary `AGENTS.md`; installed Claude must meet the verified minimum, and actual loading is separately observed under its native precedence/configuration conditions. An external reviewer invoked from the repo root is bound by the same policies, invariants, and verdict contract as a native subagent, with no extra plumbing.
 
 ## 2. Claude Code → `codex` (headless)
 
@@ -73,7 +66,7 @@ Flag-by-flag rationale:
   role directive enforces the matrix. Do not disable all MCP servers or
   plugins as a substitute for role authority.
 - **Pass large context via files, not inline.** Write the plan text or `git diff` output to a temp file and reference its path in the prompt. Every published skill does this.
-- **Select model and effort only through the manager.** The manager validates a selector-specific effort subset before write or spawn: named Astra/Sol/Terra/Luna/Opus/Fable accept low through max; provider-default codex conservatively accepts low through xhigh, provider-default claude low through max, and native default no explicit effort. Ultra is not enabled. `astra` maps to `gpt-6-astra`; `sol`, `terra`, and `luna` retain their explicit GPT-5.6 mappings. A bare `codex` pin uses its configured default. The generated argv adds the selected model and separate `-c 'model_reasoning_effort="<effort>"'` override, preserving both on every resume. `render-command` and `watch` share command generation and validate requested routing before spawn. API settings alone do not prove CLI execution or entitlement; each checkout must qualify its configured target through live preflight. Supported model settings are a deliberately conservative subset, not a claim about every provider capability.
+- **Select model and effort only through the manager.** The manager validates a selector-specific effort subset before write or spawn: named Astra/Sol/Terra/Luna/Opus/Fable accept low through max; provider-default codex conservatively accepts low through xhigh, provider-default claude low through max, and native default no explicit effort. Ultra is not enabled. `astra` maps to `gpt-6-astra`, `sol` to `gpt-6.1-sol`, `luna` to `gpt-6-luna` and `terra` to `gpt-5.6-terra`. A bare `codex` pin uses its configured default. The generated argv adds the selected model and separate `-c 'model_reasoning_effort="<effort>"'` override, preserving both on every resume. `render-command` and `watch` share command generation and validate requested routing before spawn. API settings alone do not prove CLI execution or entitlement; each checkout must qualify its configured target through live preflight. Supported model settings are a deliberately conservative subset, not a claim about every provider capability.
 
 - **Exit codes are not the whole contract** for `codex exec`. Ordinary success
   requires a successful child, a fresh `-o` artifact with the expected role
@@ -88,7 +81,7 @@ Flag-by-flag rationale:
   ```
 
   For example, a resumed role with `model: sol` and `effort: medium` adds
-  `--model gpt-5.6-sol -c 'model_reasoning_effort="medium"'` to that command.
+  `--model gpt-6.1-sol -c 'model_reasoning_effort="medium"'` to that command.
 
   (`resume` reads stdin exactly as `exec` does, so it carries the same `</dev/null` redirect — the stdin-hang bullet above applies to both subcommands.)
 
@@ -138,10 +131,9 @@ Flag-by-flag rationale:
   empty for bare `claude` or `(--model <alias>)`; `EFFORT_ARGS` is empty or
   `(--effort <level>)`. The watchdog rejects a mismatch between those actual
   flags and its routing metadata before launch.
-- **`--max-turns N`** (and optionally `--max-budget-usd`) are Claude print-mode circuit breakers — use them as runaway guards, not review-depth budgets. `role_timeouts.<role>.claude_max_turns` supplies 50 for planner/reviewer/critic and 200 for coder. Codex and native roles expose no equivalent per-invocation turn flag, so their enforceable guards are first-event, idle, and hard time. On `error_max_turns`, preserve the streamed `session_id` and allow one concise “conclude now” resume under the existing bounded verdict-only recovery rule.
 - **Codex's sandbox blocks subprocess network by default.** A codex-spawned `claude` must reach the Anthropic API; `workspace-write` denies that unless `[sandbox_workspace_write] network_access = true` is set in `~/.codex/config.toml` — and on macOS, Seatbelt has been reported to silently ignore that setting in some versions (openai/codex#10390), requiring a full-access session. **Preserve a network failure and park unless an already-authorized recovery preserves selected model, effort and required authority; do not attempt to repair the sandbox mid-session.**
 - **Auth precedence trap.** The documented credential order (code.claude.com/docs/en/authentication) ranks an env `ANTHROPIC_API_KEY` *above* `apiKeyHelper`, `CLAUDE_CODE_OAUTH_TOKEN`, and subscription OAuth — intentionally, per Anthropic's support guidance — and *set does not mean valid*. Claude Code injects a *session-scoped* `ANTHROPIC_API_KEY` into its child processes, so any chain that began in a Claude Code session can carry a key that fails direct API auth with a structured 401 `Invalid API key` error; a stale key can also reach a genuine Codex parent through its inherited environment. Under the subscription auth model an env key is never the intended credential, so the recipe scrubs it unconditionally; the scrub is harmless to `apiKeyHelper`, keychain OAuth, and `CLAUDE_CODE_OAUTH_TOKEN`. For subscription-backed automation without a browser, `claude setup-token` mints a long-lived OAuth token (`CLAUDE_CODE_OAUTH_TOKEN`). Note `--bare` mode skips OAuth/keychain reads entirely and requires an API key; API-key-CI projects re-export the key deliberately in the child env instead of relying on inheritance.
-- **CLAUDE.md auto-loading.** A `claude -p` run inside a repo loads the repo's `CLAUDE.md`, hooks, skills, and MCP servers like an interactive session would — desirable for cross-harness review (policy parity), avoidable with `--bare` when a context-free consult is wanted.
+- **AGENTS.md auto-loading.** A `claude -p` run inside a repo loads the repo's `AGENTS.md`, hooks, skills, and MCP servers like an interactive session would — desirable for cross-harness review (policy parity), avoidable with `--bare` when a context-free consult is wanted.
 
 ## 4. General patterns (direction-independent)
 
@@ -162,11 +154,11 @@ Flag-by-flag rationale:
 - **Reviewer is read-only; never two writers on one tree.** If an external agent must write, serialize or isolate; for review there is no reason to allow writes at all. The one write-enabled cross-harness role is a *pinned coder*: it uses `-s workspace-write` (codex) / `--allowedTools "…,Write,Edit,Bash,WebFetch"` (claude), and the single-writer rule is satisfied by serialization — `kickoff` runs the coder stage with no concurrent native writer, so the pinned coder owns the tree exclusively. The macOS Seatbelt `network_access` trap (§3) applies to a workspace-write child that must reach its vendor API; preserve that network failure and follow the same governed recovery rule.
 - **Three clocks on every role call.** Require a first structured event, reset an idle watchdog only on real subprocess progress, and enforce an absolute hard deadline regardless of activity. Kill the process group, preserve artifacts/session ids, and record which clock fired. `bin/kickoff-config watch` implements this for external CLIs; native subagents use the same role budgets through their harness. Every dispatch uses an execution surface that remains observable for the full configured budget: a durable foreground session when the harness provides one, otherwise its tracked background mechanism.
 - **Calibrate from tails, not anecdotes.** Vendors publish qualitative latency guidance, not stable planner/reviewer/coder/critic wall-time distributions; task scope, repository size, tools, model, and effort dominate. Keep portable seed floors, collect local successful durations and longest progress gaps, and after at least 30 successes per `(role, venue, model, effort)` recommend `max(floor, 2 × p95)`. Treat timed-out calls as censored cases and never auto-tighten from them.
-- **Cost awareness.** Each external call is a full agent loop on the user's other-vendor quota. Bounded calls (capped turns, capped rounds) only; never unbounded polling loops.
+- **Cost awareness.** Each external call is a full agent loop on the user's other-vendor quota. Bounded calls (time-bounded runs, capped rounds) only; never unbounded polling loops.
 
 ## 5. How this maps onto our methodology
 
-These BCPs are applied by the per-role model/venue feature and the per-role execution budgets. Their separate model and effort fields plus first-event, idle-progress, and hard-deadline budgets live together in human-editable `kickoff.yaml`. Its shipped default is quality/same-harness; balanced/economy presets reduce coder or all-role cost, and cross-vendor review is explicitly selectable through ordinary role pins. Independent review contexts remain required. Requested routing and qualified provider observations are reported separately; missing observations remain unreported. Before phase state begins, `./bin/kickoff-config preflight --receipt <run-path>` live-validates every target and records the configuration-bound real-read proof. Production external calls run through `watch`, which generates and supervises the child command from resolved metadata; `render-command` exposes the same generated argv for inspection. Calls read the same canonical role file as native subagents, stream progress into the shared exact execution trace, and register immutable evidence. Orchestration and build gates are never delegated.
+These BCPs are applied by the per-role model/venue feature and the per-role execution budgets. Their separate model and effort fields plus first-event, idle-progress, and hard-deadline budgets live together in human-editable `kickoff.yaml`. Its shipped default is same-harness roles on each provider's lead coding model; the quality preset selects the escalation models, the balanced and economy presets vary which roles use which, and cross-vendor review is explicitly selectable through ordinary role pins. Independent review contexts remain required. Requested routing and qualified provider observations are reported separately; missing observations remain unreported. Before phase state begins, `./bin/kickoff-config preflight --receipt <run-path>` live-validates every target and records the configuration-bound real-read proof. Production external calls run through `watch`, which generates and supervises the child command from resolved metadata; `render-command` exposes the same generated argv for inspection. Calls read the same canonical role file as native subagents, stream progress into the shared exact execution trace, and register immutable evidence. Orchestration and build gates are never delegated.
 
 ## 6. Sources
 
@@ -197,3 +189,8 @@ Issues and reports underpinning specific claims:
 - No flag to disable AGENTS.md ingestion — openai/codex#5983, openai/codex#10067
 - Self-assessment redaction finding — Todd Orr, "What I Found When Claude Reviewed Codex's Work," May 2026
 - Official OpenAI Codex plugin for Claude Code (subprocess-based) — github.com/openai/codex-plugin-cc
+
+
+## Shared readiness, separate roles
+
+As of 2026-11-07, readiness grouping follows the actual probe command's CLI, model, effort, access and tool arguments. A role label alone does not require a second identical headless file-read challenge. The receipt can name all roles covered by that qualification while each real dispatch still receives its own role authority, research directive, attempt registration and evidence. Distinct tool capabilities, write access, models and efforts remain separate probes. This is per-command capability qualification within one preflight, not approval sharing or reuse across runs.

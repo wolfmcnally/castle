@@ -1,0 +1,11 @@
+{
+  "from": null,
+  "id": "7cee3114539b59478ee0a815b24b667f",
+  "owner": null,
+  "phase": "version-two-release",
+  "previous": null,
+  "reason": "Imported source state, not a new acceptance or lease",
+  "source_phase": "8",
+  "state": "completed",
+  "writer": "castle-operator"
+}

@@ -47,7 +47,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import MutableMapping
+from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -73,6 +73,7 @@ from agentic_starter.execution_telemetry import (  # noqa: E402
     TelemetryError,
     closed_span,
     finish_span,
+    require_persistent_directory,
     start_span,
     trace_context,
 )
@@ -133,9 +134,9 @@ MODELS = (
 CODEX_MODELS = {
     "codex": None,
     "astra": "gpt-6-astra",
-    "sol": "gpt-5.6-sol",
+    "sol": "gpt-6.1-sol",
     "terra": "gpt-5.6-terra",
-    "luna": "gpt-5.6-luna",
+    "luna": "gpt-6-luna",
 }
 CLAUDE_MODELS = {"claude": None, "opus": "opus", "fable": "fable"}
 MODEL_EFFORTS = {
@@ -145,6 +146,9 @@ MODEL_EFFORTS["codex"] = ("low", "medium", "high", "xhigh")
 MODEL_EFFORTS["default"] = ()
 EFFORTS = tuple(dict.fromkeys(effort for values in MODEL_EFFORTS.values() for effort in values))
 PRESETS = ("quality", "balanced", "economy")
+# Adopted effort per model for high-quality coding: the level each vendor ties to work
+# where verification and checking matter, not its default start.
+PRESET_EFFORTS = {"opus": "high", "sol": "high", "fable": "high", "astra": "high"}
 REVIEW_MODES = ("same-harness", "cross-vendor")
 ROLE_OPERATIONS = {
     "planner": "role.plan",
@@ -176,13 +180,19 @@ def preset_models(
         if review == "cross-vendor":
             for role in ("reviewer", "critic"):
                 roles[role]["model"] = other_economical if preset == "economy" else other_strong
+        for pin in roles.values():
+            pin["effort"] = PRESET_EFFORTS[pin["model"]]
         models[harness] = roles
     return models
 
 
+# Shipped delegated pins are each provider's lead coding model, not its escalation model.
 SHIPPED_MODELS: dict[str, dict[str, dict[str, str]]] = {
     "default": {role: {"model": "default"} for role in ROLES},
-    **preset_models("quality"),
+    **{
+        harness: {role: {"model": model, "effort": PRESET_EFFORTS[model]} for role in ROLES}
+        for harness, model in (("claude", "opus"), ("codex", "sol"))
+    },
 }
 
 SHIPPED_TIMEOUTS: dict[str, Any] = {
@@ -193,28 +203,24 @@ SHIPPED_TIMEOUTS: dict[str, Any] = {
         "planner": {
             "hard_timeout_seconds": 1800,
             "idle_timeout_seconds": 600,
-            "claude_max_turns": 50,
             "hard_floor_seconds": 1800,
             "idle_floor_seconds": 600,
         },
         "reviewer": {
             "hard_timeout_seconds": 1800,
             "idle_timeout_seconds": 600,
-            "claude_max_turns": 50,
             "hard_floor_seconds": 1800,
             "idle_floor_seconds": 600,
         },
         "coder": {
             "hard_timeout_seconds": 7200,
             "idle_timeout_seconds": 1200,
-            "claude_max_turns": 200,
             "hard_floor_seconds": 7200,
             "idle_floor_seconds": 1200,
         },
         "critic": {
             "hard_timeout_seconds": 2700,
             "idle_timeout_seconds": 600,
-            "claude_max_turns": 50,
             "hard_floor_seconds": 2700,
             "idle_floor_seconds": 600,
         },
@@ -360,7 +366,6 @@ def validate_timeouts(section: Any) -> MutableMapping[str, Any]:
             {
                 "hard_timeout_seconds",
                 "idle_timeout_seconds",
-                "claude_max_turns",
                 "hard_floor_seconds",
                 "idle_floor_seconds",
             },
@@ -369,7 +374,6 @@ def validate_timeouts(section: Any) -> MutableMapping[str, Any]:
         for field in (
             "hard_timeout_seconds",
             "idle_timeout_seconds",
-            "claude_max_turns",
             "hard_floor_seconds",
             "idle_floor_seconds",
         ):
@@ -443,14 +447,21 @@ def validate_document(document: Any) -> MutableMapping[str, Any]:
     return document
 
 
-BUILTIN_MODEL_PINS = (MODELS, CLAUDE_MODELS.copy(), CODEX_MODELS.copy(), MODEL_EFFORTS.copy())
+BUILTIN_MODEL_PINS = (
+    MODELS,
+    CLAUDE_MODELS.copy(),
+    CODEX_MODELS.copy(),
+    MODEL_EFFORTS.copy(),
+)
 
 
 def install_targets(document: dict[str, Any]) -> None:
     global MODELS
     MODELS = BUILTIN_MODEL_PINS[0]
     for table, original in zip(
-        (CLAUDE_MODELS, CODEX_MODELS, MODEL_EFFORTS), BUILTIN_MODEL_PINS[1:], strict=True
+        (CLAUDE_MODELS, CODEX_MODELS, MODEL_EFFORTS),
+        BUILTIN_MODEL_PINS[1:],
+        strict=True,
     ):
         table.clear()
         table.update(original)
@@ -567,12 +578,11 @@ def show_models(section: MutableMapping[str, Any]) -> None:
 def show_timeouts(section: MutableMapping[str, Any]) -> None:
     print(f"Execution budgets from {CONFIG}:")
     print(f"First structured event: {section['first_event_timeout_seconds']}s")
-    print("Role       hard    idle   claude turns")
+    print("Role       hard    idle")
     for role in ROLES:
         values = section["roles"][role]
         print(
-            f"{role:<10} {values['hard_timeout_seconds']:>5}s "
-            f"{values['idle_timeout_seconds']:>7}s {values['claude_max_turns']:>14}"
+            f"{role:<10} {values['hard_timeout_seconds']:>5}s {values['idle_timeout_seconds']:>7}s"
         )
     print(
         "Recalibration: at least "
@@ -750,6 +760,7 @@ def preflight_targets(
     section: MutableMapping[str, Any], harness: str
 ) -> dict[PreflightTarget, list[str]]:
     targets: dict[PreflightTarget, list[str]] = {}
+    probe_targets: dict[tuple[Any, ...], PreflightTarget] = {}
     for role, (model, effort) in resolve_models(section, harness).items():
         if model == "default":
             continue
@@ -758,7 +769,18 @@ def preflight_targets(
             target = PreflightTarget(role, "claude", CLAUDE_MODELS[model], effort, write_enabled)
         else:
             target = PreflightTarget(role, "codex", CODEX_MODELS[model], effort, write_enabled)
-        targets.setdefault(target, []).append(role)
+        # Qualification covers one readiness command, not one role's authority.
+        # Claude's tool argv differs by role capability; Codex's probe has the
+        # same read challenge/web flags for every role with the same access.
+        probe_key = (
+            target.cli,
+            target.model,
+            target.effort,
+            target.write_enabled,
+            claude_tools(role) if target.cli == "claude" else None,
+        )
+        representative = probe_targets.setdefault(probe_key, target)
+        targets.setdefault(representative, []).append(role)
     return targets
 
 
@@ -830,6 +852,33 @@ def cli_program(cli: str) -> str:
     return os.environ.get(f"KICKOFF_CLI_{cli.upper()}") or cli
 
 
+def venue_identity(cli: str, environment: Mapping[str, str]) -> tuple[str | None, str | None]:
+    """The executable a venue resolves to in an environment, and the version it reports.
+
+    Preflight records this pair and the watcher compares it before launching, so
+    a role cannot run a different install than the one preflight proved. A
+    version that cannot be read is None, never a guess.
+    """
+    resolved = shutil.which(cli_program(cli), path=environment.get("PATH"))
+    if resolved is None:
+        return None, None
+    resolved = os.path.abspath(resolved)
+    try:
+        result = subprocess.run(
+            [resolved, "--version"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            env=dict(environment),
+            timeout=5,
+            check=False,
+        )
+    except (OSError, UnicodeError, subprocess.TimeoutExpired):
+        return resolved, None
+    version = result.stdout.strip() if result.returncode == 0 else ""
+    return resolved, version or None
+
+
 def claude_routing_flags(model_slug: str | None, effort: str | None) -> list[str]:
     """Model/effort flags for the Claude CLI, repeated identically on resume."""
     flags: list[str] = []
@@ -875,7 +924,6 @@ def build_claude_command(
     model_slug: str | None,
     effort: str | None,
     role: str,
-    max_turns: int,
     schema_kind: str | None,
     resume_session: str | None,
 ) -> list[str]:
@@ -900,8 +948,6 @@ def build_claude_command(
             "--output-format",
             "stream-json",
             "--verbose",
-            "--max-turns",
-            str(max_turns),
         )
     )
     if schema_kind:
@@ -964,7 +1010,8 @@ def build_codex_command(
 
 
 def build_watch_command(
-    arguments: argparse.Namespace, document: MutableMapping[str, Any]
+    arguments: argparse.Namespace,
+    document: MutableMapping[str, Any],
 ) -> list[str]:
     """Generate the delegated invocation for one role dispatch."""
     prompt = Path(arguments.prompt_file).read_text(encoding="utf-8")
@@ -1011,7 +1058,6 @@ def build_watch_command(
             model_slug=CLAUDE_MODELS[model],
             effort=effort,
             role=arguments.role,
-            max_turns=document["role_timeouts"]["roles"][arguments.role]["claude_max_turns"],
             schema_kind=schema_kind,
             resume_session=arguments.resume_session,
         )
@@ -1077,8 +1123,6 @@ def run_claude_preflight(
         # support the idle watchdog production work needs.
         "--output-format",
         "json",
-        "--max-turns",
-        "3",
         *claude_routing_flags(target.model, target.effort),
     ]
     process = subprocess.run(
@@ -1177,8 +1221,6 @@ def run_toolchain_probe(target: PreflightTarget) -> str | None:
             claude_tools(target.role),
             "--output-format",
             "json",
-            "--max-turns",
-            "4",
             *claude_routing_flags(target.model, target.effort),
         ]
         process = subprocess.run(
@@ -1301,6 +1343,7 @@ def preflight(
             except (OSError, RuntimeError) as exc:
                 die(f"preflight failed for {label}: {exc}")
             print(f"Role venue preflight: OK — {label}")
+            executable, version = venue_identity(target.cli, scrubbed_env(target.cli, target.model))
             results.append(
                 {
                     "cli": target.cli,
@@ -1309,6 +1352,8 @@ def preflight(
                     "write_enabled": target.write_enabled,
                     "roles": sorted(roles),
                     "probe_sha256": expected_digest,
+                    "executable": executable,
+                    "version": version,
                 }
             )
             if not target.write_enabled:
@@ -1388,14 +1433,24 @@ def verify_preflight_receipt(path: Path) -> dict[str, Any]:
         "write_enabled",
         "roles",
         "probe_sha256",
+        "executable",
+        "version",
     }
+    observed_fields = {"probe_sha256", "executable", "version"}
     descriptors: list[dict[str, Any]] = []
     for target in document["targets"]:
         if not isinstance(target, dict) or set(target) != target_fields:
             die("preflight receipt target has unknown or missing fields")
         if CANDIDATE_ID.fullmatch(str(target["probe_sha256"])) is None:
             die("preflight receipt target lacks a valid probe digest")
-        descriptors.append({key: target[key] for key in target_fields if key != "probe_sha256"})
+        executable = target["executable"]
+        if not isinstance(executable, str) or not os.path.isabs(executable):
+            die("preflight receipt target lacks the absolute executable it proved")
+        if target["version"] is not None and not (
+            isinstance(target["version"], str) and target["version"].strip()
+        ):
+            die("preflight receipt target has an invalid version observation")
+        descriptors.append({key: target[key] for key in target_fields - observed_fields})
     config = load_document()
     resolution = document["workflow"]
     if not isinstance(resolution, dict) or resolution.get("mode") not in {
@@ -1417,12 +1472,19 @@ def verify_preflight_receipt(path: Path) -> dict[str, Any]:
         expected_role = baseline["roles"][role]
         allowed = (
             workflow.adviser_choices(
-                workflow.settings(config), document["harness"], resolution["primary_model"], role
+                workflow.settings(config),
+                document["harness"],
+                resolution["primary_model"],
+                role,
             )
             if role in {"reviewer", "critic"}
             else []
         )
-        fallback_role = {**expected_role, "model": selected.get("model"), "effort": None}
+        fallback_role = {
+            **expected_role,
+            "model": selected.get("model"),
+            "effort": None,
+        }
         causes = [
             cause
             for cause in resolution["fallbacks"]
@@ -1669,7 +1731,7 @@ def prepare_watched_command(
 
 def numbers_from_usage(value: Any) -> tuple[int | None, int | None]:
     if not isinstance(value, dict):
-        return (None, None)
+        return None, None
     input_tokens = value.get("input_tokens", value.get("inputTokens"))
     output_tokens = value.get("output_tokens", value.get("outputTokens"))
 
@@ -2003,18 +2065,75 @@ def record_dispatch_topology(
     return None
 
 
+def refuse_unproved_executable(
+    arguments: argparse.Namespace, environment: Mapping[str, str]
+) -> None:
+    """Refuse to launch a venue executable other than the one this run's preflight proved.
+
+    The receipt lives beside the role registration in the run directory. This
+    runs before any span, launch claim or dispatch row, so a refusal consumes
+    nothing: it is a prelaunch rejection the caller corrects and relaunches.
+    """
+    if arguments.telemetry_role_registration is None:
+        return
+    receipt = Path(arguments.telemetry_role_registration).parent / "role-preflight.json"
+    try:
+        targets = json.loads(receipt.read_text(encoding="utf-8"))["targets"]
+    except (
+        OSError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        KeyError,
+        TypeError,
+    ) as exc:
+        die(f"registered run's preflight receipt is unreadable: {exc}")
+    proved = [target for target in targets if target.get("cli") == arguments.venue]
+    if not proved:
+        return
+    now = venue_identity(arguments.venue, environment)
+    for target in proved:
+        then = (target.get("executable"), target.get("version"))
+        if then != now:
+            die(
+                f"{arguments.venue} executable differs from the one preflight proved: "
+                f"preflight {then[0]} ({then[1] or 'version unreported'}), "
+                f"now {now[0] or 'not found'} ({now[1] or 'version unreported'}). "
+                "Launch from the environment that ran preflight, or run preflight again."
+            )
+
+
 def watch(arguments: argparse.Namespace, document: MutableMapping[str, Any]) -> int:
     if os.environ.get("KICKOFF_DELEGATION_DEPTH"):
         die(
             "KICKOFF_DELEGATION_DEPTH is set: this session is itself a delegated "
             "role and may not delegate again; run the role natively"
         )
+    registration = validate_telemetry_registration(arguments)
     command = build_watch_command(arguments, document)
     program_index = validate_watch_routing(arguments, command)
     command, child_environment = prepare_watched_command(arguments, command, program_index)
-    registration = validate_telemetry_registration(arguments)
     if registration is None and arguments.authority_mode == "primary":
         die("primary advice requires a registered evidence run")
+    if registration is not None:
+        try:
+            evidence_directory = Path(arguments.telemetry_role_registration).resolve().parent
+            native_prefix = "native-" + os.urandom(16).hex()
+            if not arguments.stdout_file:
+                arguments.stdout_file = str(evidence_directory / (native_prefix + "-stdout.jsonl"))
+            if not arguments.stderr_file:
+                arguments.stderr_file = str(evidence_directory / (native_prefix + "-stderr.log"))
+            require_persistent_directory(Path(arguments.prompt_file).parent)
+            for value in (
+                arguments.stdout_file,
+                arguments.stderr_file,
+                arguments.result_file,
+                arguments.required_output_file,
+            ):
+                if value:
+                    require_persistent_directory(Path(value).parent)
+        except TelemetryError as exc:
+            die(str(exc))
+    refuse_unproved_executable(arguments, child_environment)
     intelligence = None
     wait_span = None
     telemetry_complete = registration is not None

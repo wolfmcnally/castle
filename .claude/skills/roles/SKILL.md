@@ -10,7 +10,7 @@ description: >-
   $roles in Codex; arguments show, set, reset, or apply a preset to the pins.
 argument-hint: "[<harness>] <role>: <model> [effort <level>], ... | preset <quality|balanced|economy> [same-harness|cross-vendor] | reset"
 allowed-tools: Bash
-last-reviewed: 2026-08-10
+last-reviewed: 2026-09-29
 ---
 
 # Roles — Pin models/harnesses to the four canonical roles
@@ -37,7 +37,7 @@ which harness is orchestrating. This is a thin wrapper over the deterministic
   - `codex` — `codex` CLI, its configured default model.
   - `opus`, `fable` — `claude --model opus|fable`.
   - `astra` — `codex --model gpt-6-astra`.
-  - `sol`, `terra`, `luna` — `codex --model gpt-5.6-sol|terra|luna`.
+  - `sol`, `luna` — `codex --model gpt-6.1-sol|gpt-6-luna`; `terra` — `codex --model gpt-5.6-terra`.
 - **Reasoning effort:** a separate optional field, validated against the selector-specific supported subset in [`policies/role-models.md`](../../../policies/role-models.md#human-editable-configuration). Native `default` rejects explicit effort; `ultra` is not enabled. Omission retains configured effort.
 
 Resolution for a role under harness `H`: `H`'s section, else the `default` section, else native. The shipped/reset workflow uses auto authority and cross-provider preference; the role-pin bundles below describe delegated mode. The authoritative matrix and cross-vendor selection are in [`policies/role-models.md`](../../../policies/role-models.md#authority-providers-and-graceful-fallback).

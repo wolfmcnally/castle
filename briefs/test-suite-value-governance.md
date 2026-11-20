@@ -1,67 +1,48 @@
 ---
 title: Test-Suite Value Governance
-date: 2026-08-27
+date: 2026-10-12
 status: methodology
-scope: Universal design for resetting and governing an attributable proof estate without allowing test accumulation to become permanent.
+scope: Marginal test value, bounded attempted work, diagnostic timing and qualified hang safety.
 ---
 
 # Test-Suite Value Governance
 
-A test suite is a proof estate, not an accumulating file count. Every executable
-proof needs a contract, an independent oracle, a red witness, and a reason it is
-not subsumed by a cheaper proof. The estate stays useful only when those claims
-are tested against failures that matter and dominated proofs are physically
-removed.
+Keep tests for the failures they distinguish. A useful test protects an active contract, reaches the relevant condition, uses an independent oracle and adds evidence the nearest existing proofs do not supply. Complete code coverage is a non-goal. A test count, assertion count, coverage percentage or mutation score cannot decide whether a scenario earns its maintenance and execution cost.
 
-## Adoption begins with a reset
+## Value is a contextual judgment
 
-A repository adopting this method freezes its whole pre-reset estate, inventories
-both parameter-collapsed families and expanded executable leaves, and dispositions
-every proof as retain, consolidate, or delete. Retaining everything for a later
-audit is not adoption. The reset removes dominated test bodies together with dead
-fixtures, helpers, mutation rows, and caller wiring; skipped, deselected, renamed,
-or hidden proofs still count as present.
+Judge semantic scenarios, including additions inside existing test functions. Several assertions may explain one result; unrelated scenarios packed into one function still carry separate evidence and cost obligations. Compare only the nearest relevant overlaps. To retire a test, explain why its actual keepers preserve its inputs, boundary, oracle, ordering, concurrency, execution lanes and diagnostic benefit. A counterexample where it fails and its keepers pass disproves domination. Retain uncertain cases rather than performing an expensive exhaustive redundancy search.
 
-The one-time reset targets no more than 20% of both frozen family and leaf counts.
-That pressure is subordinate to effectiveness: the retained estate must recall at
-least 80% of a frozen local historical-defect corpus, kill at least 80% of a held-
-out local mutant corpus, and keep direct proof for every applicable critical-risk
-class. If the cap and those floors cannot coexist, the repository parks for its
-owner instead of changing the denominator or silently retaining the estate.
-Corpus case metadata and mutation-patch bytes are digest-bound to the observed
-effectiveness report so a nominally frozen holdout cannot drift after execution.
+Mechanical inventories remain useful identifiers, not measures of value. Exact-byte, source or protocol checks may look implementation-shaped while guarding an independent public contract. Resemblance is a noisy proxy that can invert, recommending deletion of the strongest evidence. Review the contract and failure behavior before judging its syntax.
 
-## Evidence makes removal reviewable
+## Authoring evidence has a defined occasion
 
-The frozen baseline records every proof identity. Its append-only ledger gives
-each one a disposition, contract, oracle, red witness, nearest overlap,
-replacement evidence, and rationale. Consolidation names a retained executable
-replacement. Deletion states why no replacement is needed. A new post-baseline
-proof names its active contract and risk, supplies the same evidence, and spends
-an explicit positive budget or names a compensating retirement.
+When a test is created or modified, demonstrate that each authored assertion can fail when the protected behavior is broken. Include repaired vacuous assertions and carried assertions in modified keepers. Record the targeted defect, reached precondition, intended assertion failure and restored success. A failure at the first assertion says nothing about later assertions; receipts must explain which observations establish which claims. Existing unchanged tests do not incur a retroactive witness sweep.
 
-Zero-net-growth remains executable after the initial reset through append-only
-lifecycle replay. A post-reset retirement removes one currently active baseline
-or admitted proof, names its consolidation replacement or deletion rationale,
-and creates one budget. One later admission consumes that retirement once.
-Reset-era removals fund only reset-era admissions; they are not a permanent bank
-for later growth. Replaying the ledger must reproduce the live estate exactly.
+A targeted authoring witness and a mutation-tool survey serve different purposes. The witness establishes one authored check against a chosen defect. The survey searches for missed faults and can be costly or incomplete. Mutation tools run only on an explicit operator request, over any requested new or committed subset and for any requested duration. No routine gate, sweep or generic implementation approval supplies that request. A mutation score is never an acceptance target.
 
-Historical cases may guide the retained selection. The holdout selection is
-frozen before its mutants run, then the result is recorded without tuning. The
-corpora, selectors, survivor identities, risk applicability, timings, and audit
-judgments are always recipient-local; transfer carries the machinery and the
-obligation to perform a new assay, never another repository's answer.
+Historical reset ledgers and observation receipts remain recoverable evidence. No committed mutant corpus is restored: source-anchored defect patches previously became stale, and apparent detections could arise from unrelated failures. New modifications link their own receipts; an old matching test name does not prove a new assertion. Structural checks verify recorded shape and linkage, while the selected review lane verifies semantic relevance and freshness (primary self-inspection for methodology work).
 
-## Fast feedback does not narrow acceptance
+## Work, elapsed time and hang safety answer different questions
 
-Vital and changed lanes select retained proofs for iteration. Invalid inventory,
-an unavailable comparison, an empty or ambiguous mapping, or an unrunnable
-selector widens to the full retained estate. The full retained estate remains the
-authoritative close and pre-push gate.
+Concrete attempted-work limits bound the operations that can multiply: input generation, rejects, shrinking, retry attempts, polling, fixture expansion, subprocess calls and teardown. Count transitive work, not only the top-level test body. An opaque operation can still hang or perform unbounded internal work, and a limit on accepted cases may conceal rejected attempts. Name those limitations rather than claiming a stronger bound.
 
-Periodic reassessment repeats the inventory, cap, ledger, risk, and corpus checks.
-Every governed maintenance sweep runs the deterministic reassessment and reruns
-the local assay when proof code, selection, corpus, or critical-risk applicability
-changes. Shrinkage is therefore an executable obligation rather than permission
-that can be deferred indefinitely.
+Ordinary elapsed time is diagnostic because hardware, resource contention and the environment can change it without changing test value. Do not fail a correct slow test, rerun a completed suite to beat a budget or move work into a fixture to evade a metric. Explicit product-performance requirements keep controlled performance tests. Comparable trends can inform an owner decision; they do not automatically contain cumulative suite growth.
+
+A separately qualified monotonic deadline stops a hung invocation. Output chatter does not renew it. Timeout and interruption are incomplete evidence, neither a correctness pass nor proof of a product defect. Preserve output, terminate owned children and report the supervised boundary honestly. Runtime startup and independently detached processes need enclosing guards; a process-group supervisor alone does not prove those boundaries. A bounded retry requires a concrete changed condition, and a repeated cause stops the loop.
+
+## Adoption preserves useful history
+
+Apply the method to new and modified tests immediately. Freeze a recipient-local inventory; explicitly distinguish completed judgments from pending baseline review. Inspect existing suites in bounded batches when a concrete reason warrants it. Completed resets are preserved, and inherited suites may retain every proof. No retirement quota, automatic whole-estate rewrite or retroactive observed-red campaign applies.
+
+Transfer universal machinery, not another project's judgment. Families, selectors, risk applicability, timings, witness receipts, survivors and dispositions remain recipient-local. The full retained suite remains the handoff gate; focused lanes provide earlier feedback. Review pending groups and available cost trends at existing close/sweep seams without creating a new recurring benchmark campaign.
+
+## Evidence informing the design
+
+Retrieved 2026-10-12. The sources support the distinctions above; the authoring and adoption boundaries are operator decisions, not claims established by a metric.
+
+- [Software Engineering at Google, testing overview](https://abseil.io/resources/swe-book/html/ch11.html) (2020): testing trades confidence against maintenance and execution cost.
+- [Inozemtseva and Holmes, Coverage Is Not Strongly Correlated with Test Suite Effectiveness](https://www.cs.ubc.ca/~rtholmes/papers/icse_2014_inozemtseva.pdf) (2014): after controlling suite size in five Java programs, coverage had only weak to moderate correlation with mutation-based effectiveness; this is evidence against treating coverage as value, not against every coverage use.
+- [Hypothesis settings](https://hypothesis.readthedocs.io/en/latest/reference/api.html) and [libFuzzer options](https://llvm.org/docs/LibFuzzer.html) (retrieved 2026-10-12): example/run limits have specific semantics and do not necessarily count every attempted operation.
+- [pyperf benchmarking guidance](https://pyperf.readthedocs.io/en/latest/run_benchmark.html) (retrieved 2026-10-12): environmental noise matters when interpreting runtime comparisons.
+- [Practical Combinatorial Testing](https://www.nist.gov/publications/practical-combinatorial-testing) (2010): systematic interaction selection can reduce work where the fault model justifies it; it is not a reason to maximize combinations.

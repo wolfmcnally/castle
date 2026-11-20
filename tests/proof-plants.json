@@ -1,0 +1,1575 @@
+{
+  "gate:policy-test-time": {
+    "command": "./bin/test-governance timing",
+    "defect": "The proof estate declares a hang deadline of zero seconds.",
+    "expect": "runtime configuration invalid",
+    "plant": {
+      "path": "tests/proof-estate.yaml",
+      "replace": "hang_timeout_seconds: 1800\n",
+      "with": "hang_timeout_seconds: 0\n"
+    }
+  },
+  "hook:.githooks/pre-commit:./bin/multioperator validate --root . --staged": {
+    "command": "./bin/test tests/test_pre_commit.py::test_pre_commit_runs_structural_governance_after_existing_checks -q",
+    "defect": "The pre-commit hook drops staged record validation.",
+    "expect": "AssertionError: HOOK OMITTED STRUCTURED RECORD VALIDATION",
+    "plant": {
+      "path": ".githooks/pre-commit",
+      "replace": "./bin/multioperator validate --root . --staged\n",
+      "with": ""
+    }
+  },
+  "pytest:tests/test_check.py::test_all_is_default_locked_ordered_and_cwd_independent": {
+    "defect": "Route the gate's test lane back to the uncached full suite",
+    "expect": "GATE OMITTED OR REORDERED REQUIRED COMMAND",
+    "plant": {
+      "path": "bin/check",
+      "replace": "    run_gate test \"$repo_root/bin/test\" --reuse || return $?\n",
+      "with": "    run_test || return $?\n"
+    }
+  },
+  "pytest:tests/test_check.py::test_all_policy_failure_cannot_be_masked_by_later_policy_output": {
+    "defect": "Swallow the last policy check's failure status",
+    "expect": "== 41",
+    "plant": {
+      "path": "bin/check",
+      "replace": "    run_gate policy-test-time ./bin/test-governance timing || return $?\n",
+      "with": "    run_gate policy-test-time ./bin/test-governance timing || true\n"
+    }
+  },
+  "pytest:tests/test_check.py::test_authoritative_runtime_probe_failure_stops_before_gate_without_fallback": {
+    "command": "./bin/test 'tests/test_check.py::test_authoritative_runtime_probe_failure_stops_before_gate_without_fallback' -q",
+    "defect": "A failed authoritative runtime probe no longer says no fallback was attempted.",
+    "expect": "assert 'no runtime fallback was attempted' in",
+    "plant": {
+      "path": "bin/_python-toolchain",
+      "replace": "  if [[ -n \"${TOOLCHAIN_PYTHON:-}\" ]]; then\n    echo \"$python_toolchain_prefix ERROR no runtime fallback was attempted\" >&2",
+      "with": "  if [[ -n \"${TOOLCHAIN_PYTHON:-}\" ]]; then\n    :"
+    }
+  },
+  "pytest:tests/test_check.py::test_format_rejects_staged_unstaged_and_untracked_candidates_without_rewriting": {
+    "command": "./bin/test 'tests/test_check.py::test_format_rejects_staged_unstaged_and_untracked_candidates_without_rewriting' -q",
+    "defect": "The format gate no longer checks the shared library directory.",
+    "expect": "AssertionError: CHECK format START",
+    "plant": {
+      "path": "bin/check",
+      "replace": "ruff format --check \\\n      castle tests ../lib ",
+      "with": "ruff format --check \\\n      castle tests "
+    }
+  },
+  "pytest:tests/test_check.py::test_governed_iteration_lanes_dispatch_selected_tests_without_receipt[arguments0---tier vital --format lines]": {
+    "command": "./bin/test 'tests/test_check.py::test_governed_iteration_lanes_dispatch_selected_tests_without_receipt[arguments0---tier vital --format lines]' -q",
+    "defect": "The vital lane selects by changed paths instead of the vital tier.",
+    "expect": "args=select --tier vital --format lines",
+    "plant": {
+      "path": "bin/check",
+      "replace": "  run_gate vital \"$repo_root/bin/test\" --vital",
+      "with": "  run_gate vital \"$repo_root/bin/test\" --changed-from HEAD"
+    }
+  },
+  "pytest:tests/test_check.py::test_governed_iteration_lanes_dispatch_selected_tests_without_receipt[arguments1---changed-from HEAD~1 --format lines]": {
+    "command": "./bin/test 'tests/test_check.py::test_governed_iteration_lanes_dispatch_selected_tests_without_receipt[arguments1---changed-from HEAD~1 --format lines]' -q",
+    "defect": "The changed lane ignores its ref and runs the vital tier.",
+    "expect": "args=select --changed-from HEAD~1 --format lines",
+    "plant": {
+      "path": "bin/check",
+      "replace": "  run_gate changed \"$repo_root/bin/test\" --changed-from \"$1\"",
+      "with": "  run_gate changed \"$repo_root/bin/test\" --vital"
+    }
+  },
+  "pytest:tests/test_check.py::test_interrupted_tests_cannot_issue_a_passing_gate_receipt": {
+    "command": "./bin/test 'tests/test_check.py::test_interrupted_tests_cannot_issue_a_passing_gate_receipt' -q",
+    "defect": "An incomplete run is labelled a correctness failure.",
+    "expect": "gate must label incomplete tests",
+    "plant": {
+      "path": "bin/check",
+      "replace": "    if [[ \"$command_exit\" -eq 124 || \"$command_exit\" -ge 128 ]]; then\n      gate_verdict=INCOMPLETE",
+      "with": "    if false; then\n      gate_verdict=INCOMPLETE"
+    }
+  },
+  "pytest:tests/test_check.py::test_no_reuse_runs_the_whole_suite_and_a_failing_reuse_lane_fails_the_gate": {
+    "defect": "Ignore the gate's --no-reuse option",
+    "expect": "UNCACHED GATE REUSED TESTS OR A FAILED REUSE LANE PASSED",
+    "plant": {
+      "path": "bin/check",
+      "replace": "  test_reuse=0\n",
+      "with": "  test_reuse=1\n"
+    }
+  },
+  "pytest:tests/test_check.py::test_report_runs_every_lane_names_each_failure_and_stores_no_receipt": {
+    "defect": "Drop the policy lane from report mode",
+    "expect": "REPORT STOPPED EARLY, HID A FAILED LANE OR STORED A RECEIPT",
+    "plant": {
+      "path": "bin/check",
+      "replace": "  run_reported policy run_policy\n",
+      "with": ""
+    }
+  },
+  "pytest:tests/test_check.py::test_stale_catalog_or_report_stops_the_gate_before_lint_and_tests[check-catalogs-policy-catalogs]": {
+    "defect": "The early guards skip the catalog check, leaving it to the final policy lane",
+    "expect": "STALE BOOKKEEPING REACHED EXPENSIVE GATES OR PASSED RECEIPT",
+    "plant": {
+      "path": "bin/check",
+      "replace": "    run_gate policy-execution-dashboards ./bin/check-execution-dashboards || return $?\n    run_gate policy-catalogs ./bin/check-catalogs || return $?\n",
+      "with": "    run_gate policy-execution-dashboards ./bin/check-execution-dashboards || return $?\n"
+    }
+  },
+  "pytest:tests/test_check.py::test_stale_catalog_or_report_stops_the_gate_before_lint_and_tests[check-execution-dashboards-policy-execution-dashboards]": {
+    "defect": "The early guards skip the execution-report check, leaving it to the final policy lane",
+    "expect": "STALE BOOKKEEPING REACHED EXPENSIVE GATES OR PASSED RECEIPT",
+    "plant": {
+      "path": "bin/check",
+      "replace": "    cd \"$repo_root\"\n    run_gate policy-execution-dashboards ./bin/check-execution-dashboards || return $?\n",
+      "with": "    cd \"$repo_root\"\n"
+    }
+  },
+  "pytest:tests/test_check_catalogs.py::test_a_phase_names_other_phases_by_id_and_a_path_is_refused": {
+    "defect": "The catalog checker prints its findings but exits successfully",
+    "expect": "PHASE CATALOG ADMITTED PATH AS depends_on",
+    "plant": {
+      "path": "bin/check-catalogs",
+      "replace": "        print(\"\\n\".join(sorted(DRIFT)))\n        return 1",
+      "with": "        print(\"\\n\".join(sorted(DRIFT)))\n        return 0"
+    }
+  },
+  "pytest:tests/test_check_catalogs.py::test_imported_links_use_exact_git_history_without_legacy_aliases": {
+    "defect": "The catalog checker prints its findings but exits successfully",
+    "expect": "HISTORY UNVERIFIED SOURCE ADMITTED",
+    "plant": {
+      "path": "bin/check-catalogs",
+      "replace": "        print(\"\\n\".join(sorted(DRIFT)))\n        return 1",
+      "with": "        print(\"\\n\".join(sorted(DRIFT)))\n        return 0"
+    }
+  },
+  "pytest:tests/test_check_catalogs.py::test_prospective_child_close_requires_real_parent_disposition": {
+    "defect": "The catalog checker prints its findings but exits successfully",
+    "expect": "CHILD CLOSE STRANDED ACTIVE PARENT",
+    "plant": {
+      "path": "bin/check-catalogs",
+      "replace": "        print(\"\\n\".join(sorted(DRIFT)))\n        return 1",
+      "with": "        print(\"\\n\".join(sorted(DRIFT)))\n        return 0"
+    }
+  },
+  "pytest:tests/test_check_catalogs.py::test_registering_a_registered_document_again_changes_nothing": {
+    "defect": "A repeated registration is refused as an error",
+    "expect": "REPEATED REGISTRATION WAS REFUSED OR REWROTE THE CATALOG",
+    "plant": {
+      "path": "bin/check-catalogs",
+      "replace": "            print(\"DOCUMENT ALREADY REGISTERED; nothing written\")\n            return\n",
+      "with": "            raise ValueError(\"document is already registered\")\n"
+    }
+  },
+  "pytest:tests/test_check_catalogs.py::test_structured_phase_order_and_events_are_checked_by_the_catalog": {
+    "defect": "The catalog checker prints its findings but exits successfully",
+    "expect": "PHASE CATALOG ADMITTED unknown dependency",
+    "plant": {
+      "path": "bin/check-catalogs",
+      "replace": "        print(\"\\n\".join(sorted(DRIFT)))\n        return 1",
+      "with": "        print(\"\\n\".join(sorted(DRIFT)))\n        return 0"
+    }
+  },
+  "pytest:tests/test_check_catalogs.py::test_the_citation_rule_is_directional_not_symmetric": {
+    "command": "./bin/test 'tests/test_check_catalogs.py::test_the_citation_rule_is_directional_not_symmetric' -q",
+    "defect": "The research-to-runbook navigation handoff is no longer admitted.",
+    "expect": "RUNBOOK HANDOFF REFUSED",
+    "plant": {
+      "path": "bin/check-catalogs",
+      "replace": "PROCEDURE_HANDOFFS = {\n    (\"briefs/multi-operator-collaboration.md\", \"policies/multi-operator-migration.md\"),\n}",
+      "with": "PROCEDURE_HANDOFFS: set[tuple[str, str]] = set()"
+    }
+  },
+  "pytest:tests/test_check_catalogs.py::test_tracked_markdown_deleted_from_worktree_is_not_read_as_a_source": {
+    "command": "./bin/test 'tests/test_check_catalogs.py::test_tracked_markdown_deleted_from_worktree_is_not_read_as_a_source' -q",
+    "defect": "The catalog checker no longer admits a valid primary constitution.",
+    "expect": "CATALOG LOST PRIMARY CONSTITUTION",
+    "plant": {
+      "path": "bin/check-catalogs",
+      "replace": "        (\"AGENTS.md\", instructions, 20480),",
+      "with": "        (\"AGENTS.md\", instructions, 200),"
+    }
+  },
+  "pytest:tests/test_check_plan_concreteness.py::test_unread_identifier_refuses_and_declared_new_passes": {
+    "command": "./bin/test 'tests/test_check_plan_concreteness.py::test_unread_identifier_refuses_and_declared_new_passes' -q",
+    "defect": "An identifier that occurs nowhere and is not declared is accepted.",
+    "expect": "assert 0 == 1",
+    "plant": {
+      "path": "bin/check-plan-concreteness",
+      "replace": "            errors.append(\n                (\n                    \"identifier-unread\",",
+      "with": "            (\n                (\n                    \"identifier-unread\","
+    }
+  },
+  "pytest:tests/test_check_plan_delivery.py::test_a_planned_deletion_is_delivered_when_the_file_is_gone": {
+    "command": "./bin/test 'tests/test_check_plan_delivery.py::test_a_planned_deletion_is_delivered_when_the_file_is_gone' -q",
+    "defect": "A path listed under Deleted Files is treated as a new file.",
+    "expect": "is planned as a new file and does not exist",
+    "plant": {
+      "path": "lib/agentic_starter/plan_artifact.py",
+      "replace": "listed = plan.deleted_paths if in_deleted_files else plan.new_paths",
+      "with": "listed = plan.new_paths"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_directory_below_the_checkout_top_is_not_a_release_checkout": {
+    "defect": "The root is not compared with the top of the checkout",
+    "expect": "DIRECTORY BELOW THE CHECKOUT TOP PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    if toplevel.resolve() != root:\n",
+      "with": "    if False:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_failed_git_command_is_an_error_and_never_a_pass[status]": {
+    "defect": "A failed git command is read as empty output",
+    "expect": "FAILED GIT COMMAND READ AS A CLEAN RESULT",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    if result.returncode != 0:\n        detail",
+      "with": "    if False:\n        detail"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_failed_git_command_is_an_error_and_never_a_pass[worktree]": {
+    "defect": "A failed git command is read as empty output",
+    "expect": "FAILED GIT COMMAND READ AS A CLEAN RESULT",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    if result.returncode != 0:\n        detail",
+      "with": "    if False:\n        detail"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_linked_worktree_is_not_a_release_checkout": {
+    "defect": "Other registered worktrees are not reported",
+    "expect": "RELEASE FROM A LINKED WORKTREE PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    for other in others:\n",
+      "with": "    for other in []:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_record_without_its_identity_fields_is_refused[both]": {
+    "defect": "A record's commit and branch-or-detached fields are not required",
+    "expect": "RECORD WITHOUT IDENTITY FIELDS PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "        if \"bare\" not in registration.attributes:\n",
+      "with": "        if False:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_record_without_its_identity_fields_is_refused[no-branch-or-detached]": {
+    "defect": "A record's commit and branch-or-detached fields are not required",
+    "expect": "RECORD WITHOUT IDENTITY FIELDS PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "        if \"bare\" not in registration.attributes:\n",
+      "with": "        if False:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_record_without_its_identity_fields_is_refused[none]": {
+    "defect": "A record's commit and branch-or-detached fields are not required",
+    "expect": "RECORD WITHOUT IDENTITY FIELDS PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "        if \"bare\" not in registration.attributes:\n",
+      "with": "        if False:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_a_worktree_path_with_a_space_and_a_newline_is_read_exactly": {
+    "defect": "A worktree path is cut at its first newline",
+    "expect": "WORKTREE PATH WAS NOT PARSED EXACTLY",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "        registration = Registration(fields[0][9:])\n",
+      "with": "        registration = Registration(fields[0][9:].split(\"\\n\")[0])\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_an_extra_registered_worktree_refuses_clean_or_dirty[clean]": {
+    "defect": "Other registered worktrees are not reported",
+    "expect": "EXTRA WORKTREE PASSED OR ITS STATE WAS MISREPORTED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    for other in others:\n",
+      "with": "    for other in []:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_an_extra_registered_worktree_refuses_clean_or_dirty[dirty]": {
+    "defect": "A dirty extra worktree is described as clean",
+    "expect": "EXTRA WORKTREE PASSED OR ITS STATE WAS MISREPORTED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    return f\"dirty, {len(changes)} changed or untracked path(s)\" if changes else \"clean\"",
+      "with": "    return \"clean\""
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_an_unusable_extra_registration_refuses[locked]": {
+    "defect": "Prunable and locked registrations are not recognized",
+    "expect": "UNUSABLE REGISTRATION PASSED OR WAS MISREPORTED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    for flag in (\"bare\", \"prunable\", \"locked\"):\n        if flag in registration.attributes:",
+      "with": "    for flag in (\"bare\",):\n        if flag in registration.attributes:"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_an_unusable_extra_registration_refuses[missing]": {
+    "defect": "Prunable and locked registrations are not recognized",
+    "expect": "UNUSABLE REGISTRATION PASSED OR WAS MISREPORTED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    for flag in (\"bare\", \"prunable\", \"locked\"):\n        if flag in registration.attributes:",
+      "with": "    for flag in (\"bare\",):\n        if flag in registration.attributes:"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_any_change_in_the_release_checkout_refuses[staged]": {
+    "defect": "Changes in the release checkout are read and then ignored",
+    "expect": "DIRTY RELEASE CHECKOUT PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "        changes = dirt(item.path)\n        if changes:\n",
+      "with": "        changes = dirt(item.path)\n        if False:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_any_change_in_the_release_checkout_refuses[tracked]": {
+    "defect": "Changes in the release checkout are read and then ignored",
+    "expect": "DIRTY RELEASE CHECKOUT PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "        changes = dirt(item.path)\n        if changes:\n",
+      "with": "        changes = dirt(item.path)\n        if False:\n"
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_any_change_in_the_release_checkout_refuses[untracked]": {
+    "defect": "Untracked files are left out of the status read",
+    "expect": "DIRTY RELEASE CHECKOUT PASSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "\"--untracked-files=all\"",
+      "with": "\"--untracked-files=no\""
+    }
+  },
+  "pytest:tests/test_check_release_worktrees.py::test_one_clean_release_checkout_passes": {
+    "defect": "The check refuses a checkout that is registered exactly once",
+    "expect": "SOLE CLEAN RELEASE CHECKOUT REFUSED",
+    "plant": {
+      "path": "bin/check-release-worktrees",
+      "replace": "    if len(current) != 1:\n",
+      "with": "    if len(current) != 0:\n"
+    }
+  },
+  "pytest:tests/test_documentation.py::test_setup_installs_exact_versions_locally_without_global_upgrade": {
+    "defect": "Documentation tools install without the locked dependency set",
+    "expect": "failed",
+    "plant": {
+      "path": "lib/agentic_starter/documentation.py",
+      "replace": "                        \"--locked\",\n",
+      "with": ""
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_content_scan_blanks_operation_labels_and_nothing_else": {
+    "command": "./bin/test 'tests/test_execution_dashboard.py::test_content_scan_blanks_operation_labels_and_nothing_else' -q",
+    "defect": "The content scan leaves operation labels in place.",
+    "expect": "'gate.no-lock-tokens' not in",
+    "plant": {
+      "path": "lib/agentic_starter/execution_dashboard.py",
+      "replace": "    return OPERATION_LABEL.sub('\"operation\":\"\"', text)",
+      "with": "    return text"
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-kind]": {
+    "command": "./bin/test 'tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-kind]' -q",
+    "defect": "A recommendation of an unknown kind is accepted.",
+    "expect": "DID NOT RAISE ValidationError",
+    "plant": {
+      "path": "lib/agentic_starter/execution_dashboard.py",
+      "replace": "        if item[\"kind\"] not in RECOMMENDATION_KINDS:",
+      "with": "        if False:"
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-missing fields]": {
+    "command": "./bin/test 'tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-missing fields]' -q",
+    "defect": "The handoff key set no longer includes the project name.",
+    "expect": "KeyError: 'project'",
+    "plant": {
+      "path": "lib/agentic_starter/execution_dashboard.py",
+      "replace": "        \"schema\",\n        \"project\",\n        \"phase_id\",",
+      "with": "        \"schema\",\n        \"phase_id\","
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-nonempty]": {
+    "command": "./bin/test 'tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-nonempty]' -q",
+    "defect": "The handoff project name skips the text checks every other field gets.",
+    "expect": "DID NOT RAISE ValidationError",
+    "plant": {
+      "path": "lib/agentic_starter/execution_dashboard.py",
+      "replace": "        \"project\": _handoff_text(value[\"project\"], \"project\", maximum=80),",
+      "with": "        \"project\": value[\"project\"],"
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-out-of-scope]": {
+    "command": "./bin/test 'tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-out-of-scope]' -q",
+    "defect": "The handoff project name skips the text checks every other field gets.",
+    "expect": "DID NOT RAISE ValidationError",
+    "plant": {
+      "path": "lib/agentic_starter/execution_dashboard.py",
+      "replace": "        \"project\": _handoff_text(value[\"project\"], \"project\", maximum=80),",
+      "with": "        \"project\": value[\"project\"],"
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-phase]": {
+    "command": "./bin/test 'tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-phase]' -q",
+    "defect": "A handoff for another phase is accepted.",
+    "expect": "DID NOT RAISE ValidationError",
+    "plant": {
+      "path": "lib/agentic_starter/execution_dashboard.py",
+      "replace": "    if value[\"schema\"] != HANDOFF_SCHEMA or value[\"phase_id\"] != phase_id:",
+      "with": "    if value[\"schema\"] != HANDOFF_SCHEMA:"
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-private]": {
+    "command": "./bin/test 'tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-private]' -q",
+    "defect": "Handoff text skips the private-content patterns.",
+    "expect": "DID NOT RAISE ValidationError",
+    "plant": {
+      "path": "lib/agentic_starter/execution_dashboard.py",
+      "replace": "    for pattern in HANDOFF_FORBIDDEN:\n        if pattern.search(value):",
+      "with": "    for pattern in ():\n        if pattern.search(value):"
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-unknown]": {
+    "command": "./bin/test 'tests/test_execution_dashboard.py::test_handoff_schema_rejects_private_or_malformed_content[<lambda>-unknown]' -q",
+    "defect": "A handoff with unknown fields is accepted.",
+    "expect": "DID NOT RAISE ValidationError",
+    "plant": {
+      "path": "lib/agentic_starter/execution_dashboard.py",
+      "replace": "    if not isinstance(value, Mapping) or set(value) != HANDOFF_KEYS:",
+      "with": "    if not isinstance(value, Mapping) or not HANDOFF_KEYS <= set(value):"
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_inline_planning_and_coding_are_attributed_to_their_activities": {
+    "command": "./bin/test 'tests/test_execution_dashboard.py::test_inline_planning_and_coding_are_attributed_to_their_activities' -q",
+    "defect": "Every planning and implementation stage is marked inline even when a delegated role ran.",
+    "expect": "{'orchestrati",
+    "plant": {
+      "path": "lib/agentic_starter/execution_dashboard.py",
+      "replace": "            if inline_role is not None and inline_role not in delegated_roles:",
+      "with": "            if inline_role is not None:"
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_named_phase_identity_waits_and_reader_refusals": {
+    "command": "./bin/test 'tests/test_execution_dashboard.py::test_named_phase_identity_waits_and_reader_refusals' -q",
+    "defect": "The phase selector is numeric-only again.",
+    "expect": "phase_id must be a dotted numeric or safe named phase id",
+    "plant": {
+      "path": "lib/agentic_starter/execution_telemetry.py",
+      "replace": "PHASE_ID_RE = re.compile(r\"^(?=.{1,122}$)(?:\\d+(?:\\.\\d+)*|[a-z][a-z0-9_+-]*(?:\\.[a-z0-9_+-]+)*)$\")",
+      "with": "PHASE_ID_RE = re.compile(r\"^(?=.{1,122}$)(?:\\d+(?:\\.\\d+)*)$\")"
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_payload_reports_each_operator_park_and_nonexact_total": {
+    "command": "./bin/test 'tests/test_execution_dashboard.py::test_payload_reports_each_operator_park_and_nonexact_total' -q",
+    "defect": "Handoff composition substitutes invented project meaning.",
+    "expect": "HANDOFF AUTHORING FAILED",
+    "plant": {
+      "path": "bin/execution-telemetry",
+      "replace": "        value.update(schema=HANDOFF_SCHEMA, phase_id=args.phase)",
+      "with": "        value.update(schema=HANDOFF_SCHEMA, phase_id=args.phase, project=\"Invented\")"
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_regeneration_repairs_a_changed_history_whole_or_not_at_all": {
+    "defect": "Regeneration treats a handoff as a generated file and rewrites one that differs",
+    "expect": "REGENERATION REWROTE AN INPUT, WROTE BEFORE VALIDATING OR LOST THE ACCEPTED TRACE",
+    "plant": {
+      "path": "bin/check-execution-dashboards",
+      "replace": "                regenerated / relative / \"handoff.json\",\n                generated=False,\n",
+      "with": "                regenerated / relative / \"handoff.json\",\n"
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_render_is_byte_identical_and_recovers_interrupted_replacement": {
+    "command": "./bin/test 'tests/test_execution_dashboard.py::test_render_is_byte_identical_and_recovers_interrupted_replacement' -q",
+    "defect": "The archive index loses the project name.",
+    "expect": "assert None == 'Sample Project'",
+    "plant": {
+      "path": "lib/agentic_starter/execution_dashboard.py",
+      "replace": "        \"project\": summaries[-1][\"project\"] if summaries else None,",
+      "with": "        \"project\": None,"
+    }
+  },
+  "pytest:tests/test_execution_dashboard.py::test_stale_dashboard_refuses_until_regenerated_from_tracked_inputs": {
+    "defect": "Make regeneration report success without rewriting",
+    "expect": "STALE DASHBOARD PASSED OR REGENERATION DID NOT RESTORE TRACKED BYTES",
+    "plant": {
+      "path": "bin/check-execution-dashboards",
+      "replace": "        destination.write_bytes(pending[destination])\n",
+      "with": "        pass\n"
+    }
+  },
+  "pytest:tests/test_execution_telemetry.py::test_lifecycle_idempotency_finalization_and_crash_recovery": {
+    "command": "./bin/test 'tests/test_execution_telemetry.py::test_lifecycle_idempotency_finalization_and_crash_recovery' -q",
+    "defect": "A conflicting repeated span finish is accepted.",
+    "expect": "DID NOT RAISE ValidationError",
+    "plant": {
+      "path": "lib/agentic_starter/execution_telemetry.py",
+      "replace": "            raise ValidationError(\"conflicting repeated span finish\")",
+      "with": "            pass"
+    }
+  },
+  "pytest:tests/test_kickoff_config.py::TestGeneratedInvocationRecipes::test_claude_coder_is_the_only_write_enabled_role": {
+    "command": "./bin/test 'tests/test_kickoff_config.py::TestGeneratedInvocationRecipes::test_claude_coder_is_the_only_write_enabled_role' -q",
+    "defect": "The write-enabled coder loses its write tools.",
+    "expect": "assert 'Read,Grep,Glob,WebFetch' ==",
+    "plant": {
+      "path": "bin/kickoff-config",
+      "replace": "    \"workspace-write\": \"Read,Grep,Glob,Write,Edit,Bash\",",
+      "with": "    \"workspace-write\": \"Read,Grep,Glob\","
+    }
+  },
+  "pytest:tests/test_kickoff_config.py::test_preflight_groups_only_identical_readiness_commands": {
+    "defect": "Group roles that differ only in effort under one readiness probe",
+    "expect": "READINESS PROBE GROUPING LOST",
+    "plant": {
+      "path": "bin/kickoff-config",
+      "replace": "            target.model,\n            target.effort,\n",
+      "with": "            target.model,\n"
+    }
+  },
+  "pytest:tests/test_kickoff_config.py::test_preflight_still_aborts_on_a_failed_sentinel": {
+    "command": "./bin/test 'tests/test_kickoff_config.py::test_preflight_still_aborts_on_a_failed_sentinel' -q",
+    "defect": "Preflight no longer names a missing CLI.",
+    "expect": "assert 'CLI not on PATH' in",
+    "plant": {
+      "path": "bin/kickoff-config",
+      "replace": "                die(f\"preflight failed for {label}: CLI not on PATH\")",
+      "with": "                die(f\"preflight failed for {label}\")"
+    }
+  },
+  "pytest:tests/test_kickoff_config.py::test_scoped_edit_preserves_extensions_comments_and_timeouts": {
+    "command": "./bin/test 'tests/test_kickoff_config.py::test_scoped_edit_preserves_extensions_comments_and_timeouts' -q",
+    "defect": "The Claude quality preset reverts to Fable planning, against Castle's Opus ruling.",
+    "expect": "assert {'planner':",
+    "plant": {
+      "path": "bin/kickoff-config",
+      "replace": "        (\"claude\", \"opus\", \"opus\", \"astra\", \"sol\"),",
+      "with": "        (\"claude\", \"fable\", \"opus\", \"astra\", \"sol\"),"
+    }
+  },
+  "pytest:tests/test_kickoff_config.py::test_show_validates_seed_config": {
+    "command": "./bin/test 'tests/test_kickoff_config.py::test_show_validates_seed_config' -q",
+    "defect": "`show` no longer explains the delegated resolution for this harness.",
+    "expect": "assert 'Delegated resolution for this harness' in",
+    "plant": {
+      "path": "bin/kickoff-config",
+      "replace": "    print(f\"\\nDelegated resolution for this harness ({harness}):\")",
+      "with": "    print(f\"\\nResolution ({harness}):\")"
+    }
+  },
+  "pytest:tests/test_kickoff_config.py::test_timeout_kills_descendant_after_group_leader_exits": {
+    "defect": "A timed-out role's descendant that ignores termination is never killed",
+    "expect": "DESCENDANT SURVIVED THE TIMEOUT",
+    "plant": {
+      "path": "bin/kickoff-config",
+      "replace": "                os.killpg(group_id, signal.SIGKILL)\n",
+      "with": "                pass\n"
+    }
+  },
+  "pytest:tests/test_kickoff_config.py::test_watch_registered_review_durability_and_child_environment": {
+    "defect": "Configuration refusals exit successfully",
+    "expect": "DURABILITY WATCHER TEMPORARY IO ADMITTED",
+    "plant": {
+      "path": "bin/kickoff-config",
+      "replace": "    raise SystemExit(2)",
+      "with": "    raise SystemExit(0)"
+    }
+  },
+  "pytest:tests/test_kickoff_control_plane.py::test_manifest_preflight_and_runner_admission_fail_closed": {
+    "command": "./bin/test tests/test_kickoff_control_plane.py::test_manifest_preflight_and_runner_admission_fail_closed -q",
+    "defect": "Command zero skips the manifest's selector dry-runs before format and record policy.",
+    "expect": "At index 1 diff: 'format' != 'probe'",
+    "plant": {
+      "path": "bin/kickoff-command-zero",
+      "replace": "        for index, row in enumerate(manifest[\"preflight_commands\"], 1):\n            run_checked(list(row[\"argv\"]), root, f\"manifest selector dry-run {index}\")\n",
+      "with": ""
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_a_refused_launch_is_relaunched_or_recorded_never_left_unaccounted": {
+    "defect": "Validation ignores recorded never-launched attempts",
+    "expect": "REFUSED LAUNCH LEFT UNACCOUNTED",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "    if set(dispatch_by_key) != keys - unlaunched:\n",
+      "with": "    if set(dispatch_by_key) != keys:\n"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_a_run_refuses_to_start_on_a_tree_that_fails_the_catalog_check": {
+    "defect": "Run start skips the catalog check",
+    "expect": "RUN STARTED OR CAPTURED EVIDENCE ON A TREE THAT FAILS ITS CATALOG CHECK",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "    require_consistent_catalogs(root)\n    run_dir = require_persistent_directory(\n",
+      "with": "    run_dir = require_persistent_directory(\n"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_change_manifest_is_candidate_bound_and_detects_authority_drift": {
+    "command": "./bin/test 'tests/test_kickoff_evidence.py::test_change_manifest_is_candidate_bound_and_detects_authority_drift' -q",
+    "defect": "Required evidence may use temporary storage.",
+    "expect": "DURABILITY TEMPORARY RUN ADMITTED",
+    "plant": {
+      "path": "lib/agentic_starter/execution_telemetry.py",
+      "replace": "            raise ValidationError(\"required evidence cannot use temporary storage\")",
+      "with": "            pass"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_child_close_moves_a_stranded_next_marker_only_in_pairs": {
+    "command": "./bin/test 'tests/test_kickoff_evidence.py::test_child_close_moves_a_stranded_next_marker_only_in_pairs' -q",
+    "defect": "A child close is held to completing a phase it did not accept.",
+    "expect": "transition must complete exactly the accepted phase and authorized ancestors",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "    allowed = {phase, *(parents or [])}",
+      "with": "    allowed = {phase, *(parents or []), \"unaccepted-sibling-package\"}"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_complete_synthetic_kickoff_cross_validates_roles_revision_and_gates": {
+    "command": "./bin/test 'tests/test_kickoff_evidence.py::test_complete_synthetic_kickoff_cross_validates_roles_revision_and_gates' -q",
+    "defect": "Mutated gate or diagnostics bytes are treated as intact.",
+    "expect": "DURABILITY GATE BYTES ACCEPTED",
+    "plant": {
+      "path": "lib/agentic_starter/execution_telemetry.py",
+      "replace": "    if hashlib.sha256(data).hexdigest() != digest:\n        raise ValidationError(\"retained artifact bytes changed\")",
+      "with": "    if False:\n        raise ValidationError(\"retained artifact bytes changed\")"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_historical_advice_attestation_preserves_originals[historical-gap]": {
+    "defect": "Evidence refusals exit successfully",
+    "expect": "assert 'not contiguous' in",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "        return 2\n    return 0 if result is None else result",
+      "with": "        return 0\n    return 0 if result is None else result"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_historical_advice_attestation_refuses_unfaithful_evidence[missing-claim-historical-gap]": {
+    "defect": "Evidence refusals exit successfully",
+    "expect": "AssertionError: kickoff-evidence: attested predecessor lacks its unique earlier accepted launch",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "        return 2\n    return 0 if result is None else result",
+      "with": "        return 0\n    return 0 if result is None else result"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_historical_advice_attestation_refuses_unfaithful_evidence[missing-span-historical-gap]": {
+    "defect": "Evidence refusals exit successfully",
+    "expect": "AssertionError: kickoff-evidence: role-dispatch.jsonl line 2 changes the intelligence span recorded on line 1",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "        return 2\n    return 0 if result is None else result",
+      "with": "        return 0\n    return 0 if result is None else result"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_historical_advice_attestation_refuses_unfaithful_evidence[not-earlier-historical-gap]": {
+    "defect": "Evidence refusals exit successfully",
+    "expect": "AssertionError: kickoff-evidence: attested predecessor lacks its unique earlier accepted launch",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "        return 2\n    return 0 if result is None else result",
+      "with": "        return 0\n    return 0 if result is None else result"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_historical_advice_attestation_refuses_unfaithful_evidence[self-historical-gap]": {
+    "defect": "Evidence refusals exit successfully",
+    "expect": "AssertionError: kickoff-evidence: advice source requires distinct original predecessors",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "        return 2\n    return 0 if result is None else result",
+      "with": "        return 0\n    return 0 if result is None else result"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_historical_advice_attestation_refuses_unfaithful_evidence[wrong-candidate-historical-gap]": {
+    "defect": "Evidence refusals exit successfully",
+    "expect": "AssertionError: kickoff-evidence: attested predecessor lacks its unique earlier accepted launch",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "        return 2\n    return 0 if result is None else result",
+      "with": "        return 0\n    return 0 if result is None else result"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_historical_advice_attestation_refuses_unfaithful_evidence[wrong-phase-historical-gap]": {
+    "defect": "Evidence refusals exit successfully",
+    "expect": "AssertionError: kickoff-evidence: attestation requires the same primary work item",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "        return 2\n    return 0 if result is None else result",
+      "with": "        return 0\n    return 0 if result is None else result"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_historical_distinct_role_predecessors[historical-two-roles]": {
+    "defect": "Evidence refusals exit successfully",
+    "expect": "AssertionError: assert (0 != 0)",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "        return 2\n    return 0 if result is None else result",
+      "with": "        return 0\n    return 0 if result is None else result"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_nested_final_child_close_requires_an_accepted_parent_chain": {
+    "command": "./bin/test 'tests/test_kickoff_evidence.py::test_nested_final_child_close_requires_an_accepted_parent_chain' -q",
+    "defect": "A final child closes under a parent closure that is not a genuine accepted closure.",
+    "expect": "artifact is not this phase's accepted close",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "        raise EvidenceError(\"phase acceptance is not a genuine matching accepted closure\")",
+      "with": "        pass"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_owner_directed_review_is_attested_counted_and_never_passed_off_as_witnessed": {
+    "defect": "An owner-directed review is ingested without its launch attestation",
+    "expect": "UNATTESTED DIRECTED REVIEW ACCEPTED",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "    require_directed_launch(arguments.run_dir, dispatch[\"operation\"], dispatch[\"attempt\"])\n",
+      "with": ""
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_owner_exception_budget_is_scoped_atomic_and_auditable": {
+    "defect": "A consumed owner exception can be granted again",
+    "expect": "DID NOT RAISE AdvisoryError",
+    "plant": {
+      "path": "lib/agentic_starter/advisory.py",
+      "replace": "                    raise AdvisoryError(\"exception already pending or consumed\")",
+      "with": "                    pass"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_owner_exception_uses_pinned_watcher_and_acceptance": {
+    "defect": "Evidence refusals exit successfully",
+    "expect": "AssertionError: assert (0 != 0)",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "        return 2\n    return 0 if result is None else result",
+      "with": "        return 0\n    return 0 if result is None else result"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_primary_continuation_carries_original_predecessors[1]": {
+    "defect": "Evidence refusals exit successfully",
+    "expect": "DURABILITY RAW ADVICE ACCEPTED",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "        return 2\n    return 0 if result is None else result",
+      "with": "        return 0\n    return 0 if result is None else result"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_primary_continuation_carries_original_predecessors[2]": {
+    "defect": "Evidence refusals exit successfully",
+    "expect": "assert (1 == 2)",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "        return 2\n    return 0 if result is None else result",
+      "with": "        return 0\n    return 0 if result is None else result"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_primary_continuation_refuses_unproved_predecessors": {
+    "defect": "Evidence refusals exit successfully",
+    "expect": "UNPROVED PREDECESSORS ACCEPTED",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "        return 2\n    return 0 if result is None else result",
+      "with": "        return 0\n    return 0 if result is None else result"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_primary_mode_kickoff_records_advice_dispositions_and_stale_acceptance": {
+    "command": "./bin/test 'tests/test_kickoff_evidence.py::test_primary_mode_kickoff_records_advice_dispositions_and_stale_acceptance' -q",
+    "defect": "A primary decision for a different candidate or different advice is accepted.",
+    "expect": "missing successful pre-acceptance orchestration stages",
+    "plant": {
+      "path": "lib/agentic_starter/advisory.py",
+      "replace": "    if decision[\"candidate_id\"] != candidate or decision[\"reports_sha256\"] != digest(reports):",
+      "with": "    if False:"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_registrar_refuses_gap_before_any_dispatch": {
+    "defect": "The registrar accepts a later attempt over one that never launched",
+    "expect": "a later attempt was registered over one that never launched",
+    "plant": {
+      "path": "bin/kickoff-evidence",
+      "replace": "            and (item[\"operation\"], item[\"attempt\"]) not in accounted\n",
+      "with": "            and False\n"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_revision_round_requires_and_carries_failure_analysis": {
+    "command": "./bin/test 'tests/test_kickoff_evidence.py::test_revision_round_requires_and_carries_failure_analysis' -q",
+    "defect": "A mutated revision packet is treated as intact.",
+    "expect": "DURABILITY PACKET CORRUPTION ACCEPTED",
+    "plant": {
+      "path": "lib/agentic_starter/execution_telemetry.py",
+      "replace": "    if hashlib.sha256(data).hexdigest() != digest:\n        raise ValidationError(\"retained artifact bytes changed\")",
+      "with": "    if False:\n        raise ValidationError(\"retained artifact bytes changed\")"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_role_artifacts_feed_findings_and_change_metadata_without_reparsing": {
+    "command": "./bin/test 'tests/test_kickoff_evidence.py::test_role_artifacts_feed_findings_and_change_metadata_without_reparsing' -q",
+    "defect": "Changed retained bytes are treated as intact.",
+    "expect": "DURABILITY RAW INGEST ACCEPTED",
+    "plant": {
+      "path": "lib/agentic_starter/execution_telemetry.py",
+      "replace": "    if hashlib.sha256(data).hexdigest() != digest:\n        raise ValidationError(\"retained artifact bytes changed\")",
+      "with": "    if False:\n        raise ValidationError(\"retained artifact bytes changed\")"
+    }
+  },
+  "pytest:tests/test_kickoff_evidence.py::test_validate_detects_corrupt_evidence": {
+    "command": "./bin/test 'tests/test_kickoff_evidence.py::test_validate_detects_corrupt_evidence' -q",
+    "defect": "Changed required proof bytes are treated as intact.",
+    "expect": "DURABILITY IMPORTED BYTES ACCEPTED",
+    "plant": {
+      "path": "lib/agentic_starter/execution_telemetry.py",
+      "replace": "    if hashlib.sha256(data).hexdigest() != digest:\n        raise ValidationError(\"retained artifact bytes changed\")",
+      "with": "    if False:\n        raise ValidationError(\"retained artifact bytes changed\")"
+    }
+  },
+  "pytest:tests/test_kickoff_tree_id.py::test_identity_is_cwd_independent_and_manifest_is_ordered": {
+    "command": "./bin/test 'tests/test_kickoff_tree_id.py::test_identity_is_cwd_independent_and_manifest_is_ordered' -q",
+    "defect": "Active context is classified as bookkeeping.",
+    "expect": "candidate-partition.yaml must classify as active",
+    "plant": {
+      "path": "lib/agentic_starter/candidate_boundaries.py",
+      "replace": "        if any(matches(path, p) for p in self.active):\n            return \"active\"",
+      "with": "        if any(matches(path, p) for p in self.active):\n            return \"bookkeeping\""
+    }
+  },
+  "pytest:tests/test_lessons.py::test_aged_lists_open_lessons_with_no_new_occurrence_in_sixty_days": {
+    "command": "./bin/test 'tests/test_lessons.py::test_aged_lists_open_lessons_with_no_new_occurrence_in_sixty_days' -q",
+    "defect": "An open lesson is listed as aged one day early.",
+    "expect": "amber-finch",
+    "plant": {
+      "path": "bin/lessons",
+      "replace": "AGING_DAYS = 60",
+      "with": "AGING_DAYS = 59"
+    }
+  },
+  "pytest:tests/test_lessons.py::test_valid_open_and_archived_lessons_pass": {
+    "command": "./bin/test 'tests/test_lessons.py::test_valid_open_and_archived_lessons_pass' -q",
+    "defect": "Lesson authoring discards the supplied learning.",
+    "expect": "LESSON AUTHORING FAILED",
+    "plant": {
+      "path": "bin/lessons",
+      "replace": "        body = supplied[\"body\"]",
+      "with": "        body = \"\""
+    }
+  },
+  "pytest:tests/test_log_control_plane.py::test_shared_normalization_survives_record_migration": {
+    "defect": "Final-newline repair accepts paths outside the admitted bookkeeping set",
+    "expect": "SHARED NORMALIZER ADMITTED ACTIVE CONTEXT",
+    "plant": {
+      "path": "bin/normalize-final-newline",
+      "replace": "            raise ValueError(\"path is outside the admitted bookkeeping repair set\")",
+      "with": "            pass"
+    }
+  },
+  "pytest:tests/test_methodology_toolchain_contract.py::test_atomic_contract_pins_behavioral_coverage_floor": {
+    "command": "./bin/test 'tests/test_methodology_toolchain_contract.py::test_atomic_contract_pins_behavioral_coverage_floor' -q",
+    "defect": "The transferred workflow defaults name a stale Codex primary model.",
+    "expect": "AssertionError: assert 'astra' == 'sol'",
+    "plant": {
+      "path": "lib/agentic_starter/workflow.py",
+      "replace": "    \"primary_models\": {\"claude\": \"opus\", \"codex\": \"sol\"},",
+      "with": "    \"primary_models\": {\"claude\": \"opus\", \"codex\": \"astra\"},"
+    }
+  },
+  "pytest:tests/test_methodology_toolchain_contract.py::test_mini_method_delivers_within_existing_authority": {
+    "command": "./bin/test 'tests/test_methodology_toolchain_contract.py::test_mini_method_delivers_within_existing_authority' -q",
+    "defect": "The copyable mini-method loses its delivery authority.",
+    "expect": "MINI DELIVERY AUTHORITY LOST",
+    "plant": {
+      "path": "briefs/mini-method.md",
+      "replace": "- **Delivery.** Commit and push approved project work without a separate human approval after applicable objective checks pass.",
+      "with": "- **Delivery.** Ask the human before pushing approved project work after applicable objective checks pass."
+    }
+  },
+  "pytest:tests/test_methodology_toolchain_contract.py::test_optional_cross_harness_coordination_stays_optional": {
+    "command": "./bin/test 'tests/test_methodology_toolchain_contract.py::test_optional_cross_harness_coordination_stays_optional' -q",
+    "defect": "The dispatcher withdraws the native fallback while policy still promises it.",
+    "expect": "dispatch.md: missing owned obligation",
+    "plant": {
+      "path": ".claude/skills/kickoff/dispatch.md",
+      "replace": "When no supported cross-harness launch path is available, use the existing direct native dispatch path. ",
+      "with": ""
+    }
+  },
+  "pytest:tests/test_methodology_toolchain_contract.py::test_proof_estate_governance_propagates_without_local_judgments": {
+    "command": "./bin/test tests/test_methodology_toolchain_contract.py::test_proof_estate_governance_propagates_without_local_judgments -q",
+    "defect": "Castle's policy section weakens the held-out mutant recall floor.",
+    "expect": "80% kill recall",
+    "plant": {
+      "path": "policies/test-suite-governance.md",
+      "replace": "at least 80% kill recall over a held-out local mutant corpus.\n",
+      "with": "at least 70% kill recall over a held-out local mutant corpus.\n"
+    }
+  },
+  "pytest:tests/test_methodology_toolchain_contract.py::test_research_authority_contract_propagates_and_stays_allow_by_default": {
+    "command": "./bin/test 'tests/test_methodology_toolchain_contract.py::test_research_authority_contract_propagates_and_stays_allow_by_default' -q",
+    "defect": "The research policy drops its allow-by-default resource rule.",
+    "expect": "assert 'allow-by-default' in",
+    "plant": {
+      "path": "policies/research-authority.md",
+      "replace": "## Installed resources are allow-by-default",
+      "with": "## Installed resources are opt-in"
+    }
+  },
+  "pytest:tests/test_methodology_toolchain_contract.py::test_travelling_migration_proofs_run_without_donor_history": {
+    "defect": "Report the newest source revision as every file's ancestor, breaking one travelling proof",
+    "expect": "failed",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "            if nearest is None or distance < nearest[0]:\n",
+      "with": "            if nearest is None:\n"
+    }
+  },
+  "pytest:tests/test_mirror_parity.py::test_repository_is_in_parity": {
+    "command": "./bin/test 'tests/test_mirror_parity.py::test_repository_is_in_parity' -q",
+    "defect": "Mirror sync overwrites unknown custom wrapper fields.",
+    "expect": "MIRROR SYNC OVERWROTE CUSTOM FIELDS",
+    "plant": {
+      "path": "bin/check-harness-parity",
+      "replace": "                    if set(previous) - {\"name\", \"description\", \"developer_instructions\"}:",
+      "with": "                    if False:"
+    }
+  },
+  "pytest:tests/test_multioperator.py::test_a_relative_root_means_the_callers_directory": {
+    "defect": "A relative root is read from the tool's own directory",
+    "expect": "RELATIVE ROOT WAS READ FROM THE WRONG DIRECTORY",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "            setattr(args, name, invoked_from / value)\n",
+      "with": "            pass\n"
+    }
+  },
+  "pytest:tests/test_multioperator.py::test_absent_retained_evidence_is_reported_while_altered_evidence_refuses": {
+    "defect": "Never excuse absent ignored evidence",
+    "expect": "RETAINED EVIDENCE ABSENCE REFUSED OR ALTERATION PASSED",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "    absent.append(relative)\n    return True\n",
+      "with": "    return False\n"
+    }
+  },
+  "pytest:tests/test_multioperator.py::test_adoption_is_the_only_manifest_change_after_cutover": {
+    "defect": "Admit any staged manifest whose adoption field is true, whatever else changed",
+    "expect": "ADOPTION DECLARATION REFUSED OR WIDENED",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "        and after == {**before, \"adopted\": True}\n",
+      "with": "        and after.get(\"adopted\") is True\n"
+    }
+  },
+  "pytest:tests/test_multioperator.py::test_constitution_version_gate_and_loading_limits": {
+    "defect": "Record validation never refuses",
+    "expect": "CLAUDE INVALID VERSION ADMITTED",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "    if not condition:\n        raise Refusal(reason)",
+      "with": "    return"
+    }
+  },
+  "pytest:tests/test_multioperator.py::test_converter_reports_each_renamed_line_and_never_leaves_a_link_to_nothing": {
+    "defect": "The converter renames the old constitution in a sentence that names both files",
+    "expect": "CONVERTER RENAMED A TWO-NAME SENTENCE, HID A REWRITE OR LEFT AN EMPTY LINK",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator_transition.py",
+      "replace": "        if relative.endswith(\".md\") and \"AGENTS.md\" in line:\n",
+      "with": "        if False:\n"
+    }
+  },
+  "pytest:tests/test_multioperator.py::test_methodology_close_cannot_bypass_the_lessons_contract": {
+    "defect": "Disable the append-boundary refusal of a bare methodology close",
+    "expect": "METHODOLOGY CLOSE BYPASSED LESSONS OR VALID RECORD REFUSED",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "                and \"\u2014 PARK\" not in block.header\n",
+      "with": "                and \"\u2014 PARK\" not in block.header\n                and False\n"
+    }
+  },
+  "pytest:tests/test_multioperator.py::test_portable_rehearsal_preserves_source_and_guards": {
+    "defect": "Record validation never refuses",
+    "expect": "MIGRATION STAGED HISTORY REWRITE PASSED",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "    if not condition:\n        raise Refusal(reason)",
+      "with": "    return"
+    }
+  },
+  "pytest:tests/test_multioperator.py::test_preflight_lists_source_releases_the_recipient_has_not_recorded": {
+    "defect": "Report every declared release as unrecorded",
+    "expect": "RELEASE GAP MISREPORTED OR MALFORMED PROVENANCE ACCEPTED",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "            if recorded is None\n",
+      "with": "            if True\n"
+    }
+  },
+  "pytest:tests/test_multioperator.py::test_retrofit_rehearsal_preserves_narrative_history": {
+    "defect": "Remove the retrofit dispatch so a narrative-only project is rehearsed as if it had canonical history",
+    "expect": "RETROFIT HISTORY OR REFUSAL CONTRACT LOST",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "        if config.get(\"mode\") == \"retrofit\":\n",
+      "with": "        if False:\n"
+    }
+  },
+  "pytest:tests/test_multioperator.py::test_transfer_ancestry_names_the_nearest_revision_and_recipient_lines": {
+    "defect": "Report the newest source revision as every file's ancestor",
+    "expect": "TRANSFER ANCESTRY MISREAD THE RECIPIENT",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "            if nearest is None or distance < nearest[0]:\n",
+      "with": "            if nearest is None:\n"
+    }
+  },
+  "pytest:tests/test_multioperator.py::test_transfer_equivalence_for_existing_product": {
+    "defect": "Require an adopted donor even for capability learning",
+    "expect": "TRANSFER EQUIVALENCE OR REFUSAL CONTRACT LOST",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "        intent == \"capability\" or donor_state == \"declared-adopted\",\n",
+      "with": "        donor_state == \"declared-adopted\",\n"
+    }
+  },
+  "pytest:tests/test_multioperator.py::test_transition_and_maintenance_refuse_false_state": {
+    "defect": "Record validation never refuses",
+    "expect": "MIGRATION ACTIVE CUTOVER NOT HELD",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "    if not condition:\n        raise Refusal(reason)",
+      "with": "    return"
+    }
+  },
+  "pytest:tests/test_multioperator_legacy_shapes.py::test_legacy_shapes_convert_with_history_and_product_intact": {
+    "command": "./bin/test 'tests/test_multioperator_legacy_shapes.py::test_legacy_shapes_convert_with_history_and_product_intact' -q",
+    "defect": "The converter matches only the exact-case phase table heading.",
+    "expect": "LEGACY SHAPE REFUSED",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "PHASE_TABLE = re.compile(r\"(?mi)^## Phase Table[ \\t]*$\")",
+      "with": "PHASE_TABLE = re.compile(r\"(?m)^## Phase Table[ \\t]*$\")"
+    }
+  },
+  "pytest:tests/test_multioperator_legacy_shapes.py::test_only_imported_heads_may_precede_their_dependencies": {
+    "command": "./bin/test 'tests/test_multioperator_legacy_shapes.py::test_only_imported_heads_may_precede_their_dependencies' -q",
+    "defect": "A new event on a dependent is exempted from dependency ordering like an imported head.",
+    "expect": "DID NOT RAISE Refusal",
+    "plant": {
+      "path": "lib/agentic_starter/multioperator.py",
+      "replace": "        and event.get(\"reason\") == IMPORT_REASON\n",
+      "with": "        or event.get(\"reason\") == \"New phase\"\n"
+    }
+  },
+  "pytest:tests/test_mutation.py::test_a_repository_with_no_tool_reports_unmeasured_and_never_measured": {
+    "command": "./bin/test 'tests/test_mutation.py::test_a_repository_with_no_tool_reports_unmeasured_and_never_measured' -q",
+    "defect": "A repository with no mutation tool is reported as measured.",
+    "expect": "{'state': 'me",
+    "plant": {
+      "path": "lib/agentic_starter/mutation.py",
+      "replace": "            \"state\": \"unmeasured\",\n            \"tool\": None,",
+      "with": "            \"state\": \"measured\",\n            \"tool\": None,"
+    }
+  },
+  "pytest:tests/test_mutation.py::test_a_survey_that_cannot_be_taken_fails_and_an_unfinished_one_is_partial": {
+    "command": "./bin/test 'tests/test_mutation.py::test_a_survey_that_cannot_be_taken_fails_and_an_unfinished_one_is_partial' -q",
+    "defect": "Tests that fail before any fault is planted no longer stop the survey.",
+    "expect": "Regex pattern did not match",
+    "plant": {
+      "path": "lib/agentic_starter/mutation.py",
+      "replace": "    if status != 0:\n        raise MutationError(f\"tests fail before any fault is planted for {path}:\\n{output[-2000:]}\")",
+      "with": "    if False:\n        raise MutationError(f\"tests fail before any fault is planted for {path}:\\n{output[-2000:]}\")"
+    }
+  },
+  "pytest:tests/test_pre_commit.py::test_pre_commit_runs_structural_governance_after_existing_checks": {
+    "command": "./bin/test tests/test_pre_commit.py::test_pre_commit_runs_structural_governance_after_existing_checks -q",
+    "defect": "The pre-commit hook drops proof-estate validation.",
+    "expect": "HOOK OMITTED STRUCTURED RECORD VALIDATION",
+    "plant": {
+      "path": ".githooks/pre-commit",
+      "replace": "./bin/check-candidate-partition --staged\n./bin/test-governance validate\n",
+      "with": "./bin/check-candidate-partition --staged\n"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_a_command_family_is_inventoried_and_selected_for_its_own_runner": {
+    "defect": "Drop command-kind selectors from the printed selection",
+    "expect": "NATIVE-RUNNER FAMILY NOT SELECTED OR NOT INVENTORIED",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "                            print(\"command \" + str(selector))\n",
+      "with": "                            pass\n"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_a_mutation_declaration_names_its_tool_scope_and_budget_or_says_why_not": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_a_mutation_declaration_names_its_tool_scope_and_budget_or_says_why_not' -q",
+    "defect": "A mutation declaration with a zero budget is accepted.",
+    "expect": "('mutation.budget_seconds must be a positive number', [])",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "or budget <= 0:\n        errors.append(\"mutation.budget_seconds must be a positive number\")",
+      "with": "or budget < 0:\n        errors.append(\"mutation.budget_seconds must be a positive number\")"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_a_pending_witness_blocks_validation_until_it_is_aborted": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_a_pending_witness_blocks_validation_until_it_is_aborted' -q",
+    "defect": "Validation no longer refuses while a red witness is pending.",
+    "expect": "Regex pattern did not match",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "    _refuse_pending_witness(root)\n    captures = ",
+      "with": "    captures = "
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_a_refused_liveness_probe_is_settled_before_a_finished_command_is_called_incomplete": {
+    "defect": "Count a refused liveness probe as a live child at once, without probing again",
+    "expect": "REFUSED PROBE MISREAD",
+    "plant": {
+      "path": "lib/agentic_starter/test_runner.py",
+      "replace": "            if time.monotonic() >= deadline:\n                return True\n",
+      "with": "            if True:\n                return True\n"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_admit_records_a_catch_up_that_retires_one_proof_while_another_arrives": {
+    "defect": "Admission ignores the retirements supplied with the arriving proofs",
+    "expect": "CATCH-UP COULD NOT RECORD A RETIREMENT AND AN ARRIVAL TOGETHER",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "{\"families\": families, \"records\": [*retirements, *records]}",
+      "with": "{\"families\": families, \"records\": records}"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_admit_records_a_proof_only_after_seeing_it_fail_and_restoring_the_tree": {
+    "defect": "Abort the witness instead of finishing it",
+    "expect": "ADMIT RECORDED AN UNSEEN FAILURE, LEFT A DEFECT PLANTED OR LOST A RECEIPT",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "        witness_finish(root)\n        records.append(",
+      "with": "        witness_abort(root)\n        records.append("
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_admit_refuses_before_witnessing_and_replays_a_recorded_defect": {
+    "defect": "Proceed to witnessing even when the finished ledger could not be recorded",
+    "expect": "nothing was witnessed",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "    if blocking:\n",
+      "with": "    if False:\n"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_changed_code_selects_the_families_of_files_that_use_it": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_changed_code_selects_the_families_of_files_that_use_it' -q",
+    "defect": "Changed code no longer selects the families of the files that name it.",
+    "expect": "assert ({'helper', 'vital'}, None)",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "    if mapped_code:\n        readers = _readers(root, mapped_code)",
+      "with": "    if mapped_code and False:\n        readers = _readers(root, mapped_code)"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_changed_selection_maps_documents_to_readers_and_widens_on_unmapped_code": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_changed_selection_maps_documents_to_readers_and_widens_on_unmapped_code' -q",
+    "defect": "A changed document no family covers no longer selects the families of its readers.",
+    "expect": "assert ({'vital'}, None) == ({'mapped', 'vital'}, None)",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "    if documents:\n        readers = _readers(root, documents)",
+      "with": "    if documents and False:\n        readers = _readers(root, documents)"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_critical_risk_requires_a_retained_direct_proof": {
+    "command": "./bin/test tests/test_test_governance.py::test_critical_risk_requires_a_retained_direct_proof -q",
+    "defect": "A critical risk's direct proof is accepted without being retained.",
+    "expect": "DID NOT RAISE",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "            if direct_proof not in current_ids:",
+      "with": "            if direct_proof is None:"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_family_or_leaf_cap_overrun_fails_closed": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_family_or_leaf_cap_overrun_fails_closed' -q",
+    "defect": "Each count ceiling silently allows one more than the reset limit plus the named budget.",
+    "expect": "Expected regex: 'families cap exceeded'",
+    "plant": {
+      "path": "lib/agentic_starter/recipient_governance.py",
+      "replace": "        allowed = int(baseline_count * ratio_limit) + delta\n",
+      "with": "        allowed = int(baseline_count * ratio_limit) + delta + 1\n"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_fixture_repositories_never_sign_whatever_the_machine_configures": {
+    "defect": "Test setup leaves fixture repositories on the machine's signing configuration",
+    "expect": "FIXTURE REPOSITORY SIGNED",
+    "plant": {
+      "path": "tests/conftest.py",
+      "replace": "isolate_fixture_git_signing(os.environ)\n",
+      "with": ""
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_governance_allows_nested_supervisor_cleanup": {
+    "command": "./bin/python -m pytest -q -p no:cacheprovider -n 0 'tests/test_test_governance.py::test_governance_allows_nested_supervisor_cleanup'",
+    "defect": "Escalation kills the group at once instead of TERM before KILL.",
+    "expect": "outer supervisor killed inner cleanup before its resistant child",
+    "plant": {
+      "path": "lib/agentic_starter/test_runner.py",
+      "replace": "    for signum in (signal.SIGTERM, signal.SIGKILL):",
+      "with": "    for signum in (signal.SIGKILL,):"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_governance_child_incomplete_remains_incomplete": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_governance_child_incomplete_remains_incomplete' -q",
+    "defect": "The manager relabels an incomplete child as an ordinary failure.",
+    "expect": "governance must preserve the incomplete exit",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "        if result.returncode == 124:\n            raise GovernanceIncomplete(detail)",
+      "with": "        if False:\n            raise GovernanceIncomplete(detail)"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_hang_supervision_preserves_failures_and_stops_chattering_children": {
+    "command": "./bin/python -m pytest -q -p no:cacheprovider -n 0 'tests/test_test_governance.py::test_hang_supervision_preserves_failures_and_stops_chattering_children'",
+    "defect": "A completed test failure is changed to success.",
+    "expect": "completed failure status must survive",
+    "plant": {
+      "path": "lib/agentic_starter/test_runner.py",
+      "replace": "            code = process.returncode\n            if code < 0 or _group_outstanding",
+      "with": "            code = 0 if process.returncode == 1 else process.returncode\n            if code < 0 or _group_outstanding"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_incomplete_disposition_evidence_fails_closed": {
+    "command": "./bin/test tests/test_test_governance.py::test_incomplete_disposition_evidence_fails_closed -q",
+    "defect": "A baseline proof with no disposition is accepted.",
+    "expect": "DID NOT RAISE",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "if missing_dispositions and manifest.get(\"adoption\", {}).get(\"mode\") != \"bounded\":",
+      "with": "if False:"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_incomplete_exit_cannot_supply_a_red_witness": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_incomplete_exit_cannot_supply_a_red_witness' -q",
+    "defect": "An incomplete exit with matching output certifies a witness.",
+    "expect": "DID NOT RAISE GovernanceError",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "    if status != request[\"failure_exit\"]:\n        raise GovernanceError(\n            f\"NOT WITNESSED: incomplete",
+      "with": "    if False:\n        raise GovernanceError(\n            f\"NOT WITNESSED: incomplete"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_inventory_counts_executable_families_and_expanded_leaves": {
+    "command": "./bin/test tests/test_test_governance.py::test_inventory_counts_executable_families_and_expanded_leaves -q",
+    "defect": "Disposable assay controls lose their explicitly isolated environment.",
+    "expect": "== 0",
+    "plant": {
+      "path": "lib/agentic_starter/recipient_governance.py",
+      "replace": "        env=environment,",
+      "with": "        env=None,"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_lifecycle_replay_and_repairs": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_lifecycle_replay_and_repairs' -q",
+    "defect": "Ledger replay no longer refuses a proof retired more than once.",
+    "expect": "Regex pattern did not match",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "            if proof_id in seen_retirement_targets:\n                errors.append(f\"proof is retired more than once: {proof_id}\")",
+      "with": "            if False:\n                errors.append(f\"proof is retired more than once: {proof_id}\")"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_live_reset_validates": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_live_reset_validates' -q",
+    "defect": "Witness history no longer checks the digest of the ledger prefix it names.",
+    "expect": "WITNESS HISTORY PREFIX DRIFT ACCEPTED",
+    "plant": {
+      "path": "lib/agentic_starter/recipient_governance.py",
+      "replace": "        or hashlib.sha256(b\"\".join(lines[:rows])).hexdigest() != declared[\"ledger_prefix_sha256\"]\n",
+      "with": "        or not declared[\"ledger_prefix_sha256\"]\n"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_modification_must_reference_its_own_unreused_observation": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_modification_must_reference_its_own_unreused_observation' -q",
+    "defect": "One observation is reused for successive modifications.",
+    "expect": "modification incorrectly accepted reused",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "            elif (proof_id, number) in used_modification_receipts:",
+      "with": "            elif False:"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_outstanding_child_makes_completed_leader_incomplete[0]": {
+    "command": "./bin/python -m pytest -q -p no:cacheprovider -n 0 'tests/test_test_governance.py::test_outstanding_child_makes_completed_leader_incomplete[0]'",
+    "defect": "A leader's exit hides its outstanding child.",
+    "expect": "outstanding group after exit 0 is incomplete",
+    "plant": {
+      "path": "lib/agentic_starter/test_runner.py",
+      "replace": "            if code < 0 or _group_outstanding(process.pid, cleanup_grace):",
+      "with": "            if code < 0:"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_outstanding_child_makes_completed_leader_incomplete[1]": {
+    "command": "./bin/python -m pytest -q -p no:cacheprovider -n 0 'tests/test_test_governance.py::test_outstanding_child_makes_completed_leader_incomplete[1]'",
+    "defect": "A leader's exit hides its outstanding child.",
+    "expect": "outstanding group after exit 1 is incomplete",
+    "plant": {
+      "path": "lib/agentic_starter/test_runner.py",
+      "replace": "            if code < 0 or _group_outstanding(process.pid, cleanup_grace):",
+      "with": "            if code < 0:"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_parallel_pytest_keeps_coverage_isolation_and_failure_truth": {
+    "command": "./bin/python -m pytest -q -p no:cacheprovider -n 0 'tests/test_test_governance.py::test_parallel_pytest_keeps_coverage_isolation_and_failure_truth'",
+    "defect": "Independent pytest selections are serialized.",
+    "expect": "PARALLEL CONTRACT FAILED",
+    "plant": {
+      "path": "lib/agentic_starter/test_runner.py",
+      "replace": "        *args[:2],\n        \"-n\",\n        \"auto\",",
+      "with": "        *args[:2],\n        \"-n\",\n        \"0\","
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_positive_growth_requires_named_approval": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_positive_growth_requires_named_approval' -q",
+    "defect": "A positive budget no longer needs a named approval.",
+    "expect": "Expected regex: 'positive families budget'",
+    "plant": {
+      "path": "lib/agentic_starter/recipient_governance.py",
+      "replace": "        if delta > 0 and not approval_named:\n",
+      "with": "        if delta > 0 and not approval_named and delta > 1000:\n"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_real_supervisor_entrypoint_handles_deadlines_and_signals[completed-error]": {
+    "command": "./bin/python -m pytest -q -p no:cacheprovider -n 0 'tests/test_test_governance.py::test_real_supervisor_entrypoint_handles_deadlines_and_signals[completed-error]'",
+    "defect": "A completed non-assertion error is relabelled incomplete.",
+    "expect": "completed non-assertion error status must survive",
+    "plant": {
+      "path": "lib/agentic_starter/test_runner.py",
+      "replace": "            if code < 0 or _group_outstanding(process.pid, cleanup_grace):",
+      "with": "            if code not in (0, 1) or _group_outstanding(process.pid, cleanup_grace):"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_real_supervisor_entrypoint_handles_deadlines_and_signals[double-term]": {
+    "command": "./bin/python -m pytest -q -p no:cacheprovider -n 0 'tests/test_test_governance.py::test_real_supervisor_entrypoint_handles_deadlines_and_signals[double-term]'",
+    "defect": "A repeated signal interrupts TERM-to-KILL cleanup.",
+    "expect": "supervisor left its inherited child alive",
+    "plant": {
+      "path": "lib/agentic_starter/test_runner.py",
+      "replace": "        if process is not None and not cleaning:",
+      "with": "        if process is not None:"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_real_supervisor_entrypoint_handles_deadlines_and_signals[hup]": {
+    "command": "./bin/python -m pytest -q -p no:cacheprovider -n 0 'tests/test_test_governance.py::test_real_supervisor_entrypoint_handles_deadlines_and_signals[hup]'",
+    "defect": "HUP is not handled or forwarded.",
+    "expect": "entrypoint interruption must remain incomplete",
+    "plant": {
+      "path": "lib/agentic_starter/test_runner.py",
+      "replace": "        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):",
+      "with": "        for signum in (signal.SIGINT, signal.SIGTERM):"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_real_supervisor_entrypoint_handles_deadlines_and_signals[term]": {
+    "command": "./bin/python -m pytest -q -p no:cacheprovider -n 0 'tests/test_test_governance.py::test_real_supervisor_entrypoint_handles_deadlines_and_signals[term]'",
+    "defect": "TERM is not handled or forwarded.",
+    "expect": "entrypoint interruption must remain incomplete",
+    "plant": {
+      "path": "lib/agentic_starter/test_runner.py",
+      "replace": "        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):",
+      "with": "        for signum in (signal.SIGINT, signal.SIGHUP):"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_real_supervisor_entrypoint_handles_deadlines_and_signals[timeout]": {
+    "command": "./bin/python -m pytest -q -p no:cacheprovider -n 0 'tests/test_test_governance.py::test_real_supervisor_entrypoint_handles_deadlines_and_signals[timeout]'",
+    "defect": "The entrypoint ignores its manifest hang deadline.",
+    "expect": "subprocess.TimeoutExpired",
+    "plant": {
+      "path": "lib/agentic_starter/test_runner.py",
+      "replace": "        result = run_command([sys.executable, *arguments], cwd=root, timeout=timeout)",
+      "with": "        result = run_command([sys.executable, *arguments], cwd=root, timeout=10**6)"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_recall_below_eighty_percent_fails_closed": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_recall_below_eighty_percent_fails_closed' -q",
+    "defect": "Recall below the declared floor is no longer refused.",
+    "expect": "Expected regex: 'recall below floor'",
+    "plant": {
+      "path": "lib/agentic_starter/recipient_governance.py",
+      "replace": "        if score < minimum:\n",
+      "with": "        if score < minimum and not evidence:\n"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_receipts_are_validated_and_an_admitted_proof_must_have_one": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_receipts_are_validated_and_an_admitted_proof_must_have_one' -q",
+    "defect": "Validation no longer refuses an admitted proof with no witness receipt.",
+    "expect": "DID NOT RAISE GovernanceError",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "    for proof_id in sorted(admitted_or_repaired - witnessed - history):",
+      "with": "    for proof_id in sorted(set()):"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_report_counts_the_frozen_baseline_and_current_estate": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_report_counts_the_frozen_baseline_and_current_estate' -q",
+    "defect": "The report gives the frozen baseline counts as the current estate.",
+    "expect": "assert {'families': 8, 'leaves': 9}",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "        \"current\": current[\"counts\"],\n        \"by_kind\"",
+      "with": "        \"current\": baseline[\"counts\"],\n        \"by_kind\""
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_report_reproduces_reset_ratios": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_report_reproduces_reset_ratios' -q",
+    "defect": "The report's leaf ratio is computed from the family counts.",
+    "expect": "At index 1 diff: 0.31456548347613217 != 0.2869415807560137",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "        \"leaf_ratio\": current[\"counts\"][\"leaves\"] / baseline[\"counts\"][\"leaves\"],\n",
+      "with": "        \"leaf_ratio\": current[\"counts\"][\"families\"] / baseline[\"counts\"][\"families\"],\n"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_reuse_runs_only_what_changed_since_a_proven_tree_and_everything_when_unsure": {
+    "defect": "Have the reuse lane select no family whatever changed",
+    "expect": "REUSE SKIPPED AN AFFECTED FAMILY OR RERAN AN UNAFFECTED ONE",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "        return _families_for_changes(root, families, changed, [])\n",
+      "with": "        return [], None\n"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_runtime_is_diagnostic_and_stale_records_are_unmeasured": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_runtime_is_diagnostic_and_stale_records_are_unmeasured' -q",
+    "defect": "A missing measurement loses its explicit reason.",
+    "expect": "missing timing must explain the missing record",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "            \"reason\": \"no full-run timing record\",",
+      "with": "            \"reason\": \"\","
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_script_environments_are_prepared_in_the_cache_the_caller_names": {
+    "defect": "Preparation ignores the environment its caller names",
+    "expect": "SCRIPT ENVIRONMENT BUILT IN THE WRONG CACHE",
+    "plant": {
+      "path": "lib/agentic_starter/test_runner.py",
+      "replace": "            env=None if environment is None else dict(environment),\n",
+      "with": ""
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_script_tool_environments_are_built_before_parallel_workers_start": {
+    "defect": "The supervised runner starts parallel workers without preparing script tool environments",
+    "expect": "SCRIPT ENVIRONMENTS NOT PREPARED BEFORE WORKERS",
+    "plant": {
+      "path": "lib/agentic_starter/test_runner.py",
+      "replace": "        prepare_script_environments(root, arguments)\n",
+      "with": ""
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_shadow_deleted_proof_fails_closed": {
+    "command": "./bin/test tests/test_test_governance.py::test_shadow_deleted_proof_fails_closed -q",
+    "defect": "A proof recorded as deleted may still exist.",
+    "expect": "Regex pattern did not match",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "        elif proof_id in current_ids or replacement is not None:",
+      "with": "        elif replacement is not None:"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_witness_expect_must_appear_in_a_declared_failure_line": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_witness_expect_must_appear_in_a_declared_failure_line' -q",
+    "defect": "Witness matching ignores the declared failure lines.",
+    "expect": "WITNESS ACCEPTED AN ECHOED MESSAGE",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "    if failure_lines is not None and not any(\n        request[\"expect\"] in line",
+      "with": "    if False and not any(\n        request[\"expect\"] in line"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_witness_observes_red_restores_exactly_and_records_a_receipt": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_witness_observes_red_restores_exactly_and_records_a_receipt' -q",
+    "defect": "Witness finish builds the receipt but never appends it.",
+    "expect": "assert [] == [",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "    with ledger.open(\"a\") as handle:\n        handle.write(json.dumps(row, sort_keys=True) + \"\\n\")",
+      "with": "    with ledger.open(\"a\") as handle:\n        pass"
+    }
+  },
+  "pytest:tests/test_test_governance.py::test_witness_refuses_anything_short_of_the_named_failure": {
+    "command": "./bin/test 'tests/test_test_governance.py::test_witness_refuses_anything_short_of_the_named_failure' -q",
+    "defect": "Witness finish accepts a planted defect that leaves the command passing.",
+    "expect": "Regex pattern did not match",
+    "plant": {
+      "path": "lib/agentic_starter/test_governance.py",
+      "replace": "    if status == 0:\n        raise GovernanceError(\n            \"NOT WITNESSED: the command still passed",
+      "with": "    if False:\n        raise GovernanceError(\n            \"NOT WITNESSED: the command still passed"
+    }
+  },
+  "pytest:tests/test_toolchain_entrypoints.py::test_a_declared_native_suite_is_a_second_lane_and_only_both_lanes_prove_the_tree": {
+    "defect": "The full run records the pytest lane's status and ignores a failed native lane",
+    "expect": "NATIVE SUITE WAS NOT A SECOND LANE, OR A TREE WAS PROVEN WITHOUT IT",
+    "plant": {
+      "path": "bin/test",
+      "replace": "    [[ \"$lanes_exit\" -ne 0 ]] || lanes_exit=\"$native_exit\"\n",
+      "with": ""
+    }
+  },
+  "pytest:tests/test_toolchain_entrypoints.py::test_reuse_lane_runs_native_runner_families_and_nothing_when_nothing_changed": {
+    "defect": "Skip selected native-runner families in the test entry point",
+    "expect": "REUSE LANE SKIPPED A NATIVE-RUNNER FAMILY OR RAN TESTS WHEN NOTHING CHANGED",
+    "plant": {
+      "path": "bin/test",
+      "replace": "    \"$repo_root/bin/test\" \"${command_words[@]}\" || return $?\n",
+      "with": "    :\n"
+    }
+  },
+  "pytest:tests/test_toolchain_entrypoints.py::test_test_defaults_to_every_repository_test_from_any_cwd": {
+    "command": "./bin/test 'tests/test_toolchain_entrypoints.py::test_test_defaults_to_every_repository_test_from_any_cwd' -q",
+    "defect": "The full test path bypasses the qualified hang supervisor.",
+    "expect": "assert ['uv cwd=",
+    "plant": {
+      "path": "bin/test",
+      "replace": "    python \"$repo_root/lib/agentic_starter/test_runner.py\" -m pytest \"${full_suite[@]}\" \\",
+      "with": "    python -m pytest \"${full_suite[@]}\" \\"
+    }
+  },
+  "pytest:tests/test_toolchain_entrypoints.py::test_test_governed_lanes_run_selected_proofs[arguments0]": {
+    "command": "./bin/test tests/test_toolchain_entrypoints.py::test_test_governed_lanes_run_selected_proofs -q",
+    "defect": "The governed lanes run their selected proofs without the quiet runner arguments the lane contract fixes.",
+    "expect": "AssertionError",
+    "plant": {
+      "path": "bin/test",
+      "replace": "python \"$repo_root/lib/agentic_starter/test_runner.py\" -m pytest -q \"${selectors[@]}\"",
+      "with": "python \"$repo_root/lib/agentic_starter/test_runner.py\" -m pytest \"${selectors[@]}\""
+    }
+  },
+  "pytest:tests/test_toolchain_entrypoints.py::test_test_governed_lanes_run_selected_proofs[arguments1]": {
+    "command": "./bin/test tests/test_toolchain_entrypoints.py::test_test_governed_lanes_run_selected_proofs -q",
+    "defect": "The governed lanes run their selected proofs without the quiet runner arguments the lane contract fixes.",
+    "expect": "AssertionError",
+    "plant": {
+      "path": "bin/test",
+      "replace": "python \"$repo_root/lib/agentic_starter/test_runner.py\" -m pytest -q \"${selectors[@]}\"",
+      "with": "python \"$repo_root/lib/agentic_starter/test_runner.py\" -m pytest \"${selectors[@]}\""
+    }
+  },
+  "pytest:tests/test_toolchain_entrypoints.py::test_the_native_suite_runs_supervised_with_its_arguments_and_never_signs": {
+    "defect": "The native lane runs its suite on the machine's signing configuration",
+    "expect": "NATIVE SUITE RAN UNSUPERVISED, LOST ITS SELECTION OR SIGNED FIXTURE COMMITS",
+    "plant": {
+      "path": "lib/agentic_starter/native_suite.py",
+      "replace": "        isolate_fixture_git_signing(os.environ)\n",
+      "with": ""
+    }
+  },
+  "pytest:tests/test_toolchain_entrypoints.py::test_wrapper_run_excludes_runtime_state_from_dropbox_sync": {
+    "defect": "Drop the sync-exclusion call from the shared toolchain initialiser",
+    "expect": "RUNTIME STATE NOT SYNC-EXCLUDED",
+    "plant": {
+      "path": "bin/_python-toolchain",
+      "replace": "  python_toolchain_exclude_runtime_state_from_sync || return $?\n",
+      "with": ""
+    }
+  },
+  "pytest:tests/test_treatise.py::test_the_repository_own_treatises_validate": {
+    "command": "./bin/test 'tests/test_treatise.py::test_the_repository_own_treatises_validate' -q",
+    "defect": "A partial editorial update replaces the whole treatise record instead of merging into it.",
+    "expect": "TREATISE UPDATE LOST PRIOR DIRECTIVES",
+    "plant": {
+      "path": "bin/treatise",
+      "replace": "            proposed = {**existing.get(MARKER_KEY, {}), **supplied}\n",
+      "with": "            proposed = {**supplied}\n"
+    }
+  }
+}

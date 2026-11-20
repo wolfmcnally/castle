@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import shutil
 import subprocess
 from pathlib import Path
+
+from structured_fixtures import completion, create_records, install_record_tools
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKER = ROOT / "bin" / "check-catalogs"
@@ -44,22 +48,6 @@ def write_instruction_resources(root: Path) -> None:
         (skill / name).write_text(f"# {name}\n\n[Entry](SKILL.md)\n", encoding="utf-8")
 
 
-INDEX = """\
-# Plan
-
-Status legend: ⏳ Not Started · ⬅️ Next (only one at a time) · 🚧 In Progress.
-
-## Phase Table
-
-| Phase | Title | Status |
-|-------|-------|--------|
-| Phase 1 | First | {first} |
-| Phase 2 | Second | {second} |
-
-`kickoff` flips `⬅️` → `🚧` on start.
-"""
-
-
 def run(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
     checker = root / "bin" / "check-catalogs"
     return subprocess.run(
@@ -80,18 +68,23 @@ def fixture(tmp_path: Path, *, first: str = "⬅️", second: str = "⏳") -> Pa
         (root / directory).mkdir()
     (root / "policies" / "example.md").write_text("# Policy: Example\n", encoding="utf-8")
     (root / "briefs" / "design.md").write_text("# Design\n", encoding="utf-8")
-    (root / "CLAUDE.md").write_text(
+    (root / "AGENTS.md").write_text(
         "# Instructions\n\n"
         "- [`example.md`](policies/example.md) — an example policy.\n"
         "- [`design.md`](briefs/design.md) — a design brief.\n" + ZONE_MARKERS,
         encoding="utf-8",
     )
     write_instruction_resources(root)
-    (root / "plan").mkdir()
-    (root / "plan" / "INDEX.md").write_text(
-        INDEX.format(first=first, second=second),
-        encoding="utf-8",
+    install_record_tools(root)
+    create_records(
+        root,
+        {
+            "first-work-package": {"state": "next", "owner": "fixture-operator"},
+            "second-work-package": {},
+        },
     )
+    (root / "plan/INDEX.md").write_text("# Plan context\n")
+    (root / ".gitignore").write_text(".kickoff/\n__pycache__/\n.collaboration-views/\n")
     subprocess.run(["git", "init", "-q", "-b", "master", str(root)], check=True)
     subprocess.run(["git", "-C", str(root), "add", "."], check=True)
     return root
@@ -114,16 +107,145 @@ def test_tracked_markdown_deleted_from_worktree_is_not_read_as_a_source(
 
     result = run(root)
 
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.returncode == 0, (
+        "CATALOG LOST PRIMARY CONSTITUTION: " + result.stdout + result.stderr
+    )
     _assert_instruction_delivery(root)
-    _assert_phase_entry_ledgers(root)
-    _assert_child_close_requires_parent_close_or_another_drafted_child(tmp_path / "stranded-child")
-    _assert_child_close_accepts_parent_close(tmp_path / "closed-parent")
-    _assert_child_close_accepts_drafted_incomplete_sibling(tmp_path / "queued-sibling")
+    # The writer owns syntax and catalog placement; content and zone remain explicit.
+    instructions = root / "AGENTS.md"
+    instructions.write_text(
+        instructions.read_text().replace(
+            "<!-- METHODOLOGY_CONTRACT_START -->",
+            "<!-- METHODOLOGY_CONTRACT_START -->\n## Methodology briefs\n",
+        )
+    )
+    supplied = root / "document-input.json"
+    supplied.write_text(
+        json.dumps(
+            {
+                "path": "briefs/created.md",
+                "title": "Created brief",
+                "body": "Actual design.\n",
+                "status": "draft",
+                "scope": "A bounded design.",
+            }
+        )
+    )
+    command = [str(CHECKER), "--root", str(root)]
+    written = subprocess.run(
+        command + ["--create-input", str(supplied)], capture_output=True, text=True
+    )
+    document = root / "briefs/created.md"
+    assert written.returncode == 0 and "status: draft" in document.read_text(), (
+        "DOCUMENT SKELETON AUTHORING FAILED: " + written.stderr
+    )
+    before = document.read_bytes()
+    escaped = root / "project/example.md"
+    supplied.write_text(
+        json.dumps(
+            {
+                "path": "docs/../project/example.md",
+                "title": "Not docs",
+                "body": "Outside the owning subtree.",
+            }
+        )
+    )
+    traversal = subprocess.run(
+        command + ["--create-input", str(supplied)], capture_output=True, text=True
+    )
+    assert traversal.returncode != 0 and not escaped.exists(), (
+        "DOCUMENT DESTINATION ESCAPED SUBTREE"
+    )
+    supplied.write_text(
+        json.dumps(
+            {
+                "path": "briefs/created.md",
+                "title": "Created brief",
+                "body": "Actual design.\n",
+                "status": "draft",
+                "scope": "A bounded design.",
+            }
+        )
+    )
+    collision = subprocess.run(
+        command + ["--create-input", str(supplied)], capture_output=True, text=True
+    )
+    assert collision.returncode != 0 and document.read_bytes() == before, (
+        "DOCUMENT COLLISION OVERWROTE ORIGINAL"
+    )
+    supplied.write_text(
+        json.dumps({"path": "briefs/created.md", "label": "Created", "zone": "methodology"})
+    )
+    original = instructions.read_bytes()
+    registered = subprocess.run(
+        command
+        + [
+            "--register-input",
+            str(supplied),
+            "--expect-sha256",
+            hashlib.sha256(original).hexdigest(),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert (
+        registered.returncode == 0 and "[Created](briefs/created.md)" in instructions.read_text()
+    ), "CATALOG REGISTRATION FAILED: " + registered.stderr
+    current = instructions.read_bytes()
+    write_tracked(root, "briefs/second.md", "# Second\n")
+    second = root / "second-input.json"
+    second.write_text(
+        json.dumps({"path": "briefs/second.md", "label": "Second", "zone": "methodology"})
+    )
+    refused = subprocess.run(
+        command + ["--register-input", str(second), "--expect-sha256", "0" * 64],
+        capture_output=True,
+        text=True,
+    )
+    assert refused.returncode != 0 and instructions.read_bytes() == current, (
+        "CATALOG REFUSAL MUTATED CONSTITUTION"
+    )
+
+
+def test_registering_a_registered_document_again_changes_nothing(tmp_path: Path) -> None:
+    """Admission: a rerun after an interrupted delivery refused work that was already done.
+
+    One document is registered, then registered again with a different label and a digest
+    that no longer matches; the oracle is the exit status and the catalog's exact bytes.
+    """
+    root = fixture(tmp_path)
+    instructions = root / "AGENTS.md"
+    instructions.write_text(
+        instructions.read_text().replace(
+            "<!-- METHODOLOGY_CONTRACT_START -->",
+            "<!-- METHODOLOGY_CONTRACT_START -->\n## Methodology briefs\n",
+        )
+    )
+    write_tracked(root, "briefs/kept.md", "# Kept\n")
+    supplied = root / "registration.json"
+    command = [str(CHECKER), "--root", str(root), "--register-input", str(supplied)]
+
+    def register(label: str, digest: str) -> subprocess.CompletedProcess[str]:
+        supplied.write_text(
+            json.dumps({"path": "briefs/kept.md", "label": label, "zone": "methodology"})
+        )
+        return subprocess.run(command + ["--expect-sha256", digest], capture_output=True, text=True)
+
+    first = register("Kept", hashlib.sha256(instructions.read_bytes()).hexdigest())
+    once = instructions.read_bytes()
+    again = register("Renamed", "0" * 64)
+    assert (
+        first.returncode == 0
+        and b"[Kept](briefs/kept.md)" in once
+        and again.returncode == 0
+        and "ALREADY REGISTERED" in again.stdout
+        and instructions.read_bytes() == once
+        and run(root).returncode == 0
+    ), "REPEATED REGISTRATION WAS REFUSED OR REWROTE THE CATALOG: " + first.stderr + again.stderr
 
 
 def _assert_instruction_delivery(root: Path) -> None:
-    instructions = root / "CLAUDE.md"
+    instructions = root / "AGENTS.md"
     entry = root / ".claude/skills/kickoff/SKILL.md"
     for path, ceiling in ((instructions, 20480), (entry, 10240)):
         original = path.read_bytes()
@@ -155,7 +277,7 @@ def _assert_instruction_delivery(root: Path) -> None:
             instructions.write_text(changed)
             result = run(root)
             assert result.returncode == 1
-            assert "instructions\tCLAUDE.md\tzone markers must" in result.stdout
+            assert "instructions\tAGENTS.md\tzone markers must" in result.stdout
             assert diagnostic in result.stdout
         finally:
             instructions.write_text(original_root)
@@ -248,35 +370,55 @@ def _assert_instruction_delivery(root: Path) -> None:
         instructions.unlink()
         result = run(root)
         assert result.returncode == 1
-        assert "instructions\tCLAUDE.md\t" in result.stdout
+        assert "instructions\tAGENTS.md\t" in result.stdout
     finally:
         instructions.write_text(original_root)
     restored = run(root)
     assert restored.returncode == 0, restored.stdout + restored.stderr
 
 
-def _assert_phase_entry_ledgers(root: Path) -> None:
-    index = root / "plan/INDEX.md"
-    original = index.read_bytes()
-    try:
-        for first, second, diagnostic in (
-            ("⬅️", "⏳", None),  # Coherent major work needs no child files.
-            ("🚧", "⏳", None),  # Valid active ledger; selection remains explicit.
-            ("✅", "✅", None),
-            ("⏳", "⏳", "idle incomplete phase table"),
-            ("⬅️", "⬅️", "may carry at most one"),
-            ("🚧 ✅", "⏳", "exactly one status marker"),
-            ("", "⬅️", "exactly one status marker"),
-        ):
-            index.write_text(INDEX.format(first=first, second=second))
-            result = run(root, "--closing-phase", "1")
-            if diagnostic is None:
-                assert result.returncode == 0, result.stdout + result.stderr
-            else:
-                assert result.returncode == 1
-                assert diagnostic in result.stdout
-    finally:
-        index.write_bytes(original)
+def test_structured_phase_order_and_events_are_checked_by_the_catalog(tmp_path: Path) -> None:
+    root = fixture(tmp_path)
+    second = root / "plan/phases/second-work-package.md"
+    original = second.read_bytes()
+    for before, after, diagnostic in (
+        (b"depends_on: []", b"depends_on: [missing-work-package]", "unknown dependency"),
+        (b"order: '2'", b"order: 'bad'", "invalid rational order"),
+    ):
+        assert before in original
+        second.write_bytes(original.replace(before, after))
+        refused = run(root)
+        assert refused.returncode == 1 and diagnostic in refused.stdout, (
+            "PHASE CATALOG ADMITTED " + diagnostic
+        )
+        second.write_bytes(original)
+    assert run(root).returncode == 0
+    event = next((root / "plan/events").glob("*.json"))
+    row = json.loads(event.read_text())
+    fork = {**row, "id": "a" * 32}
+    (event.parent / (fork["id"] + ".json")).write_text(json.dumps(fork))
+    refused = run(root)
+    assert refused.returncode == 1 and "competing phase heads" in refused.stdout, (
+        "PHASE CATALOG ADMITTED EVENT FORK"
+    )
+
+
+def test_a_phase_names_other_phases_by_id_and_a_path_is_refused(tmp_path: Path) -> None:
+    root = fixture(tmp_path)
+    path = root / "plan/phases/second-work-package.md"
+    original = path.read_text()
+    for key in ("depends_on", "informs"):
+        path.write_text(
+            original.replace(key + ": []", key + ": [plan/phases/first-work-package.md]")
+        )
+        refused = run(root)
+        assert (
+            refused.returncode == 1
+            and ("unknown dependency" if key == "depends_on" else "unknown informed phase")
+            in refused.stdout
+        ), "PHASE CATALOG ADMITTED PATH AS " + key
+    path.write_text(original.replace("depends_on: []", "depends_on: [first-work-package]"))
+    assert run(root).returncode == 0
 
 
 def test_missing_internal_inline_and_reference_links_are_reported(
@@ -315,6 +457,38 @@ def test_the_citation_rule_is_directional_not_symmetric(tmp_path: Path) -> None:
     result = run(root)
 
     assert result.returncode == 0, result.stdout + result.stderr
+    # The one operator-directed research-to-runbook handoff is navigation only.
+    write_tracked(root, "policies/multi-operator-migration.md", "# Migration runbook\n")
+    brief = write_tracked(
+        root,
+        "briefs/multi-operator-collaboration.md",
+        "# Research\n[Runbook](../policies/multi-operator-migration.md)\n",
+    )
+    instruction = root / "AGENTS.md"
+    write_tracked(
+        root,
+        "AGENTS.md",
+        instruction.read_text()
+        + "\n[Migration](policies/multi-operator-migration.md)\n"
+        + "[Research](briefs/multi-operator-collaboration.md)\n",
+    )
+    handed_off = run(root)
+    assert handed_off.returncode == 0, "RUNBOOK HANDOFF REFUSED: " + handed_off.stdout
+    brief.write_text("# Research\n[Other](../policies/example.md)\n")
+    wrong_target = run(root)
+    assert wrong_target.returncode == 1 and "citations" in wrong_target.stdout, (
+        "RUNBOOK HANDOFF ALLOWED WRONG TARGET"
+    )
+    brief.write_text("# Research\n[Runbook](../policies/multi-operator-migration.md)\n")
+    write_tracked(
+        root,
+        "briefs/design.md",
+        "# Design\n[Other source](../policies/multi-operator-migration.md)\n",
+    )
+    wrong_source = run(root)
+    assert wrong_source.returncode == 1 and "citations" in wrong_source.stdout, (
+        "RUNBOOK HANDOFF ALLOWED WRONG SOURCE"
+    )
     _assert_briefs_and_policies_may_cite_a_pinned_document(tmp_path / "cite-docs")
     _assert_a_pinned_document_never_links_outside_docs(tmp_path / "docs-outbound")
 
@@ -437,41 +611,121 @@ def _assert_briefs_and_policies_may_cite_a_pinned_document(tmp_path: Path) -> No
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def _assert_child_close_requires_parent_close_or_another_drafted_child(tmp_path: Path) -> None:
-    root = fixture(tmp_path, first="🚧", second="⏳")
-    (root / "plan" / "INDEX.md").write_text(
-        INDEX.format(first="🚧", second="⏳").replace(
-            "| Phase 2 | Second | ⏳ |",
-            "| Phase 1.1 | Child | ✅ |\n| Phase 2 | Second | ⏳ |",
+def test_prospective_child_close_requires_real_parent_disposition(tmp_path: Path) -> None:
+    root = fixture(tmp_path)
+    create_records(
+        root,
+        {
+            "active-parent-package": {"state": "in-progress", "order": "3"},
+            "active-child-package": {
+                "state": "in-progress",
+                "order": "4",
+                "parent": "active-parent-package",
+            },
+        },
+    )
+    proposal = completion(root, "active-child-package")
+    target = root / ".kickoff/transition.json"
+    target.parent.mkdir()
+    target.write_text(json.dumps(proposal))
+    refused = run(root, "--closing-phase", "active-child-package", "--ledger-file", str(target))
+    assert refused.returncode == 1 and "last child requires" in refused.stdout, (
+        "CHILD CLOSE STRANDED ACTIVE PARENT"
+    )
+    proposal["parent_continuation"] = "Parent has separately scoped integration work remaining"
+    target.write_text(json.dumps(proposal))
+    accepted = run(root, "--closing-phase", "active-child-package", "--ledger-file", str(target))
+    assert accepted.returncode == 0, (
+        "CHILD CLOSE LOST EXPLICIT REMAINING WORK: " + accepted.stdout + accepted.stderr
+    )
+    proposal["events"][0]["claim"] = "wrong-claim"
+    target.write_text(json.dumps(proposal))
+    refused = run(root, "--closing-phase", "active-child-package", "--ledger-file", str(target))
+    assert refused.returncode == 1 and "changed owner or claim" in refused.stdout, (
+        "CHILD CLOSE CHANGED OWNER CLAIM"
+    )
+
+
+def test_imported_links_use_exact_git_history_without_legacy_aliases(tmp_path: Path) -> None:
+    import hashlib
+
+    root = fixture(tmp_path)
+    old_log = b"# Imported history\n\n[Original constitution](CLAUDE.md#hard-rules)\n"
+    (root / "CLAUDE.md").write_text("# Instructions\n\n## Hard rules\nPreserve history.\n")
+    (root / "LOG.md").write_bytes(old_log)
+    archive = root / "lessons-archived/retained-observation.md"
+    archive.parent.mkdir()
+    archive.write_text("# Historical observation\n\n[Original](../CLAUDE.md#hard-rules)\n")
+    subprocess.run(["git", "config", "user.name", "Fixture"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "add", "--", "CLAUDE.md", "LOG.md", "lessons-archived"], cwd=root, check=True
+    )
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "Retained historical fixture"], cwd=root, check=True
+    )
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root).decode().strip()
+    (root / "CLAUDE.md").unlink()
+    (root / "LOG.md").unlink()
+    manifest_path = root / "collaboration/manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest.update(
+        source_commit=commit,
+        original_log_bytes=len(old_log),
+        original_log_sha256=hashlib.sha256(old_log).hexdigest(),
+    )
+    manifest_path.write_text(json.dumps(manifest))
+    entry = root / "log/entries" / ("1" * 32 + ".md")
+    metadata = {
+        "id": "1" * 32,
+        "writer": "unattributed-import",
+        "sequence": 1,
+        "previous": None,
+        "at": "import",
+        "source_offset": 0,
+        "body_sha256": hashlib.sha256(old_log).hexdigest(),
+    }
+
+    def publish(body: bytes) -> None:
+        metadata["body_sha256"] = hashlib.sha256(body).hexdigest()
+        entry.write_bytes(b"---\n" + json.dumps(metadata).encode() + b"\n---\n" + body)
+
+    publish(old_log)
+    subprocess.run(["git", "add", "--", "log", "collaboration"], cwd=root, check=True)
+    positive = run(root)
+    assert positive.returncode == 0, (
+        "HISTORY LOST GIT LINK RESOLUTION: " + positive.stdout + positive.stderr
+    )
+    assert not (root / "CLAUDE.md").exists(), "HISTORY CREATED A LIVE LEGACY ALIAS"
+    for bad, diagnostic in (
+        ("0" * 40, "verified repository ancestor"),
+        ("not-a-commit", "invalid historical source"),
+    ):
+        manifest_path.write_text(json.dumps({**manifest, "source_commit": bad}))
+        refused = run(root)
+        assert refused.returncode == 1 and diagnostic in refused.stdout, (
+            "HISTORY UNVERIFIED SOURCE ADMITTED"
+        )
+    manifest_path.write_text(json.dumps(manifest))
+    changed = old_log.replace(b"Original constitution", b"Altered historical assertion")
+    publish(changed)
+    manifest_path.write_text(
+        json.dumps(
+            {
+                **manifest,
+                "original_log_bytes": len(changed),
+                "original_log_sha256": hashlib.sha256(changed).hexdigest(),
+            }
         )
     )
-    result = run(root, "--closing-phase", "1.1")
-    assert result.returncode == 1
-    assert "must close parent Phase 1 or leave it 🚧" in result.stdout
-
-
-def _assert_child_close_accepts_parent_close(tmp_path: Path) -> None:
-    root = fixture(tmp_path, first="✅", second="⬅️")
-    (root / "plan" / "INDEX.md").write_text(
-        INDEX.format(first="✅", second="⬅️").replace(
-            "| Phase 2 | Second | ⬅️ |",
-            "| Phase 1.1 | Child | ✅ |\n| Phase 2 | Second | ⬅️ |",
-        )
+    refused = run(root)
+    assert refused.returncode == 1 and "differs from the declared Git source" in refused.stdout, (
+        "HISTORY MUTATED IMPORT ADMITTED"
     )
-    result = run(root, "--closing-phase", "1.1")
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-def _assert_child_close_accepts_drafted_incomplete_sibling(tmp_path: Path) -> None:
-    root = fixture(tmp_path, first="🚧", second="⏳")
-    (root / "plan" / "phase-1.2.md").write_text("# Phase 1.2\n")
-    (root / "plan" / "INDEX.md").write_text(
-        INDEX.format(first="🚧", second="⏳").replace(
-            "| Phase 2 | Second | ⏳ |",
-            "| Phase 1.1 | Child one | ✅ |\n"
-            "| Phase 1.2 | Child two | ⬅️ |\n"
-            "| Phase 2 | Second | ⏳ |",
-        )
+    publish(old_log)
+    manifest_path.write_text(json.dumps(manifest))
+    archive.write_text(archive.read_text() + "\nNew post-import prose.\n")
+    refused = run(root)
+    assert refused.returncode == 1 and "missing target CLAUDE.md" in refused.stdout, (
+        "HISTORY EDIT RETAINED IMPORT EXEMPTION"
     )
-    result = run(root, "--closing-phase", "1.1")
-    assert result.returncode == 0, result.stdout + result.stderr

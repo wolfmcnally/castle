@@ -39,7 +39,7 @@ Briefs and policies routinely rest on external authority — a wire format, a CL
 
 ## The catalog: `docs/README.md`
 
-`docs/README.md` is the index of everything under `docs/`. It is required whenever the directory holds anything beyond the README itself, and it is the *only* catalog of pinned documents — `CLAUDE.md` does not list them, because a pinned document is consulted through the brief or policy that cites it, and `CLAUDE.md` is read every turn.
+`docs/README.md` is the index of everything under `docs/`. It is required whenever the directory holds anything beyond the README itself, and it is the *only* catalog of pinned documents — `AGENTS.md` does not list them, because a pinned document is consulted through the brief or policy that cites it, and `AGENTS.md` is read every turn.
 
 One table row per top-level entry (a file, or a directory holding a multi-file document), carrying:
 
@@ -60,7 +60,7 @@ One table row per top-level entry (a file, or a directory holding a multi-file d
 
 `docs/` sits beneath every other documentation directory:
 
-- `briefs/`, `policies/`, `plan/`, `CLAUDE.md`, skills, and agent definitions may cite a file under `docs/`.
+- `briefs/`, `policies/`, `plan/`, `AGENTS.md`, skills, and agent definitions may cite a file under `docs/`.
 - A file under `docs/` cites nothing in the repository.
 
 This extends the one-way rule in [`briefs-and-policies.md`](briefs-and-policies.md): docs ← briefs ← policies / plan. When a brief's or policy's claim rests on external text, it cites the local pin — `docs/<file>` with a section — rather than the URL alone, so a reader can verify the claim against the exact text and so a later re-pin surfaces every claim that needs re-reading.
@@ -75,7 +75,7 @@ Every catalog row dates its pin. A pin is never silently refreshed: re-pinning i
 
 ## Portability
 
-`docs/README.md` — the catalog shape and its header — is part of the methodology contract and ships with `stamp` and `teach`. Pinned *content* is project state: the template's own pins are never copied into a derived project, and a `learn` pass never absorbs a donor's pins.
+`docs/README.md` — the catalog shape and its header — is part of the methodology contract and ships with `stamp` and `teach`. Project-specific pinned content is project state and is never copied into a derived project; a `learn` pass never absorbs a donor's project pins. The shared software-documentation baseline is a toolchain exception: the mdBook/admonish versioned reference directories and the three minimal reader-needs/docs-as-code/accessibility excerpts travel with their policy, source attribution/license and exact tool pins. Retain only those catalog rows when stamping; a changed recipient toolchain deliberately re-pins its authority.
 
 ## Enforcement
 

@@ -107,7 +107,11 @@ def check_commands(plan: Plan, tree: Tree, errors: list[tuple[str, int, str]]) -
             continue
         for token in PLACEHOLDER_TOKEN_PATTERN.findall(stripped):
             errors.append(
-                ("command-placeholder", number, f"placeholder token {token} in a command")
+                (
+                    "command-placeholder",
+                    number,
+                    f"placeholder token {token} in a command",
+                )
             )
         if CANDIDATE_ID_PATTERN.search(stripped):
             errors.append(
@@ -204,7 +208,11 @@ def check_definitions(plan: Plan, tree: Tree, errors: list[tuple[str, int, str]]
                 )
         elif not needle_pattern.search(text):
             errors.append(
-                ("definition-not-in-file", number, f"`{identifier}` does not occur in {target}")
+                (
+                    "definition-not-in-file",
+                    number,
+                    f"`{identifier}` does not occur in {target}",
+                )
             )
     return declared
 

@@ -27,32 +27,32 @@ Don't add a policy for:
 - Research, surveys, or methodology investigations. Those are briefs — a brief *informs* a policy; the policy is the rule extracted from it.
 - Logs of what happened. Those are commits and `LOG.md`.
 - Active execution queues. Live queues are directories at the repo root (`user-actions/`, `lessons/`), not policy bodies. A policy may *govern* a queue's format and lifecycle; the queue itself does not live under `policies/`.
-- Identity / framing material that every agent needs every turn. That stays in `CLAUDE.md`.
+- Identity / framing material that every agent needs every turn. That stays in `AGENTS.md`.
 
 ## How a policy evolves
 
 - **Add** a policy when a rule starts being cited or implicitly assumed in more than one place. Don't pre-write speculative policies.
-- **Revise** in place when the rule changes; bump no version metadata, just edit. Git is the audit trail.
+- **Revise** in place when the rule changes; keep no per-policy version counter. Git is the audit trail; Starter-wide release batches follow the Starter-only release policy.
 - **Supersede** by replacing the file's contents and noting the prior shape inline if the prior shape will be referenced. Don't keep dead policies around just for history.
 - **Cite the brief** that motivated the policy when the brief's argument is the load-bearing justification. The policy is the rule; the brief is why.
 
 ## How agents use this directory
 
 - The planner reads the policies that touch the phase's surfaces before drafting a plan.
-- The plan reviewer treats every policy as a blocking criterion: any plan that violates a policy is `REVISE`.
+- The plan reviewer treats every policy as a review criterion. In delegated mode any plan that violates a policy is `REVISE`; in primary mode a violation is an advisory finding the primary must dispose of ([`four-canonical-agents.md`](four-canonical-agents.md)).
 - The coder honors every policy while writing code.
-- The code critic treats every policy as a blocking criterion: any code that violates a policy is `REVISE`.
+- The code critic treats every policy as a review criterion. In delegated mode any code that violates a policy is `REVISE`; in primary mode a violation is an advisory finding the primary must dispose of.
 
 ## Catalog
 
-The catalog of policies in this repo is in [`../CLAUDE.md`](../CLAUDE.md) under "Policies catalog." Keep that catalog and the files in this directory in sync — no orphans either way.
+The catalog of policies in this repo is in [`../CLAUDE.md`](../AGENTS.md) under "Policies catalog." Keep that catalog and the files in this directory in sync — no orphans either way.
 
 ## Authority and precedence
 
 When two rules conflict:
 
 1. The human's global instructions override everything in this repo.
-2. The repo's `CLAUDE.md` (Hard rules and architectural invariants) overrides individual policy files.
+2. The repo's `AGENTS.md` (Hard rules and architectural invariants) overrides individual policy files.
 3. Policy files override briefs (briefs inform, policies bind) and plan files (a plan that proposes work violating a policy must change — the plan, not the policy).
 4. `plan/` files override briefs (the plan is the refinement — it knows what the brief did not; update the brief to record the refinement).
 5. A more-specific policy overrides a more-general one.
@@ -61,5 +61,4 @@ If an apparent conflict can't be resolved by precedence, surface it. Don't paper
 
 Policies are themselves subordinate to:
 
-- The methodology in [`../briefs/methodology.md`](../briefs/methodology.md), which is foundational.
 - A direct instruction from the human, given in the current session, that explicitly overrides the policy for a clearly-scoped reason. (The human owns the repo; the agents serve the human's intent. But the override is one-shot — the policy survives unless the human asks for it to be amended.)

@@ -10,7 +10,7 @@ Review code produced for a phase. Verify that it is correct, idiomatic, faithful
 
 ## Select the review contract
 
-Read the dispatch's frozen authority mode before reviewing. In `primary` mode this is advisory only: report a summary and findings with id, severity (critical/high/medium/low/informational), affected_paths, evidence, consequence and suggestion. Do not emit APPROVED/REVISE, blocking severity, required changes, or instructions to repeat review. The primary decides dispositions and whether a second pass has recorded cause; two passes is the maximum. Return the generated advisory JSON schema. Independently inspect the artifact and its authorities, without adopting the primary's self-assessment.
+Read the dispatch's frozen authority mode before reviewing. In `primary` mode this is advisory only: report a summary and findings with id, severity (critical/high/medium/low/informational), affected_paths, evidence, consequence and suggestion. Do not emit APPROVED/REVISE, blocking severity, required changes, or instructions to repeat review. The primary decides dispositions and whether a second pass has recorded cause; two passes is the default maximum, and only the operator's single-use exception admits a third code review. Return the generated advisory JSON schema. Independently inspect the artifact and its authorities, without adopting the primary's self-assessment.
 
 The evidence and domain-reading guidance below remains useful, but its approval verdicts, required-change language, finding-state transitions and convergence procedure apply only in `delegated` mode. An advisory finding cannot park the run or bind the primary. Route genuine questions as observations for the primary to assess; only the primary handles operator decisions. Methodology work, including teach/learn, never invokes this role.
 
@@ -32,11 +32,11 @@ Candidate ids supplied by the orchestrator bind the product identity under `cand
 ### 1. Read the authorities
 
 1. **`plan/INDEX.md`** for cross-cutting concerns.
-2. **`plan/phase-<id>.md`** for acceptance criteria. (For sub-phases, also the parent `plan/phase-<N>.md`.)
+2. **`plan/phases/<id>.md`** for acceptance criteria. (For sub-phases, also the parent `plan/phases/<parent-id>.md`.)
 3. **Every brief listed under "Brief refs"** in the phase file — these are the contracts the code must realize. Check the cited section ids match the code's behavior. Verify against the pinned document under `docs/` whenever a brief, policy, or the plan cites one — the pin is the authority, not the live URL — and treat an un-cataloged pin, a pin with no recorded basis, or project-authored prose inside a pin as `REVISE` (`policies/docs.md`).
-4. Every file listed in the phase frontmatter `depends_on`.
+4. The phase file of every phase id in the phase frontmatter `depends_on` (`plan/phases/<id>.md`).
 5. The immediately preceding completed phase in `plan/INDEX.md`.
-6. **`CLAUDE.md`** for invariants.
+6. **`AGENTS.md`** for invariants.
 7. **Every policy** the plan's "Policy Constraints" section names, plus any policy whose subject the code touches.
 
 Do **not** read every phase file.
@@ -94,7 +94,7 @@ Evaluate in priority order:
 - Nothing significant was added outside the plan. Drift to defend: new dependencies not in the plan, new modules not in the plan, new schema fields not in the plan.
 
 **Language fluency**
-- The code follows the language's idiomatic patterns and the project's conventions (from `CLAUDE.md`).
+- The code follows the language's idiomatic patterns and the project's conventions (from `AGENTS.md`).
 - Type hints / signatures on new public APIs when the language supports them.
 - Explicit error types over generic ones.
 - Context managers / RAII / `defer` for resource handling.
@@ -107,8 +107,9 @@ Evaluate in priority order:
 - Tests assert against the brief's contract, not just "the function returns a value."
 - **Falsifiers.** The coder's Change Evidence names, for each new or changed test, the mutation that reds it. Judge each row: would that mutation really fail that test, and is it a mutation of the property rather than of a string the test happens to read? A test with no row, or with a falsifier that would not red it, is the finding, at `high` — this is the largest category of code findings and the first thing to read.
 - **No mirror tests.** The coder wrote the implementation and its tests from one understanding, so any blind spot in the first is reproduced in the second and the suite still passes. For each new test ask: would this still pass if the implementation were subtly wrong in a way consistent with itself? A test that re-executes the implementation's own logic, or asserts a constant lifted from the code rather than derived from the requirement, verifies only that the code does what the code does. Anchor it to the phase's Acceptance criterion or the cited brief instead. This is your check specifically — you are the first reader who did not write both artifacts.
+- **Junk patterns and seams.** Check each new or changed test against the junk patterns in `policies/test-suite-governance.md` § Judging a proof, and name the pattern in the finding. A production export, flag, parameter, or hook whose only caller is a test is a finding against the code, not only the test. Apply the same section's retention bar before calling an existing test redundant. A created or modified test assertion without its own relevant observed-red evidence is a finding; an untouched test does not require a new witness. When the approved plan specifically named a mutation survey, an undispositioned survivor in that requested scope is also a finding. The absence of a survey the plan did not name is not a finding.
 - The Build Gate Sequence's `./bin/test` selection would actually exercise the new code.
-- When the repo owns the toolchain contract, focused tests use `bin/test`, the coder's evidence covers the iteration/revision-close sequence, the planned implementation-candidate sequence ends with `./bin/check all`, the close protocol adds a bare post-bookkeeping handoff gate using `./bin/check all`, and the wrappers agree with the runtime pin, committed metadata, and lockfile while preserving child statuses.
+- When the repo owns the toolchain contract, focused tests use `bin/test`, the coder's evidence covers the iteration/revision-close sequence, the planned implementation-candidate sequence ends with the changed-path selection `./bin/test --changed-from '@{upstream}'`, the close protocol adds the one bare post-bookkeeping handoff gate using `./bin/check all`, and the wrappers agree with the runtime pin, committed metadata, and lockfile while preserving child statuses.
 
 **Simplicity and consolidation** (per `policies/simplicity-and-consolidation.md`)
 - No abstraction, generic, base class, helper, interface, parameter, hook, or mode flag whose **second concrete present-tense use** the code or plan cannot name. A one-implementation interface, a parameter every caller passes identically, and a flag with one reachable value are all blocking; so are tests that exist only to exercise machinery production code never calls. Name the concrete cost in the finding — what a future reader must model that cannot happen.

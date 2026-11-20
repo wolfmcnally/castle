@@ -1,0 +1,11 @@
+{
+  "from": null,
+  "id": "d74ea6de769852f1a484b28f6a58d4c9",
+  "owner": null,
+  "phase": "transactional-namespace-crud",
+  "previous": null,
+  "reason": "Imported source state, not a new acceptance or lease",
+  "source_phase": "4",
+  "state": "completed",
+  "writer": "castle-operator"
+}

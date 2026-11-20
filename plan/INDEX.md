@@ -1,23 +1,6 @@
 # Public Castle plan
 
-## Phase table
-
-| Phase | Title | Status |
-|---|---|---|
-| [Release](phase-release.md) | Public 0.1.0 preparation | ⬅️ |
-| [Phase 1](phase-1.md) | Namespace and recovery contract refinement | ✅ |
-| [Phase 2](phase-2.md) | Reliable existing-content namespace operations | ✅ |
-| [Phase 3](phase-3.md) | Bounded CAS interruption recovery | ✅ |
-| [Phase 4](phase-4.md) | Coordinated transactional namespace CRUD | ✅ |
-| [Phase 5](phase-5.md) | Folder admission, snapshots, and optional onboarding | ✅ |
-| [Phase 6](phase-6.md) | Namespace excision coordination and epoch fencing | ✅ |
-| [Phase 7](phase-7.md) | Consumer surface and namespace qualification | ✅ |
-| [Phase 8](phase-8.md) | Version 0.2.0 release preparation | ✅ |
-| [Phase 9](phase-9.md) | Delete and Excise correction and tagged release | ✅ |
-| [Phase 10](phase-10.md) | Read-only namespace access | ✅ |
-| [Phase 11](phase-11.md) | Incremental admission design review | 🚧 |
-| [Phase 12](phase-12.md) | Touched-record namespace admission | ✅ |
-| [Phase 13](phase-13.md) | Incremental namespace content publication | ✅ |
+State lives in `plan/phases/` and `plan/events/`; `./bin/multioperator render` produces disposable local views. The context below is Castle's preserved discovery text; dated history keeps its original phase numbers (the numeric-to-permanent id map is in `collaboration/manifest.json`).
 
 Private execution history is excluded. The public package contracts and methodology policies govern future work.
 

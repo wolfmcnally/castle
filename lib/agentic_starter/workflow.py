@@ -16,20 +16,20 @@ from typing import Any
 ROLES = ("planner", "reviewer", "coder", "critic")
 BUILTIN_TARGETS = {
     "astra": ("codex", "gpt-6-astra"),
-    "sol": ("codex", "gpt-5.6-sol"),
+    "sol": ("codex", "gpt-6.1-sol"),
     "terra": ("codex", "gpt-5.6-terra"),
-    "luna": ("codex", "gpt-5.6-luna"),
+    "luna": ("codex", "gpt-6-luna"),
     "fable": ("claude", "fable"),
     "opus": ("claude", "opus"),
 }
 
 DEFAULT_WORKFLOW = {
     "mode": "auto",
-    "primary_models": {"claude": "opus", "codex": "astra"},
-    "eligible_primary_models": ["astra", "opus"],
+    "primary_models": {"claude": "opus", "codex": "sol"},
+    "eligible_primary_models": ["opus", "sol", "fable", "astra"],
     "review_preference": "cross-vendor",
     "adviser_models": {
-        "claude": {"reviewer": ["astra"], "critic": ["astra"]},
+        "claude": {"reviewer": ["sol"], "critic": ["sol"]},
         "codex": {"reviewer": ["opus"], "critic": ["opus"]},
     },
     "allowed_harnesses": ["claude", "codex"],
@@ -284,11 +284,15 @@ def usage_windows(
     block = snapshot.get(deployment["provider"])
     if not isinstance(block, dict) or block.get("ok") is not True:
         raise WorkflowError(f"llm-usage failed for {deployment['provider']}")
+    # usage_snapshot already refreshed a too-old reading once. A reading still
+    # older than this consumer accepts, or an age that is not a real,
+    # non-negative number, refuses.
     age = block.get("cache_age_seconds")
     if age is not None and (
         not isinstance(age, (int, float))
         or isinstance(age, bool)
         or not math.isfinite(age)
+        or age < 0
         or age > USAGE_MAX_AGE_SECONDS
     ):
         raise WorkflowError("llm-usage snapshot is stale or has invalid cache age")
@@ -338,7 +342,9 @@ def usage_windows(
         active = window.get("is_active")
         if active is not None and not isinstance(active, bool):
             raise WorkflowError("invalid usage window activity")
-        if active is False:
+        # A provider's activity flag never removes a shared account limit: it can
+        # mark the general windows inactive while a model-scoped one is active.
+        if active is False and not shared:
             continue
         percent, duration = window.get("utilization"), window.get("window_seconds")
         if (
@@ -360,9 +366,8 @@ def usage_windows(
                 "reset": window.get("resets_at", window.get("reset_at")),
             }
         )
-    # A limit that applies but is not active binds nothing: a model with no scoped limit of its
-    # own, whose shared limits are all inactive, proceeds. Only a model no reported limit applies
-    # to at all refuses.
+    # A shared account limit always binds, even when flagged inactive; an inactive scoped limit
+    # binds nothing. Only a model no reported limit applies to at all refuses.
     if not applicable or (selectors and set(selectors) - set(windows)):
         raise WorkflowError("usage window mapping is missing or ambiguous")
     return selected

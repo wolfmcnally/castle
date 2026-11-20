@@ -10,13 +10,13 @@ The [coordinated namespace brief](../briefs/coordinated-namespace-crud.md) defin
 
 | Phase | Outcome | Why this is a separate boundary |
 |---|---|---|
-| [1](phase-1.md) | Namespace, recovery, replacement, and protected-I/O contracts | Consequential persisted/public/security contracts must be settled before code. |
-| [2](phase-2.md) | Reliable existing-content namespace operations | Durable namespace authority and usable operations form the first independently accepted slice; no new CAS effects occur. |
-| [3](phase-3.md) | Bounded CAS interruption recovery | Required before new-content publication, not before metadata operations on verified durable content. |
-| [4](phase-4.md) | Coordinated transactional CRUD | One ordered authority, validated trees, durable intents, and safe retries form one coherent capability. |
-| [5](phase-5.md) | Frozen folder admission, snapshots, and optional onboarding | Explicit historic views and uncertainty-preserving reconstruction precede purge dependencies. |
-| [6](phase-6.md) | Namespace-aware excision, database replacement and epoch fencing | Irreversible cutover has a distinct quiescence, cleanup, and custody acceptance seam. |
-| [7](phase-7.md) | Consumer API/CLI, package, and platform qualification | Consumer usability and platform/artifact claims require their own end-to-end evidence. |
+| [1](phases/namespace-contract-refinement.md) | Namespace, recovery, replacement, and protected-I/O contracts | Consequential persisted/public/security contracts must be settled before code. |
+| [2](phases/existing-content-operations.md) | Reliable existing-content namespace operations | Durable namespace authority and usable operations form the first independently accepted slice; no new CAS effects occur. |
+| [3](phases/bounded-interruption-recovery.md) | Bounded CAS interruption recovery | Required before new-content publication, not before metadata operations on verified durable content. |
+| [4](phases/transactional-namespace-crud.md) | Coordinated transactional CRUD | One ordered authority, validated trees, durable intents, and safe retries form one coherent capability. |
+| [5](phases/folder-admission-snapshots.md) | Frozen folder admission, snapshots, and optional onboarding | Explicit historic views and uncertainty-preserving reconstruction precede purge dependencies. |
+| [6](phases/excision-epoch-fencing.md) | Namespace-aware excision, database replacement and epoch fencing | Irreversible cutover has a distinct quiescence, cleanup, and custody acceptance seam. |
+| [7](phases/consumer-surface-qualification.md) | Consumer API/CLI, package, and platform qualification | Consumer usability and platform/artifact claims require their own end-to-end evidence. |
 
 Each phase depends on its predecessor as recorded in frontmatter. These are major outcomes, not pre-drafted child phases. Contract changes ripple only into pending phases under [phase-ripple.md](../policies/phase-ripple.md). A newly discovered consequential decision is surfaced at its owning contract; ordinary helper choices stay with phase-entry implementation planning.
 

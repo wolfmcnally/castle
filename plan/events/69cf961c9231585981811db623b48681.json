@@ -1,0 +1,11 @@
+{
+  "from": null,
+  "id": "69cf961c9231585981811db623b48681",
+  "owner": null,
+  "phase": "touched-record-admission",
+  "previous": null,
+  "reason": "Imported source state, not a new acceptance or lease",
+  "source_phase": "12",
+  "state": "completed",
+  "writer": "castle-operator"
+}

@@ -1,6 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
+# dependencies = ["PyYAML==6.0.3"]
 # ///
 """Fail closed when durable-document catalogs, links, or citations drift.
 
@@ -14,13 +15,20 @@ file under `docs/` links outside `docs/`.
 from __future__ import annotations
 
 import argparse
+import json
+import posixpath
 import re
 import subprocess
+import sys
 from collections.abc import Iterable
+from datetime import date
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "lib"))
+from agentic_starter import multioperator  # noqa: E402
+
 DRIFT: list[str] = []
 ANCHOR_CACHE: dict[Path, frozenset[str] | None] = {}
 
@@ -30,15 +38,15 @@ CATALOGED_DIRECTORIES = ("policies", "briefs")
 # predates the rule derived from it, so the citation runs one way only.
 CITATION_SOURCE_DIRECTORY = "briefs"
 CITATION_FORBIDDEN_DIRECTORIES = ("policies", "plan")
+# Operator-directed research-to-runbook navigation; no general evidence inversion.
+PROCEDURE_HANDOFFS = {
+    ("briefs/multi-operator-collaboration.md", "policies/multi-operator-migration.md"),
+}
 # policies/docs.md: pinned third-party material never references the project.
 # Every top-level entry under docs/ is linked from docs/README.md, and no file
 # under docs/ (other than that project-owned catalog) links outside docs/.
 DOCS_DIRECTORY = "docs"
 DOCS_CATALOG = "README.md"
-PHASE_STATUSES = ("⏳", "⬅️", "🚧", "✅")
-NEXT_MARKER = "⬅️"
-IN_PROGRESS_MARKER = "🚧"
-NOT_STARTED_MARKER = "⏳"
 FENCE_PATTERN = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 # An inline code span is quotation, not prose: a link inside backticks is a
 # quoted edit target, not a live link, so it is exempt the same way fenced
@@ -55,7 +63,6 @@ HEADING_LINK_PATTERN = re.compile(r"!?\[(?P<label>[^\]\n]*)\]\([^)\n]*\)")
 HEADING_MARKUP_PATTERN = re.compile(r"[`*]")
 ANCHOR_DISALLOWED_PATTERN = re.compile(r"[^\w\- ]")
 PLACEHOLDER_PATTERN = re.compile(r"<[^>]+>|\{[^}]+\}")
-FRONTMATTER_STATUS_PATTERN = re.compile(r"^status\s*:", re.IGNORECASE)
 STATUS_DECLARATION_PATTERN = re.compile(
     r"^ {0,3}\*{0,2}status\*{0,2}\s*:\s*(⏳|⬅️|🚧|✅|not started|next|in progress|completed)",
     re.IGNORECASE,
@@ -71,9 +78,9 @@ def check_catalog(directory: str, instructions: str) -> None:
     on_disk = {item.name for item in base.glob("*.md")}
     referenced = set(re.findall(rf"{directory}/([A-Za-z0-9._-]+\.md)", instructions))
     for name in sorted(on_disk - referenced):
-        report(directory, f"{directory}/{name}", "file is not indexed in CLAUDE.md")
+        report(directory, f"{directory}/{name}", "file is not indexed in AGENTS.md")
     for name in sorted(referenced - on_disk):
-        report(directory, f"{directory}/{name}", "CLAUDE.md references a missing file")
+        report(directory, f"{directory}/{name}", "AGENTS.md references a missing file")
 
 
 def check_instruction_delivery(instructions: str) -> None:
@@ -86,7 +93,7 @@ def check_instruction_delivery(instructions: str) -> None:
         report("instructions", entry_relative, f"required entry is unreadable: {exc}")
         entry_text = ""
     for relative, text, ceiling in (
-        ("CLAUDE.md", instructions, 20480),
+        ("AGENTS.md", instructions, 20480),
         (entry_relative, entry_text, 10240),
     ):
         size = len(text.encode("utf-8"))
@@ -103,11 +110,11 @@ def check_instruction_delivery(instructions: str) -> None:
         )
     ]
     if any(instructions.count(marker) != 1 for marker in markers):
-        report("instructions", "CLAUDE.md", "zone markers must each occur exactly once")
+        report("instructions", "AGENTS.md", "zone markers must each occur exactly once")
     elif [instructions.index(marker) for marker in markers] != sorted(
         instructions.index(marker) for marker in markers
     ):
-        report("instructions", "CLAUDE.md", "zone markers must occur in declared order")
+        report("instructions", "AGENTS.md", "zone markers must occur in declared order")
 
     # Only rows of the declared table can discharge a resource's loading duty.
     # A navigation link, quoted example, or instruction elsewhere cannot do so.
@@ -172,126 +179,6 @@ def check_instruction_delivery(instructions: str) -> None:
             )
 
 
-def phase_rows(lines: list[str]) -> list[str]:
-    in_phase_table = False
-    table_started = False
-    raw_rows: list[str] = []
-    for line in lines:
-        if line.strip().casefold() == "## phase table":
-            in_phase_table = True
-            continue
-        if in_phase_table and line.startswith("## "):
-            break
-        if not in_phase_table:
-            continue
-        if line.lstrip().startswith("|"):
-            table_started = True
-            raw_rows.append(line)
-        elif table_started and line.strip():
-            break
-
-    rows: list[str] = []
-    for row in raw_rows:
-        cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
-        if not cells or cells[0].casefold() == "phase":
-            continue
-        if all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
-            continue
-        rows.append(row)
-    return rows
-
-
-def check_phase_ledger(ledger: Path | None = None) -> None:
-    index = ledger or ROOT / "plan" / "INDEX.md"
-    try:
-        lines = index.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
-        report("plan", "plan/INDEX.md", str(exc))
-        return
-
-    rows = phase_rows(lines)
-    if not rows:
-        report("plan", "plan/INDEX.md", "phase table has no data rows")
-        return
-
-    row_markers: list[str | None] = []
-    for position, row in enumerate(rows, start=1):
-        markers = [marker for marker in PHASE_STATUSES if marker in row]
-        if len(markers) != 1:
-            report(
-                "plan",
-                "plan/INDEX.md",
-                f"phase row {position} must carry exactly one status marker; found {len(markers)}",
-            )
-            row_markers.append(None)
-        else:
-            row_markers.append(markers[0])
-
-    next_count = row_markers.count(NEXT_MARKER)
-    in_progress_count = row_markers.count(IN_PROGRESS_MARKER)
-    not_started_count = row_markers.count(NOT_STARTED_MARKER)
-    if next_count > 1:
-        report(
-            "plan",
-            "plan/INDEX.md",
-            f"phase table may carry at most one {NEXT_MARKER} marker; found {next_count}",
-        )
-    elif next_count == 0 and in_progress_count == 0 and not_started_count > 0:
-        report(
-            "plan",
-            "plan/INDEX.md",
-            f"idle incomplete phase table must carry exactly one {NEXT_MARKER} marker; found 0",
-        )
-
-
-def check_closing_phase(phase: str, ledger: Path | None = None) -> None:
-    """A completed child cannot leave its parent with no truthful continuation."""
-    if "." not in phase:
-        return
-    index = ledger or ROOT / "plan" / "INDEX.md"
-    try:
-        rows = phase_rows(index.read_text(encoding="utf-8").splitlines())
-    except OSError as exc:
-        report("plan-close", "plan/INDEX.md", str(exc))
-        return
-    entries: dict[str, tuple[str | None, str]] = {}
-    for row in rows:
-        match = re.search(r"\bPhase\s+([0-9]+(?:\.[0-9]+)*)\b", row)
-        if match:
-            markers = [marker for marker in PHASE_STATUSES if marker in row]
-            entries[match.group(1)] = (markers[0] if len(markers) == 1 else None, row)
-    current = entries.get(phase)
-    if current is None or current[0] != "✅":
-        report(
-            "plan-close",
-            "plan/INDEX.md",
-            f"closing child Phase {phase} must exist and be marked ✅",
-        )
-        return
-    parent = phase.rsplit(".", 1)[0]
-    parent_entry = entries.get(parent)
-    if parent_entry is None:
-        report("plan-close", "plan/INDEX.md", f"Phase {phase} has no parent Phase {parent}")
-        return
-    if parent_entry[0] == "✅":
-        return
-    siblings = [
-        child
-        for child, (marker, _) in entries.items()
-        if child != phase
-        and child.rsplit(".", 1)[0] == parent
-        and marker in {"⏳", "⬅️", "🚧"}
-        and (ROOT / "plan" / f"phase-{child}.md").is_file()
-    ]
-    if parent_entry[0] != "🚧" or not siblings:
-        report(
-            "plan-close",
-            "plan/INDEX.md",
-            f"closing child Phase {phase} must close parent Phase {parent} or leave it 🚧 "
-            "with another drafted incomplete direct child",
-        )
-
-
 def frontmatter_lines(text: str) -> list[tuple[int, str]]:
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
@@ -304,38 +191,40 @@ def frontmatter_lines(text: str) -> list[tuple[int, str]]:
     return []
 
 
-def check_phase_files() -> None:
-    """Status lives only in plan/INDEX.md's phase table (policies/phase-status.md).
+def check_phase_ledger(ledger: Path | None = None) -> None:
+    try:
+        multioperator.validate(ROOT)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        report("plan", "plan/events", str(exc))
 
-    Narrative mentions of the status emojis in prose are fine; the failure mode
-    is a *declaration* — a frontmatter `status:` key or a `Status: ✅`-shaped
-    line — which creates a second source of truth.
-    """
-    for phase_file in sorted((ROOT / "plan").glob("phase-*.md")):
-        relative = phase_file.relative_to(ROOT).as_posix()
-        try:
-            text = phase_file.read_text(encoding="utf-8")
-        except OSError as exc:
-            report("plan", relative, str(exc))
-            continue
-        frontmatter = frontmatter_lines(text)
-        for line_number, line in frontmatter:
-            if FRONTMATTER_STATUS_PATTERN.match(line):
+
+def check_phase_files() -> None:
+    for path in sorted((ROOT / "plan/phases").glob("*.md")):
+        text = path.read_text()
+        metadata_lines = {number for number, _ in frontmatter_lines(text)}
+        for number, line in markdown_prose_lines(text):
+            if number not in metadata_lines and STATUS_DECLARATION_PATTERN.match(
+                CODE_SPAN_PATTERN.sub("", line)
+            ):
                 report(
                     "plan",
-                    relative,
-                    f"line {line_number}: frontmatter must not carry a status field",
+                    path.relative_to(ROOT).as_posix(),
+                    f"line {number}: phase state belongs only in predecessor-bound events",
                 )
-        frontmatter_numbers = {line_number for line_number, _ in frontmatter}
-        for line_number, line in markdown_prose_lines(text):
-            if line_number in frontmatter_numbers:
-                continue
-            if STATUS_DECLARATION_PATTERN.match(CODE_SPAN_PATTERN.sub("", line)):
-                report(
-                    "plan",
-                    relative,
-                    f"line {line_number}: status declaration outside plan/INDEX.md's phase table",
-                )
+
+
+def check_closing_phase(
+    phase: str, ledger: Path | None = None, next_marker_reason: str | None = None
+) -> None:
+    try:
+        if ledger is None:
+            state = multioperator.validate(ROOT)
+            if state["heads"][phase]["state"] != "completed":
+                raise ValueError("closing phase has no accepted completion event")
+        else:
+            multioperator.completion_plan(ROOT, phase, json.loads(ledger.read_text()))
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        report("plan-close", "plan/events", str(exc))
 
 
 def candidate_markdown_files() -> list[Path]:
@@ -405,6 +294,26 @@ def heading_slug(text: str) -> str:
     return ANCHOR_DISALLOWED_PATTERN.sub("", rendered.strip().lower()).replace(" ", "-")
 
 
+def anchors_from_text(text: str) -> frozenset[str]:
+    frontmatter_numbers = {line_number for line_number, _ in frontmatter_lines(text)}
+    seen: dict[str, int] = {}
+    collected: set[str] = set()
+    for line_number, line in markdown_prose_lines(text):
+        if line_number in frontmatter_numbers:
+            continue
+        match = ATX_HEADING_PATTERN.match(line)
+        if match is None:
+            continue
+        slug = heading_slug(match.group("text"))
+        if not slug:
+            continue
+        # Repeated heading text disambiguates as slug, slug-1, slug-2…
+        occurrence = seen.get(slug, 0)
+        seen[slug] = occurrence + 1
+        collected.add(slug if occurrence == 0 else f"{slug}-{occurrence}")
+    return frozenset(collected)
+
+
 def document_anchors(path: Path) -> frozenset[str] | None:
     """Anchors a Markdown document defines, or None when they cannot be derived.
 
@@ -423,23 +332,7 @@ def document_anchors(path: Path) -> frozenset[str] | None:
         except OSError:
             anchors = None
         else:
-            frontmatter_numbers = {line_number for line_number, _ in frontmatter_lines(text)}
-            seen: dict[str, int] = {}
-            collected: set[str] = set()
-            for line_number, line in markdown_prose_lines(text):
-                if line_number in frontmatter_numbers:
-                    continue
-                match = ATX_HEADING_PATTERN.match(line)
-                if match is None:
-                    continue
-                slug = heading_slug(match.group("text"))
-                if not slug:
-                    continue
-                # Repeated heading text disambiguates as slug, slug-1, slug-2…
-                occurrence = seen.get(slug, 0)
-                seen[slug] = occurrence + 1
-                collected.add(slug if occurrence == 0 else f"{slug}-{occurrence}")
-            anchors = frozenset(collected)
+            anchors = anchors_from_text(text)
 
     ANCHOR_CACHE[key] = anchors
     return anchors
@@ -464,7 +357,7 @@ def check_fragment(source: Path, line_number: int, target: Path, fragment: str) 
 def check_citation_direction(
     source: Path, line_number: int, relative_target: Path, destination: str
 ) -> None:
-    """A brief never cites a policy or a plan file (policies/briefs-and-policies.md).
+    """Refuse downward citations except the one explicit procedural navigation edge.
 
     Direction is judged before the target's existence: citing a policy that does
     not exist inverts the dependency order just the same.
@@ -473,6 +366,8 @@ def check_citation_direction(
     if relative_source.parts[:1] != (CITATION_SOURCE_DIRECTORY,):
         return
     if not relative_target.parts or relative_target.parts[0] not in CITATION_FORBIDDEN_DIRECTORIES:
+        return
+    if (relative_source.as_posix(), relative_target.as_posix()) in PROCEDURE_HANDOFFS:
         return
     report(
         "citations",
@@ -574,7 +469,102 @@ def check_docs_catalog() -> None:
             )
 
 
-def check_link(source: Path, line_number: int, destination: str) -> None:
+def verify_historical_commit(commit: str) -> None:
+    if not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", commit):
+        raise ValueError("invalid historical source identity")
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "merge-base", "--is-ancestor", commit, "HEAD"], capture_output=True
+    )
+    if result.returncode:
+        raise ValueError("historical source is not a verified repository ancestor")
+
+
+def historical_context(source: Path) -> tuple[str, str] | None:
+    relative = source.relative_to(ROOT)
+    if relative.parts[:2] == ("log", "entries"):
+        metadata, body = multioperator.read_log(source.read_bytes())
+        if "source_offset" not in metadata:
+            return None
+        manifest = json.loads((ROOT / "collaboration/manifest.json").read_text())
+        commit = manifest["source_commit"]
+        verify_historical_commit(commit)
+        original = subprocess.run(
+            ["git", "-C", str(ROOT), "show", commit + ":LOG.md"], capture_output=True
+        )
+        if original.returncode:
+            raise ValueError("declared historical log bytes are unavailable")
+        offset = metadata["source_offset"]
+        if (
+            type(offset) is not int
+            or offset < 0
+            or original.stdout[offset : offset + len(body)] != body
+        ):
+            raise ValueError("imported log differs from the declared Git source bytes")
+        return commit, "LOG.md"
+    if relative.parts[0] not in {"lessons-archived", "user-actions-archived"}:
+        return None
+    manifest = json.loads((ROOT / "collaboration/manifest.json").read_text())
+    commit = manifest["source_commit"]
+    verify_historical_commit(commit)
+    listed = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-tree", "--name-only", commit, "--", relative.as_posix()],
+        capture_output=True,
+    )
+    if listed.returncode:
+        raise ValueError("cannot query declared historical source tree")
+    if not listed.stdout.strip():
+        return None  # A new archive path has no imported-source declaration.
+    archived = subprocess.run(
+        ["git", "-C", str(ROOT), "show", commit + ":" + relative.as_posix()], capture_output=True
+    )
+    if archived.returncode:
+        raise ValueError("declared historical bytes are unavailable")
+    return (commit, relative.as_posix()) if archived.stdout == source.read_bytes() else None
+
+
+def check_historical_link(
+    source: Path, number: int, destination: str, context: tuple[str, str]
+) -> None:
+    commit, original = context
+    target, marker, fragment = destination.partition("#")
+    target = target.split("?", 1)[0]
+    relative = (
+        posixpath.normpath(posixpath.join(posixpath.dirname(original), target))
+        if target
+        else original
+    )
+    if target.startswith("/"):
+        relative = target.lstrip("/")
+    if relative == ".." or relative.startswith("../"):
+        report(
+            "links",
+            source.relative_to(ROOT).as_posix(),
+            f"line {number}: historical link escapes repository",
+        )
+        return
+    checked = subprocess.run(
+        ["git", "-C", str(ROOT), "show", commit + ":" + relative], capture_output=True
+    )
+    if checked.returncode:
+        report(
+            "links",
+            source.relative_to(ROOT).as_posix(),
+            f"line {number}: missing historical target {relative}",
+        )
+        return
+    if marker and fragment and relative.lower().endswith(".md"):
+        anchors = anchors_from_text(checked.stdout.decode())
+        if fragment not in anchors:
+            report(
+                "links",
+                source.relative_to(ROOT).as_posix(),
+                f"line {number}: missing historical anchor #{fragment} in {relative}",
+            )
+
+
+def check_link(
+    source: Path, line_number: int, destination: str, proposed: Path | None = None
+) -> None:
     if (
         not destination
         or destination.startswith("//")
@@ -583,6 +573,18 @@ def check_link(source: Path, line_number: int, destination: str) -> None:
     ):
         return
 
+    try:
+        context = historical_context(source)
+        if context is not None:
+            check_historical_link(source, line_number, destination, context)
+            return
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        report(
+            "links",
+            source.relative_to(ROOT).as_posix(),
+            f"line {line_number}: historical provenance refused: {exc}",
+        )
+        return
     file_part, has_fragment, fragment = destination.partition("#")
     fragment = fragment.strip()
     file_destination = file_part.split("?", 1)[0]
@@ -608,7 +610,8 @@ def check_link(source: Path, line_number: int, destination: str) -> None:
         return
     check_citation_direction(source, line_number, relative_candidate, destination)
     check_docs_containment(source, line_number, relative_candidate, destination)
-    if not candidate.exists():
+    proposed_self = proposed is not None and resolved_candidate == source.resolve(strict=False)
+    if not candidate.exists() and not proposed_self:
         report(
             "links",
             source.relative_to(ROOT).as_posix(),
@@ -626,29 +629,158 @@ def check_markdown_links() -> None:
         except (OSError, UnicodeError) as exc:
             report("links", source.relative_to(ROOT).as_posix(), str(exc))
             continue
-        for line_number, raw_line in markdown_prose_lines(text):
-            line = CODE_SPAN_PATTERN.sub("", raw_line)
-            destinations = [
-                match.group("destination") for match in INLINE_LINK_PATTERN.finditer(line)
-            ]
-            reference_match = REFERENCE_LINK_PATTERN.match(line)
-            if reference_match:
-                destinations.append(reference_match.group("destination"))
-            for raw_destination in destinations:
-                destination = link_destination(raw_destination)
-                if destination is not None:
-                    check_link(source, line_number, destination)
+        check_source_links(source, text)
+
+
+def check_source_links(source: Path, text: str, proposed: Path | None = None) -> None:
+    if proposed is not None:
+        ANCHOR_CACHE[source.resolve(strict=False)] = anchors_from_text(text)
+    for line_number, raw_line in markdown_prose_lines(text):
+        line = CODE_SPAN_PATTERN.sub("", raw_line)
+        destinations = [match.group("destination") for match in INLINE_LINK_PATTERN.finditer(line)]
+        reference_match = REFERENCE_LINK_PATTERN.match(line)
+        if reference_match:
+            destinations.append(reference_match.group("destination"))
+        for raw_destination in destinations:
+            destination = link_destination(raw_destination)
+            if destination is not None:
+                check_link(source, line_number, destination, proposed)
+
+
+def author_document(arguments: argparse.Namespace) -> None:
+    import yaml
+    from agentic_starter.input_io import checked_write, destination, read_object
+
+    creating = arguments.create_input is not None
+    supplied = read_object(arguments.create_input if creating else arguments.register_input)
+    relative = supplied.get("path")
+    if not isinstance(relative, str):
+        raise ValueError("document path is required")
+    path = destination(ROOT, relative)
+    parts = Path(relative).parts
+    if not parts or parts[0] not in {"briefs", "policies", "docs"}:
+        raise ValueError("only brief, policy and pinned-document destinations are supported")
+    if parts[0] in {"briefs", "policies"} and not re.fullmatch(
+        r"(?:briefs|policies)/[A-Za-z0-9._-]+\.md", relative
+    ):
+        raise ValueError("use a catalog-supported top-level Markdown filename")
+    if creating:
+        required = {"path", "title", "body"}
+        if parts[0] == "briefs":
+            required |= {"scope", "status"}
+        if set(supplied) != required or path.suffix != ".md":
+            raise ValueError("skeleton requires path/title/body and brief scope/status")
+        title, meaning = supplied["title"], supplied["body"]
+        if (
+            not all(isinstance(item, str) and item.strip() for item in (title, meaning))
+            or "\n" in title
+        ):
+            raise ValueError("supply one title line and substantive body")
+        if parts[0] in {"briefs", "policies"} and len(parts) != 2:
+            raise ValueError("briefs and policies use top-level Markdown files")
+        prefix = "# " + ("Policy: " if parts[0] == "policies" else "") + title + "\n\n"
+        if parts[0] == "briefs":
+            if supplied["status"] not in {"draft", "methodology", "implemented", "historical"}:
+                raise ValueError("invalid supplied brief status")
+            if not isinstance(supplied["scope"], str) or not supplied["scope"].strip():
+                raise ValueError("brief scope is required")
+            prefix = (
+                "---\n"
+                + yaml.safe_dump(
+                    {
+                        "title": title,
+                        "date": arguments.on.isoformat(),
+                        "status": supplied["status"],
+                        "scope": supplied["scope"],
+                    },
+                    sort_keys=False,
+                )
+                + "---\n\n"
+                + prefix
+            )
+        data = (prefix + meaning.rstrip("\n") + "\n").encode()
+
+        def check(proposed: Path) -> None:
+            check_source_links(path, proposed.read_text(), proposed)
+            if DRIFT:
+                raise ValueError("; ".join(DRIFT))
+
+        checked_write(ROOT, relative, data, check)
+    else:
+        if not path.exists():
+            raise ValueError("register an existing document; create its skeleton first")
+        catalog = "docs/README.md" if parts[0] == "docs" else "AGENTS.md"
+        required = {"path", "label"} | ({"zone"} if parts[0] == "briefs" else set())
+        if set(supplied) != required:
+            raise ValueError("registration requires path/label and brief project|methodology zone")
+        label = supplied["label"]
+        if not isinstance(label, str) or not label.strip() or any(c in label for c in "\n\r[]"):
+            raise ValueError("catalog label must be one plain nonempty line")
+        catalog_path = destination(ROOT, catalog)
+        original = catalog_path.read_text()
+        link = (
+            quote(relative.removeprefix("docs/"), safe="/-._~") if parts[0] == "docs" else relative
+        )
+        if re.search(r"\]\(" + re.escape(link) + r"(?:[#)])", original):
+            # A repeated registration is a finished one: the first caller's label and
+            # placement stand, and a rerun after an interruption has nothing to refuse.
+            print("DOCUMENT ALREADY REGISTERED; nothing written")
+            return
+        row = f"- [{label}]({link})\n"
+        if catalog == "AGENTS.md":
+            zone = supplied.get("zone", "methodology")
+            headings = {"project": "## Project briefs", "methodology": "## Methodology briefs"}
+            heading = "## Policies catalog" if parts[0] == "policies" else headings.get(zone)
+            if heading is None or original.count(heading + "\n") != 1:
+                raise ValueError("missing/ambiguous catalog section")
+            start = original.index(heading + "\n") + len(heading) + 1
+            following = re.search(r"(?m)^(?:#{1,2} |<!-- .*_END -->)", original[start:])
+            end = start + following.start() if following else len(original)
+            data = (original[:end].rstrip("\n") + "\n" + row + "\n" + original[end:]).encode()
+        else:
+            data = (original.rstrip("\n") + "\n\n" + row).encode()
+
+        def check(proposed: Path) -> None:
+            if catalog == "AGENTS.md":
+                check_instruction_delivery(proposed.read_text())
+                for directory in CATALOGED_DIRECTORIES:
+                    check_catalog(directory, proposed.read_text())
+            check_link(catalog_path, 1, link)
+            if DRIFT:
+                raise ValueError("; ".join(DRIFT))
+
+        checked_write(ROOT, catalog, data, check, arguments.expect_sha256)
+    print("DOCUMENT INPUT WRITTEN; run the complete catalog check before delivery")
 
 
 def main() -> int:
+    global ROOT
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--closing-phase")
+    parser.add_argument("--root", type=Path, default=ROOT)
+    author = parser.add_mutually_exclusive_group()
+    author.add_argument("--create-input", type=Path)
+    author.add_argument("--register-input", type=Path)
+    parser.add_argument("--expect-sha256")
+    parser.add_argument("--on", type=date.fromisoformat, default=date.today())
     parser.add_argument("--ledger-file", type=Path, help="validate a prospective phase ledger")
+    parser.add_argument(
+        "--next-marker-reason",
+        help="record why a child close queues work outside the closing parent's subtree",
+    )
     arguments = parser.parse_args()
+    ROOT = arguments.root.resolve()
+    if arguments.create_input or arguments.register_input:
+        try:
+            author_document(arguments)
+            return 0
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            print(f"DOCUMENT INPUT REFUSED: {exc}", file=sys.stderr)
+            return 1
     try:
-        instructions = (ROOT / "CLAUDE.md").read_bytes().decode("utf-8")
+        instructions = (ROOT / "AGENTS.md").read_bytes().decode("utf-8")
     except (OSError, UnicodeError) as exc:
-        report("instructions", "CLAUDE.md", str(exc))
+        report("instructions", "AGENTS.md", str(exc))
         instructions = ""
     check_instruction_delivery(instructions)
     if instructions:
@@ -657,7 +789,9 @@ def main() -> int:
     check_docs_catalog()
     check_phase_ledger(arguments.ledger_file)
     if arguments.closing_phase:
-        check_closing_phase(arguments.closing_phase, arguments.ledger_file)
+        check_closing_phase(
+            arguments.closing_phase, arguments.ledger_file, arguments.next_marker_reason
+        )
     check_phase_files()
     check_markdown_links()
     if DRIFT:

@@ -1,0 +1,11 @@
+{
+  "from": null,
+  "id": "7ec3aaaf10a059a5a68f019658b9ea55",
+  "owner": null,
+  "phase": "namespace-contract-refinement",
+  "previous": null,
+  "reason": "Imported source state, not a new acceptance or lease",
+  "source_phase": "1",
+  "state": "completed",
+  "writer": "castle-operator"
+}

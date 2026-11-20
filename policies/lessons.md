@@ -17,15 +17,15 @@ The **filename is the slug** (a two-word code-name): `sandbox-phantom.md`. There
 
 ## What `lessons/` is
 
-- The repo's structured memory of "what we keep re-learning," parallel to `LOG.md` (history) and `user-actions/` (human-only follow-ups).
-- The input queue for rule-making: a lesson that recurs graduates — with the human's explicit approval — into a policy, brief, skill, agent definition, `bin/` script, test, or `CLAUDE.md` invariant.
+- The repo's structured memory of "what we keep re-learning," parallel to `log/entries/` (history) and `user-actions/` (human-only follow-ups).
+- The input queue for rule-making: a lesson that recurs graduates — with the human's explicit approval — into a policy, brief, skill, agent definition, `bin/` script, test, or `AGENTS.md` invariant.
 - In a derived project, the `scope: methodology` subset is the standing export surface the starter harvests via the `learn` skill.
 
 ## What `lessons/` is not
 
 - Not a bug tracker or work backlog. Work an agent can do goes in `plan/`; human-only actions go in `user-actions/`.
 - Not a rule surface. A candidate lesson binds nothing; only graduation makes it binding, and only the human graduates.
-- Not agent-side memory. Per [`CLAUDE.md`](../CLAUDE.md)'s "Rules, not memory" invariant, the ledger is a committed repo surface visible to every operator and harness — never a local memory store.
+- Not agent-side memory. Per [`AGENTS.md`](../AGENTS.md)'s "Rules, not memory" invariant, the ledger is a committed repo surface visible to every operator and harness — never a local memory store.
 
 ## Format
 
@@ -64,37 +64,13 @@ No other new frontmatter keys without amending this policy.
 
 ### One row per instance — the counting rule
 
-**An occurrence row is one observation, not one filing session.** Several
-instances of the same shape seen on the same day, in the same phase, or sharing
-one root cause each get their own row. Batching them into a single row with a
-compound `ref` under-counts the lesson.
+**An occurrence row is one observation, not one filing session.** Several instances of the same shape seen on the same day, in the same phase, or sharing one root cause each get their own row. Batching them into a single row with a compound `ref` under-counts the lesson.
 
-This is not bookkeeping pedantry: the three-occurrence graduation threshold is
-evaluated by `bin/lessons candidates` over **row count**, so a batched filing
-silently suppresses the trigger. A donor project's sweep turned up three
-lessons in this state — one documenting three distinct instances in a single
-row, and therefore sitting at the threshold invisibly since the day it was
-filed. A rule whose trigger can be defeated by formatting is a rule wired to
-nothing.
+This is not bookkeeping pedantry: the three-occurrence graduation threshold is evaluated by `bin/lessons candidates` over **row count**, so a batched filing silently suppresses the trigger. A donor project's sweep turned up three lessons in this state — one documenting three distinct instances in a single row, and therefore sitting at the threshold invisibly since the day it was filed. A rule whose trigger can be defeated by formatting is a rule wired to nothing.
 
-**There is deliberately no automated check for this, and the failed attempt is
-worth recording so nobody rebuilds it.** Three lexical detectors were written
-against the donor's ledger and all three were cut. Matching `, then ` and
-lists of three fired on 17 of 46 lessons and was right about 3 — ordinary
-narrative trips both ("recurred four times, then parked the phase" is one
-observation). Matching "N times in …" fired 4 times and was right once,
-because that phrase usually counts how often some *tool* misbehaved during a
-single incident. The survivor — matching only a row that says outright it
-covers two — fired once across the whole ledger and was blind to the shape
-that caused the problem: a row that merely narrates its instances without
-counting them.
+**There is deliberately no automated check for this, and the failed attempt is worth recording so nobody rebuilds it.** Three lexical detectors were written against the donor's ledger and all three were cut. Matching `, then ` and lists of three fired on 17 of 46 lessons and was right about 3 — ordinary narrative trips both ("recurred four times, then parked the phase" is one observation). Matching "N times in …" fired 4 times and was right once, because that phrase usually counts how often some *tool* misbehaved during a single incident. The survivor — matching only a row that says outright it covers two — fired once across the whole ledger and was blind to the shape that caused the problem: a row that merely narrates its instances without counting them.
 
-The property "this sentence describes more than one observation" is not
-reliably visible in the sentence. A near-silent guard is worse than none,
-because a clean `LESSONS OK` then reads as coverage the check never had. So
-the enforcement is the rule above, applied when filing, and **`sweep`'s
-lessons audit, which reads each `ref` against its own body** — the only thing
-that has ever actually caught this.
+The property "this sentence describes more than one observation" is not reliably visible in the sentence. A near-silent guard is worse than none, because a clean `LESSONS OK` then reads as coverage the check never had. So the enforcement is the rule above, applied when filing, and **`sweep`'s lessons audit, which reads each `ref` against its own body** — the only thing that has ever actually caught this.
 
 ### Body
 
@@ -116,6 +92,8 @@ The generator filters connective filler tokens and checks the candidate against 
 2. **Stabilize.** A lesson graduates on the strength of recurrence, not eloquence. The working threshold is **three occurrences** — codifying on first sight tends to lock in rules that haven't seen their variations. The human may graduate a lesson earlier at their discretion; agents may not.
 3. **Graduate (human-only).** Graduation is a user-ratified edit to the target surface plus archival of the lesson: set `status: codified`, add `closed:` and `graduated_to:`, and move the file to `lessons-archived/`. Agents *propose* graduation — as `DECIDE`-style items in a phase's END block or a `sweep` plan — and never apply it. A rejected proposal is archived `status: rejected`; a lesson absorbed by another is `status: superseded`.
 
+4. **Age out.** A candidate whose newest occurrence is sixty days old is proposed at the next sweep for closing as `rejected` (not recurring), in one batched decision the human can pull items out of. `./bin/lessons aged` lists them. A new occurrence resets the clock, and an aged-out lesson reopens the usual way: a new occurrence with fresh evidence appended to the archived entry. A lesson the human held is aged like any other; the hold records why it did not graduate, not a reason to keep it open.
+
 Archived files **stay on disk** — they are the audit trail linking every rule back to the incidents that earned it, and the record of what was considered and declined.
 
 ### The second-instance test — state the rule, not the example
@@ -134,34 +112,17 @@ This test is the reason a family's covering sentence usually cannot graduate whi
 
 ## Named families
 
-A family is a set of open lessons whose **diagnoses rhyme**. Naming one does not
-merge its members and does not change any occurrence count: each lesson keeps
-its own slug, evidence, and remedy. The name exists so the next lesson of that
-shape can be filed **against** the family rather than beside it, and so a body
-of evidence stops reading as a pile of unrelated one-offs.
+A family is a set of open lessons whose **diagnoses rhyme**. Naming one does not merge its members and does not change any occurrence count: each lesson keeps its own slug, evidence, and remedy. The name exists so the next lesson of that shape can be filed **against** the family rather than beside it, and so a body of evidence stops reading as a pile of unrelated one-offs.
 
-**Do not collapse a family into a single entry.** A rule general enough to
-cover every member is too abstract to fire — the failure the counting rule
-above exists to prevent, in another costume. Merge two lessons only when their
-**remedies** coincide, not when their diagnoses do — that is a `superseded`
-archival with the occurrences carried onto the survivor, and it needs the same
-human ratification as any graduation.
+**Do not collapse a family into a single entry.** A rule general enough to cover every member is too abstract to fire — the failure the counting rule above exists to prevent, in another costume. Merge two lessons only when their **remedies** coincide, not when their diagnoses do — that is a `superseded` archival with the occurrences carried onto the survivor, and it needs the same human ratification as any graduation.
 
-Membership is a judgment recorded in the sweep or the policy that names the
-family, not a frontmatter key — a lesson can sit in a family and still graduate
-on its own evidence. (Two families the donor named, offered here as worked
-examples of the shape: *the fix covers the named instance, not the class*, and
-*the instrument reports positive and proves nothing*.)
+Membership is a judgment recorded in the sweep or the policy that names the family, not a frontmatter key — a lesson can sit in a family and still graduate on its own evidence. (Two families the donor named, offered here as worked examples of the shape: *the fix covers the named instance, not the class*, and *the instrument reports positive and proves nothing*.)
 
 ### Who writes
 
 - **Any agent** may file a candidate lesson or append an occurrence: `kickoff`'s harvest step at every truthful phase close or park, `sweep` during a maintenance pass, a `user-actions` disposition, `learn`/`teach` during a transfer, or the user directly. A parked run is evidence, not a reason to discard its observations.
-- **`learn` keeps two inputs distinct.** Donor-ledger lessons are harvested as
-  direct rule proposals or destination-ledger candidates. New methodology
-  defects exposed while adapting the approved bundle are filed separately in
-  the destination ledger with `source: learn` and `scope: methodology`; the
-  donor remains read-only. The aggregate LOG entry reports both counts.
-- **Only the human** graduates, and only the human edits `policies/`, `briefs/`, `CLAUDE.md`, skills, or agent definitions *because of* a lesson. Filing and occurrence-appending are the only ledger writes an agent performs autonomously.
+- **`learn` keeps two inputs distinct.** Donor-ledger lessons are harvested as direct rule proposals or destination-ledger candidates. New methodology defects exposed while adapting the approved bundle are filed separately in the destination ledger with `source: learn` and `scope: methodology`; the donor remains read-only. The aggregate LOG entry reports both counts.
+- **Only the human** graduates, and only the human edits `policies/`, `briefs/`, `AGENTS.md`, skills, or agent definitions *because of* a lesson. Filing and occurrence-appending are the only ledger writes an agent performs autonomously.
 
 ## Anonymization on the upstream path
 
@@ -192,3 +153,7 @@ A `scope: methodology` lesson in a derived repo is destined for the starter temp
 ## Per-phase waiver
 
 The human may grant a phase-specific waiver of any rule in this policy (for example, authorizing immediate codification of a first-occurrence lesson). Waivers are explicit, scoped, logged in the phase's END block, and one-shot — same contract as [`user-actions.md`](user-actions.md).
+
+## Mechanical authoring
+
+Use `./bin/lessons create --slug <from-new-name> --input-json <file>` for a new candidate. Supply title, scope, proposed_surface, source, one observation ref and substantive body; the tool derives slug/status/filed/occurrence structure. Use `recur` with only a fresh ref, or `edit` with title/body/scope/proposed_surface changes, plus `--expect-sha256 <current-digest>` for existing entries. `--on` supplies the actual evidence date when it differs from the current date. Recurrence also works on archived entries, preserving disposition, closed/graduated fields and exact body; it does not reopen or graduate them. Ordinary edit does not modify archived dispositions. All proposed metadata passes the same validator before publication; this API grants no human-only graduation or archival authority.

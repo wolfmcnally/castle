@@ -49,30 +49,16 @@ A demo protocol is **not**:
 - **Code critic.** Verify the demo as written would actually work against the merged code: the entry point exists, the suggested inputs are valid, the observable outcomes are reachable. Block if the demo is stale relative to the implementation.
 - **Orchestrator (`kickoff`).** Surface every `User Demo:` block verbatim in the phase's END block under the `Acceptance:` field's parked half, with the entry-point command on its own line so the user can copy-paste it. Do not claim to have run the demo — the orchestrator cannot demo a user-facing feature. If the phase declared `User Demo: N/A`, restate the line in the END block so the human sees the planner's reasoning. The demo protocol is also the **lead item of the user-facing report**: it is what the user does next, and it is named before anything else the report has to say.
 
-After close, the universal `demo` skill is the interactive runner for that
-approved protocol. It performs invisible prerequisites itself, explains one
-visible action plainly, pauses for the user's observation, answers questions
-without advancing, and keeps a durable resume point. It does not invent a
-missing protocol or repair the product during evaluation.
+After close, the universal `demo` skill is the interactive runner for that approved protocol. It performs invisible prerequisites itself, explains one visible action plainly, pauses for the user's observation, answers questions without advancing, and keeps a durable resume point. It does not invent a missing protocol or repair the product during evaluation.
 
 ## The demo is the user's acceptance surface
 
-Under [`human-in-the-loop.md`](human-in-the-loop.md), objective criteria close on
-the orchestrator's own evidence and the phase is delivered without waiting. That
-makes this protocol load-bearing rather than decorative: it is now the principal
-place the user's judgment actually lands.
+Under [`human-in-the-loop.md`](human-in-the-loop.md), objective criteria close on the orchestrator's own evidence and the phase is delivered without waiting. That makes this protocol load-bearing rather than decorative: it is now the principal place the user's judgment actually lands.
 
 Two consequences:
 
-- **An unrun demo is a parked acceptance criterion**, recorded as such in the
-  END block. Delivery does not close it, and no amount of green gate output
-  closes it. A phase can be delivered and still be waiting on its demo — that is
-  the normal, expected state at a seam.
-- **A padded or contrived demo now costs more than it used to.** When the demo
-  was one check among many human touchpoints, a weak one was merely noise; now
-  it is the surface the human is being asked to judge on. The plan reviewer's
-  standing instruction to block a padded demo, and to prefer an honest `N/A`,
-  binds harder for that reason — not less.
+- **An unrun demo is a parked acceptance criterion**, recorded as such in the END block. Delivery does not close it, and no amount of green gate output closes it. A phase can be delivered and still be waiting on its demo — that is the normal, expected state at a seam.
+- **A padded or contrived demo now costs more than it used to.** When the demo was one check among many human touchpoints, a weak one was merely noise; now it is the surface the human is being asked to judge on. The plan reviewer's standing instruction to block a padded demo, and to prefer an honest `N/A`, binds harder for that reason — not less.
 
 ## What a `User Demo:` block looks like
 
@@ -120,10 +106,12 @@ Most phases do not need hot-state checks. Phases without an operational surface 
 
 A phase can honestly declare `User Demo: N/A` in any of these cases:
 
-- **No user-facing surface touched.** The phase changes only internal library code, build glue, infra, CI, briefs, plans, policies, or docs.
+- **No user-facing surface touched.** The phase changes only internal library code, build glue, infra, CI, briefs, plans, policies, or docs. This does not cover internal code whose output a person judges by perceiving it; see the rule after this list.
 - **Behavior-preserving change to a user-facing surface.** A refactor, rename, dependency bump, or internal restructuring that leaves the observable behavior identical. (If a refactor *could* introduce a regression a human would notice — e.g. a rewrite of the rendering path — that's worth demoing, even though the behavior is "supposed to" be identical.)
 - **Trivially verifiable bug fix or copy change.** A typo correction, a one-line bug fix, or a small message tweak whose entire verification is "the new string appears" or "the bug no longer reproduces" — already covered by a deterministic acceptance check or by inspection of the diff. Forcing a demo here would be theater.
 - **Deferred surface.** The phase scaffolds infrastructure for a future user-facing feature but does not yet expose it (e.g. wiring up a backend route whose UI lands in a later phase). Demo lands with the phase that exposes the surface.
+
+**An output a person judges by perceiving it has a demo as soon as it can be rendered.** A phase can produce something heard, seen or read (a synthesized sound, a drawing, a layout, generated prose) before any user-facing surface exists to carry it. If an artifact of that output can be rendered now (an audio file, an image, a document), neither exemption above applies. The phase's `User Demo:` block names the command that renders the artifact and what to judge in it, and that judgment is a parked criterion of this phase. Deferring it to the phase that adds the delivery surface builds that surface on something no one has judged. (Observed 2026-10-07 in a derived project: a synthesis phase closed green on objective measurements with its demo declared not applicable; rendered to files afterwards, its sound was rejected at first hearing and the phase needed a full correction.)
 
 In each case, the Acceptance section carries a single line:
 

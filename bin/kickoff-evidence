@@ -1,6 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
+# dependencies = ["PyYAML==6.0.3"]
 # ///
 """Create and validate run-scoped evidence for incremental kickoff review."""
 
@@ -17,7 +18,6 @@ import shlex
 import shutil
 import subprocess
 import sys
-import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -39,7 +39,7 @@ from agentic_starter import (  # noqa: E402
     advisory,
     candidate_boundaries,
     kickoff_runbook,
-    log_blocks,
+    multioperator,
 )
 from agentic_starter.execution_telemetry import (  # noqa: E402
     TelemetryError,
@@ -48,9 +48,12 @@ from agentic_starter.execution_telemetry import (  # noqa: E402
     closed_spans,
     finalized_trace,
     recover_trace,
+    require_persistent_directory,
+    retain_evidence,
     run_observed,
     runtime_span_context,
     trace_context,
+    verify_retained_evidence,
 )
 from agentic_starter.finding_schema import (  # noqa: E402
     CLASSIFICATIONS,
@@ -121,7 +124,7 @@ ROLE_OPERATIONS = {
     "role.implement": "coder",
     "role.code-review": "critic",
 }
-ROLE_REASONS = {"initial", "revision", "resume", "rescue", "reexecution", "fallback"}
+ROLE_REASONS = {"initial", "revision", "resume", "reexecution", "fallback"}
 ROLE_HARNESSES = {"native", "claude", "codex"}
 REVIEW_LANES = {"full", "light", "one-shot"}
 CLOSURE_OUTCOMES = {"accepted", "parked", "failed"}
@@ -267,8 +270,16 @@ def now() -> str:
 def atomic_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    temporary.write_text(json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+    with temporary.open("w") as handle:
+        handle.write(json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
     temporary.replace(path)
+    descriptor = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def append_jsonl(path: Path, value: Any) -> None:
@@ -276,41 +287,8 @@ def append_jsonl(path: Path, value: Any) -> None:
     with path.open("a") as handle:
         json.dump(value, handle, sort_keys=True, separators=(",", ":"))
         handle.write("\n")
-
-
-def append_text_once(path: Path, payload: str) -> None:
-    """Append one exact closure block once, under an inter-process lock."""
-    if not payload or payload.startswith("\n") or not payload.endswith("\n"):
-        raise EvidenceError(
-            "closure log block must be nonempty, begin at its H2 header, and end in one newline"
-        )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor = os.open(path, os.O_RDWR | os.O_CREAT, 0o666)
-    try:
-        fcntl.flock(descriptor, fcntl.LOCK_EX)
-        size = os.lseek(descriptor, 0, os.SEEK_END)
-        os.lseek(descriptor, 0, os.SEEK_SET)
-        existing = os.read(descriptor, size).decode("utf-8")
-        occurrences = existing.count(payload)
-        if occurrences > 1:
-            raise EvidenceError("closure log block already appears more than once")
-        if occurrences == 1:
-            return
-        if existing and not existing.endswith("\n"):
-            raise EvidenceError("refusing append to a non-newline-terminated log")
-        separator = "\n" if existing and not existing.endswith("\n\n") else ""
-        candidate = existing + separator + payload
-        errors = log_blocks.chronology_errors(log_blocks.parse(candidate))
-        if errors:
-            raise EvidenceError(f"closure log chronology invalid: {errors[0]}")
-        os.lseek(descriptor, 0, os.SEEK_END)
-        addition = (separator + payload).encode("utf-8")
-        written = os.write(descriptor, addition)
-        if written != len(addition):
-            raise EvidenceError("short closure log append")
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+        handle.flush()
+        os.fsync(handle.fileno())
 
 
 def load_json(path: Path) -> Any:
@@ -559,6 +537,15 @@ def validate_candidate_manifest(value: Any) -> None:
 
 
 def validate_run_dir(run_dir: Path) -> dict[str, Any]:
+    require_persistent_directory(run_dir)
+    pinned = (run_dir / "tools" / "kickoff-evidence").resolve()
+    if SCRIPT_PATH != pinned:
+        raise EvidenceError(f"active run must use pinned tool: {pinned}")
+    return validate_historical_run_metadata(run_dir)
+
+
+def validate_historical_run_metadata(run_dir: Path) -> dict[str, Any]:
+    """Read-only provenance audit; never authorizes executing a historical run."""
     run = load_json(run_dir / "run.json")
     if not isinstance(run, dict) or run.get("schema_version") != SCHEMA_VERSION:
         raise EvidenceError("invalid run metadata schema")
@@ -600,9 +587,6 @@ def validate_run_dir(run_dir: Path) -> dict[str, Any]:
         raise EvidenceError("run metadata has an unknown review lane")
     if run.get("evidence_lane") not in EVIDENCE_LANES:
         raise EvidenceError("run metadata has an unknown evidence lane")
-    pinned = (run_dir / "tools" / "kickoff-evidence").resolve()
-    if SCRIPT_PATH != pinned:
-        raise EvidenceError(f"active run must use pinned tool: {pinned}")
     bundle = run.get("tool_bundle")
     if (
         not isinstance(bundle, dict)
@@ -635,10 +619,8 @@ def validate_run_dir(run_dir: Path) -> dict[str, Any]:
     return run
 
 
-def install_tool_bundle(run_dir: Path) -> dict[str, Any]:
-    """Pin the mechanics that must remain readable after the live tree changes."""
-    bundle = run_dir / "tools"
-    sources = {
+def tool_sources() -> dict[str, Path]:
+    return {
         "kickoff-evidence": SCRIPT_PATH,
         "kickoff-tree-id": REPO_ROOT / "bin" / "kickoff-tree-id",
         "execution-telemetry": REPO_ROOT / "bin" / "execution-telemetry",
@@ -657,6 +639,7 @@ def install_tool_bundle(run_dir: Path) -> dict[str, Any]:
         "lib/agentic_starter/candidate_boundaries.py": (
             REPO_ROOT / "lib" / "agentic_starter" / "candidate_boundaries.py"
         ),
+        "lib/agentic_starter/input_io.py": REPO_ROOT / "lib" / "agentic_starter" / "input_io.py",
         "lib/agentic_starter/kickoff_runbook.py": (
             REPO_ROOT / "lib" / "agentic_starter" / "kickoff_runbook.py"
         ),
@@ -665,8 +648,17 @@ def install_tool_bundle(run_dir: Path) -> dict[str, Any]:
         ),
         "lib/agentic_starter/workflow.py": REPO_ROOT / "lib/agentic_starter/workflow.py",
         "lib/agentic_starter/advisory.py": REPO_ROOT / "lib/agentic_starter/advisory.py",
+        "lib/agentic_starter/multioperator.py": REPO_ROOT / "lib/agentic_starter/multioperator.py",
+        "lib/agentic_starter/multioperator_transition.py": REPO_ROOT
+        / "lib/agentic_starter/multioperator_transition.py",
         "kickoff-command-zero": REPO_ROOT / "bin" / "kickoff-command-zero",
     }
+
+
+def install_tool_bundle(run_dir: Path) -> dict[str, Any]:
+    """Pin the mechanics that must remain readable after the live tree changes."""
+    bundle = run_dir / "tools"
+    sources = tool_sources()
     manifest: list[dict[str, str]] = []
     for relative, source in sources.items():
         if not source.is_file():
@@ -884,11 +876,43 @@ def parse_authority_spec(specification: str, root: Path, priority: int) -> dict[
     }
 
 
+def require_consistent_catalogs(root: Path) -> None:
+    """Refuse a run whose live tree already fails the catalog check.
+
+    The check belongs to the checkout the run starts in, so it runs from there and before
+    this run's tools are frozen or its authority is captured. A run started on a stale
+    catalog would otherwise capture that state and meet the refusal only at its final gate.
+    """
+    checker = root / "bin" / "check-catalogs"
+    if not checker.is_file():
+        raise EvidenceError("pre-capture catalog check is missing: bin/check-catalogs")
+    try:
+        consistency = subprocess.run(
+            [str(checker)], cwd=root, capture_output=True, text=True, check=False
+        )
+    except OSError as exc:
+        raise EvidenceError(f"pre-capture catalog check could not run: {exc}") from exc
+    if consistency.returncode:
+        raise EvidenceError(
+            "pre-capture catalog check failed; nothing was captured:\n"
+            + (consistency.stdout + consistency.stderr).strip()
+        )
+
+
 def command_init(arguments: argparse.Namespace) -> None:
     root = git_root(arguments.root.resolve())
-    run_dir = arguments.run_dir.resolve()
+    require_consistent_catalogs(root)
+    run_dir = require_persistent_directory(
+        arguments.run_dir or root / ".kickoff" / "runs" / os.urandom(16).hex()
+    )
     if run_dir.exists() and any(run_dir.iterdir()):
         raise EvidenceError(f"run directory is not empty: {run_dir}")
+    if run_dir.is_relative_to(root):
+        ignored = subprocess.run(
+            ["git", "check-ignore", "--quiet", "--", str(run_dir)], cwd=root, check=False
+        )
+        if ignored.returncode:
+            raise EvidenceError("project evidence directory must be explicitly gitignored")
     if not arguments.preflight_receipt.is_file():
         raise EvidenceError("init requires a role-venue preflight receipt")
     receipt_check = subprocess.run(
@@ -908,6 +932,7 @@ def command_init(arguments: argparse.Namespace) -> None:
             receipt_check.stderr.strip() or "role-venue preflight receipt is invalid"
         )
     run_dir.mkdir(parents=True, exist_ok=True)
+    arguments.run_dir = run_dir
     tool_bundle = install_tool_bundle(run_dir)
     candidate = product_manifest(root)
     product = product_manifest(root)
@@ -918,6 +943,21 @@ def command_init(arguments: argparse.Namespace) -> None:
     ]
     if not authorities:
         raise EvidenceError("at least one --authority is required")
+    declaration = root / "collaboration/manifest.json"
+    if declaration.exists():
+        if not run_dir.is_relative_to(root):
+            raise EvidenceError(
+                "managed phase qualification must use durable ignored project storage"
+            )
+        custody = multioperator.phase_custody(root, arguments.phase)
+        for path, locator in [
+            ("plan/events/" + custody["id"] + ".json", "phase-custody"),
+            ("plan/phases/" + arguments.phase + ".md", "phase-definition"),
+        ]:
+            authorities.append(
+                parse_authority_spec(path + "::" + locator, root, len(authorities) + 1)
+            )
+
     created_at = now()
     resolution = load_json(arguments.preflight_receipt)["workflow"]
     validate_kickoff_context(
@@ -999,6 +1039,7 @@ def command_init(arguments: argparse.Namespace) -> None:
     (run_dir / "gate-manifests.jsonl").touch()
     (run_dir / "lineage.jsonl").touch()
     record_lineage(run_dir, candidate, "init")
+    print(f"RUN DIRECTORY {run_dir}", file=sys.stderr)
     print(candidate["candidate_id"])
 
 
@@ -1292,11 +1333,261 @@ def role_dispatch_ledger(
     )
 
 
+UNLAUNCHED_FIELDS = {
+    "schema_version",
+    "recorded_at",
+    "operation",
+    "attempt",
+    "registration_sha256",
+    "refusal_artifact",
+    "refusal_sha256",
+}
+
+
+def _registration_digest(record: dict[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(record, sort_keys=True).encode()).hexdigest()
+
+
+def load_unlaunched_attempts(run_dir: Path) -> dict[tuple[str, int], dict[str, Any]]:
+    """Registered attempts recorded as never launched: a third truthful state.
+
+    A row is admitted only against its exact registration and a refusal record retained
+    inside the run. It asserts nothing by itself; `require_unlaunched` proves the absence
+    of every launch trace each time the row is relied on.
+    """
+    rows: dict[tuple[str, int], dict[str, Any]] = {}
+    if not (run_dir / "role-unlaunched.jsonl").exists():
+        return rows
+    registrations = {
+        (item.get("operation"), item.get("attempt")): item
+        for item in load_jsonl(run_dir / "role-attempts.jsonl")
+    }
+    for row in load_jsonl(run_dir / "role-unlaunched.jsonl"):
+        if set(row) != UNLAUNCHED_FIELDS or row.get("schema_version") != SCHEMA_VERSION:
+            raise EvidenceError("invalid unlaunched-attempt record")
+        key = (row["operation"], row["attempt"])
+        registration = registrations.get(key)
+        if key in rows or registration is None:
+            raise EvidenceError("unlaunched-attempt record is duplicated or names no registration")
+        if _registration_digest(registration) != row["registration_sha256"]:
+            raise EvidenceError("unlaunched attempt's registration changed after it was recorded")
+        artifact = (run_dir / str(row["refusal_artifact"])).resolve()
+        if (
+            run_dir.resolve() not in artifact.parents
+            or not artifact.is_file()
+            or hashlib.sha256(artifact.read_bytes()).hexdigest() != row["refusal_sha256"]
+        ):
+            raise EvidenceError(
+                "unlaunched attempt's retained refusal record is missing or altered"
+            )
+        rows[key] = row
+    return rows
+
+
+def require_unlaunched(run_dir: Path, run: dict[str, Any], key: tuple[str, int]) -> None:
+    """Refuse the unlaunched state for an attempt that left any trace of a launch."""
+    _, opened, omissions = role_dispatch_ledger(
+        run_dir, allow_opened=True, allow_orphan_omissions=True
+    )
+    closed = {
+        (item["operation"], item["attempt"]) for item in load_role_dispatches_lenient(run_dir)
+    }
+    if key in closed or key in opened or key in omissions:
+        raise EvidenceError("unlaunched attempt has a dispatch record")
+    root = Path(run["repository_root"])
+    try:
+        spans = closed_spans(engine_root=root, trace_id=run["telemetry_trace_id"])
+    except TelemetryError as exc:
+        raise EvidenceError(f"invalid runtime trace: {exc}") from exc
+    if any(item.get("operation") == key[0] and item.get("attempt") == key[1] for item in spans):
+        raise EvidenceError("unlaunched attempt has a recorded execution span")
+    if run["workflow"]["mode"] == "primary":
+        budget = advisory.budget_path(root, run["phase"])
+        text = budget.read_text() if budget.exists() else ""
+        for line in text.splitlines():
+            claim = json.loads(line)
+            if (
+                claim.get("run") == str(run_dir.resolve())
+                and claim.get("operation") == key[0]
+                and claim.get("attempt") == key[1]
+            ):
+                raise EvidenceError("unlaunched attempt has an advisory launch claim")
+
+
+def load_role_dispatches_lenient(run_dir: Path) -> list[dict[str, Any]]:
+    return role_dispatch_ledger(run_dir, allow_opened=True, allow_orphan_omissions=True)[0]
+
+
 def load_role_dispatches(run_dir: Path) -> list[dict[str, Any]]:
     return role_dispatch_ledger(run_dir)[0]
 
 
-def validate_role_record(record: dict[str, Any], run: dict[str, Any]) -> None:
+DIRECTED_REVIEW_FIELDS = {
+    "schema_version",
+    "recorded_at",
+    "operation",
+    "from_attempt",
+    "harness",
+    "model",
+    "effort",
+    "launcher",
+    "scope",
+    "owner_evidence",
+}
+DIRECTED_LAUNCH_FIELDS = {
+    "schema_version",
+    "recorded_at",
+    "operation",
+    "attempt",
+    "registration_sha256",
+    "launch_evidence_sha256",
+    "prompt_sha256",
+    "observed_model",
+    "observed_effort",
+    "posture",
+}
+DIRECTED_POSTURES = ("read-only", "not-read-only", "unknown")
+
+
+def load_directed_reviews(run_dir: Path) -> list[dict[str, Any]]:
+    """The owner's task-specific directions that a review run outside the watcher.
+
+    A direction names the reviewer the owner asked for and the route that launched it. It
+    replaces the frozen reviewer for the attempts it covers and nothing else: the attempt
+    is still registered, claims its ordinary pass, is dispatched, timed and ingested.
+    """
+    file = run_dir / "owner-directed-reviews.jsonl"
+    return validate_directed_reviews(load_jsonl(file)) if file.exists() else []
+
+
+def validate_directed_reviews(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    latest: dict[str, int] = {}
+    for row in rows:
+        evidence = row.get("owner_evidence")
+        if (
+            set(row) != DIRECTED_REVIEW_FIELDS
+            or row.get("schema_version") != SCHEMA_VERSION
+            or row.get("operation") not in REVIEW_OPERATIONS
+            or row.get("harness") not in ROLE_HARNESSES - {"native"}
+            or type(row.get("from_attempt")) is not int
+            or row["from_attempt"] <= latest.get(row["operation"], 0)
+            or not isinstance(evidence, dict)
+            or set(evidence) != {"source", "reference", "statement"}
+            or any(not isinstance(v, str) or not v.strip() for v in evidence.values())
+            or any(
+                not isinstance(row.get(k), str) or not row[k].strip()
+                for k in ("model", "launcher", "scope")
+            )
+            or (row["effort"] is not None and not isinstance(row["effort"], str))
+        ):
+            raise EvidenceError("invalid owner-directed review record")
+        latest[row["operation"]] = row["from_attempt"]
+    return rows
+
+
+def directed_review_for(
+    directions: list[dict[str, Any]], operation: Any, attempt: Any
+) -> dict[str, Any] | None:
+    governing = [
+        row
+        for row in directions
+        if row["operation"] == operation
+        and isinstance(attempt, int)
+        and row["from_attempt"] <= attempt
+    ]
+    return governing[-1] if governing else None
+
+
+def load_directed_launches(run_dir: Path) -> dict[tuple[str, int], dict[str, Any]]:
+    """What the primary attests about a launch the tool did not witness."""
+    file = run_dir / "directed-review-launches.jsonl"
+    rows: dict[tuple[str, int], dict[str, Any]] = {}
+    if not file.exists():
+        return rows
+    directions = load_directed_reviews(run_dir)
+    registrations = {
+        (item.get("operation"), item.get("attempt")): item
+        for item in load_jsonl(run_dir / "role-attempts.jsonl")
+    }
+    for row in load_jsonl(file):
+        if (
+            set(row) != DIRECTED_LAUNCH_FIELDS
+            or row.get("schema_version") != SCHEMA_VERSION
+            or row.get("posture") not in DIRECTED_POSTURES
+            or any(
+                not isinstance(row.get(k), str) or not row[k].strip()
+                for k in ("observed_model", "observed_effort")
+            )
+        ):
+            raise EvidenceError("invalid directed-launch attestation")
+        key = (row["operation"], row["attempt"])
+        registration = registrations.get(key)
+        if (
+            key in rows
+            or registration is None
+            or directed_review_for(directions, *key) is None
+            or _registration_digest(registration) != row["registration_sha256"]
+        ):
+            raise EvidenceError(
+                "directed-launch attestation is duplicated or names no owner-directed attempt"
+            )
+        for field in ("launch_evidence_sha256", "prompt_sha256"):
+            retained = run_dir / "retained-artifacts" / str(row[field])
+            if (
+                not retained.is_file()
+                or hashlib.sha256(retained.read_bytes()).hexdigest() != row[field]
+            ):
+                raise EvidenceError(
+                    "directed-launch attestation's retained evidence is missing or altered"
+                )
+        rows[key] = row
+    return rows
+
+
+def directed_review_summary(run_dir: Path) -> list[dict[str, Any]]:
+    """Every review that ran under an owner direction, with what was and was not observed."""
+    directions = load_directed_reviews(run_dir)
+    launches = load_directed_launches(run_dir)
+    summary = []
+    for record in load_jsonl(run_dir / "role-attempts.jsonl"):
+        key = (record.get("operation"), record.get("attempt"))
+        direction = directed_review_for(directions, *key)
+        if direction is None:
+            continue
+        launch = launches.get(key)
+        summary.append(
+            {
+                "operation": key[0],
+                "attempt": key[1],
+                "launcher": direction["launcher"],
+                "scope": direction["scope"],
+                "owner_evidence": direction["owner_evidence"],
+                "registered": {k: record[k] for k in ("harness", "model", "effort")},
+                "launch_witness": "attested by the primary; not witnessed by this tool",
+                "attested_launch": (
+                    {
+                        k: launch[k]
+                        for k in (
+                            "observed_model",
+                            "observed_effort",
+                            "posture",
+                            "launch_evidence_sha256",
+                            "prompt_sha256",
+                        )
+                    }
+                    if launch
+                    else None
+                ),
+            }
+        )
+    return summary
+
+
+def validate_role_record(
+    record: dict[str, Any],
+    run: dict[str, Any],
+    directions: list[dict[str, Any]] | None = None,
+) -> None:
     required = {
         "schema_version",
         "registered_at",
@@ -1316,9 +1607,23 @@ def validate_role_record(record: dict[str, Any], run: dict[str, Any]) -> None:
     if run["workflow"]["mode"] == "primary":
         if operation not in REVIEW_OPERATIONS or record.get("harness") == "native":
             raise EvidenceError("primary mode only dispatches independent review instances")
-        selected = run["workflow"]["roles"][record["role"]]
-        if record.get("model") != selected["model"] or record.get("effort") != selected["effort"]:
-            raise EvidenceError("role differs from frozen primary workflow")
+        direction = directed_review_for(directions or [], operation, record.get("attempt"))
+        if direction is not None:
+            if any(record.get(k) != direction[k] for k in ("harness", "model", "effort")):
+                raise EvidenceError(
+                    "role differs from the owner-directed review recorded for this attempt"
+                )
+        else:
+            selected = run["workflow"]["roles"][record["role"]]
+            if (
+                record.get("model") != selected["model"]
+                or record.get("effort") != selected["effort"]
+            ):
+                raise EvidenceError(
+                    "role differs from frozen primary workflow. A reviewer the owner "
+                    "directed for this task is recorded first with "
+                    "record-owner-directed-review; nothing else changes the frozen reviewer."
+                )
     if operation not in ROLE_OPERATIONS or record.get("role") != ROLE_OPERATIONS[operation]:
         raise EvidenceError("role-attempt operation and role do not agree")
     if record.get("harness") not in ROLE_HARNESSES:
@@ -1371,18 +1676,52 @@ def command_register_role_attempt(arguments: argparse.Namespace) -> None:
         "effort": arguments.effort,
         "reason": arguments.reason,
     }
-    validate_role_record(record, run)
+    validate_role_record(record, run, load_directed_reviews(arguments.run_dir))
     existing = load_jsonl(arguments.run_dir / "role-attempts.jsonl")
     if any(
         item.get("operation") == record["operation"] and item.get("attempt") == record["attempt"]
         for item in existing
     ):
         raise EvidenceError("duplicate role operation/attempt registration")
+    # A refusal before launch consumes nothing, so the attempt it refused is still the one
+    # to launch. Registering the next number instead leaves a registration nothing can
+    # account for, and acceptance refuses the run much later.
+    _, opened_dispatches, omitted_opens = role_dispatch_ledger(
+        arguments.run_dir, allow_opened=True, allow_orphan_omissions=True
+    )
+    accounted = (
+        {
+            (item["operation"], item["attempt"])
+            for item in load_role_dispatches_lenient(arguments.run_dir)
+        }
+        | set(opened_dispatches)
+        | set(omitted_opens)
+        | set(load_unlaunched_attempts(arguments.run_dir))
+    )
+    for item in existing:
+        if (
+            item.get("operation") == record["operation"]
+            and item.get("attempt") < record["attempt"]
+            and (item["operation"], item["attempt"]) not in accounted
+        ):
+            raise EvidenceError(
+                f"{item['operation']} attempt {item['attempt']} is registered and was never "
+                "dispatched. A refusal before launch consumes nothing: correct the command and "
+                "relaunch that registration. If it can never be launched, record it with "
+                "record-unlaunched-attempt before registering another attempt."
+            )
+    by_operation: dict[str, list[int]] = {}
+    for item in [*existing, record]:
+        validate_role_record(item, run, load_directed_reviews(arguments.run_dir))
+        by_operation.setdefault(item["operation"], []).append(item["attempt"])
+    validate_role_continuity(arguments.run_dir, run, by_operation)
     append_jsonl(arguments.run_dir / "role-attempts.jsonl", record)
     atomic_json(arguments.output, record)
     if arguments.cause:
         atomic_json(Path(str(arguments.output) + ".cause.json"), {"cause": arguments.cause})
-    if arguments.harness == "native":
+    if arguments.harness == "native" or directed_review_for(
+        load_directed_reviews(arguments.run_dir), record["operation"], record["attempt"]
+    ):
         # An external dispatch gets its spans built by `kickoff-config watch`.
         # A native one leaves the orchestrator to reproduce that recipe by
         # hand, and a single omitted `--model` is unrecoverable once the span
@@ -1390,9 +1729,177 @@ def command_register_role_attempt(arguments: argparse.Namespace) -> None:
         recipe_path = Path(f"{arguments.output}.span-recipe.json")
         atomic_json(recipe_path, native_span_recipe(record))
         print("registered")
-        print(f"native span recipe: {recipe_path}")
+        print(f"hand-built span recipe: {recipe_path}")
         return
     print("registered")
+
+
+def command_record_unlaunched_attempt(arguments: argparse.Namespace) -> None:
+    """Record that a registered attempt was refused before anything was launched.
+
+    This is a statement of fact with its proof, not a waiver: it is accepted only when no
+    dispatch row, execution span or advisory claim exists for the attempt, and it binds
+    the exact registration and a refusal record retained inside the run. Attempts that
+    did launch keep every existing join.
+    """
+    run = validate_run_dir(arguments.run_dir)
+    run_dir = arguments.run_dir.resolve()
+    registration = load_json(arguments.registration)
+    key = (registration.get("operation"), registration.get("attempt"))
+    ledger = {
+        (item.get("operation"), item.get("attempt")): item
+        for item in load_jsonl(run_dir / "role-attempts.jsonl")
+    }
+    if ledger.get(key) != registration:
+        raise EvidenceError("registration does not match the run's recorded attempt")
+    if key in load_unlaunched_attempts(run_dir):
+        raise EvidenceError("attempt is already recorded as unlaunched")
+    artifact = arguments.refusal_artifact.resolve()
+    if (
+        run_dir not in artifact.parents
+        or not artifact.is_file()
+        or not artifact.read_bytes().strip()
+    ):
+        raise EvidenceError(
+            "the refusal record must be a nonempty file retained inside the run directory"
+        )
+    require_unlaunched(run_dir, run, key)
+    append_jsonl(
+        run_dir / "role-unlaunched.jsonl",
+        {
+            "schema_version": SCHEMA_VERSION,
+            "recorded_at": now(),
+            "operation": key[0],
+            "attempt": key[1],
+            "registration_sha256": _registration_digest(registration),
+            "refusal_artifact": artifact.relative_to(run_dir).as_posix(),
+            "refusal_sha256": hashlib.sha256(artifact.read_bytes()).hexdigest(),
+        },
+    )
+    print("UNLAUNCHED ATTEMPT RECORDED; registration, budget and other attempts unchanged")
+
+
+def require_directed_launch(run_dir: Path, operation: str, attempt: int) -> None:
+    """An owner-directed review counts only with its retained launch attestation."""
+    if directed_review_for(load_directed_reviews(run_dir), operation, attempt) is None:
+        return
+    if (operation, attempt) not in load_directed_launches(run_dir):
+        raise EvidenceError(
+            f"owner-directed {operation}#{attempt} has no launch attestation: record what "
+            "the launcher reported with attest-directed-launch before relying on the review"
+        )
+
+
+def command_record_owner_directed_review(arguments: argparse.Namespace) -> None:
+    """Record the owner's direction that this task's review run outside the watcher.
+
+    This is a statement of fact about an instruction already verified by the caller, not
+    an authenticator and not a waiver. It changes one thing: which reviewer the attempts
+    from here on may be registered as. Every other join still applies to them.
+    """
+    run = validate_run_dir(arguments.run_dir)
+    validate_kickoff_context(
+        Path(run["repository_root"]),
+        run["phase"],
+        run["telemetry_trace_id"],
+        run["telemetry_root_span_id"],
+        open_required=True,
+    )
+    if run["workflow"]["mode"] != "primary":
+        raise EvidenceError("an owner-directed review belongs to primary-mode advice")
+    evidence = load_json(arguments.owner_evidence)
+    existing = load_directed_reviews(arguments.run_dir)
+    attempts = [
+        item["attempt"]
+        for item in load_jsonl(arguments.run_dir / "role-attempts.jsonl")
+        if item.get("operation") == arguments.operation
+    ]
+    from_attempt = max(attempts, default=0) + 1
+    if any(
+        row["operation"] == arguments.operation and row["from_attempt"] == from_attempt
+        for row in existing
+    ):
+        raise EvidenceError(
+            "an owner direction for this review is already recorded and not yet used"
+        )
+    record = {
+        "schema_version": SCHEMA_VERSION,
+        "recorded_at": now(),
+        "operation": arguments.operation,
+        "from_attempt": from_attempt,
+        "harness": arguments.harness,
+        "model": arguments.model,
+        "effort": arguments.effort,
+        "launcher": arguments.launcher,
+        "scope": arguments.scope,
+        "owner_evidence": evidence,
+    }
+    try:
+        validate_directed_reviews([*existing, record])
+    except EvidenceError:
+        raise EvidenceError(
+            "owner-directed review requires a non-native harness, a model, a launcher, an "
+            "exact scope and attributable owner evidence (source, reference, statement)"
+        ) from None
+    append_jsonl(arguments.run_dir / "owner-directed-reviews.jsonl", record)
+    print(
+        f"OWNER-DIRECTED REVIEW RECORDED {arguments.operation} from attempt {from_attempt}; "
+        "the reviewer changes, the pass budget and every evidence join do not"
+    )
+
+
+def command_attest_directed_launch(arguments: argparse.Namespace) -> None:
+    """Retain what the primary observed of a launch this tool did not perform."""
+    validate_run_dir(arguments.run_dir)
+    run_dir = arguments.run_dir.resolve()
+    registration = load_json(arguments.registration)
+    key = (registration.get("operation"), registration.get("attempt"))
+    ledger = {
+        (item.get("operation"), item.get("attempt")): item
+        for item in load_jsonl(run_dir / "role-attempts.jsonl")
+    }
+    if ledger.get(key) != registration:
+        raise EvidenceError("registration does not match the run's recorded attempt")
+    if directed_review_for(load_directed_reviews(run_dir), *key) is None:
+        raise EvidenceError("only an owner-directed review carries a launch attestation")
+    if key in load_directed_launches(run_dir):
+        raise EvidenceError("this attempt's launch is already attested")
+    digests = {}
+    for label, source in (
+        ("launch_evidence_sha256", arguments.launch_evidence),
+        ("prompt_sha256", arguments.prompt),
+    ):
+        data = source.read_bytes()
+        if not data.strip():
+            raise EvidenceError("launch evidence and prompt must be nonempty files")
+        digests[label] = retain_evidence(run_dir, data)
+    append_jsonl(
+        run_dir / "directed-review-launches.jsonl",
+        {
+            "schema_version": SCHEMA_VERSION,
+            "recorded_at": now(),
+            "operation": key[0],
+            "attempt": key[1],
+            "registration_sha256": _registration_digest(registration),
+            **digests,
+            "observed_model": arguments.observed_model,
+            "observed_effort": arguments.observed_effort,
+            "posture": arguments.posture,
+        },
+    )
+    load_directed_launches(run_dir)
+    for field, observed in (
+        ("model", arguments.observed_model),
+        ("effort", arguments.observed_effort),
+    ):
+        if observed != "unknown" and observed != registration[field]:
+            print(
+                f"kickoff-evidence: the launcher reported {field} {observed!r}; the "
+                f"registration says {registration[field]!r}. Both are kept. State in the "
+                "primary decision why they name the same reviewer, or that they do not.",
+                file=sys.stderr,
+            )
+    print("DIRECTED LAUNCH ATTESTED; recorded as the primary's statement, not tool-witnessed")
 
 
 def native_span_recipe(record: dict[str, Any]) -> dict[str, Any]:
@@ -1450,8 +1957,16 @@ def native_span_recipe(record: dict[str, Any]) -> dict[str, Any]:
 def command_span_recipe(arguments: argparse.Namespace) -> None:
     validate_run_dir(arguments.run_dir)
     record = load_json(arguments.registration)
-    if not isinstance(record, dict) or record.get("harness") != "native":
-        raise EvidenceError("span recipes exist only for native role attempts")
+    if not isinstance(record, dict) or (
+        record.get("harness") != "native"
+        and directed_review_for(
+            load_directed_reviews(arguments.run_dir),
+            record.get("operation"),
+            record.get("attempt"),
+        )
+        is None
+    ):
+        raise EvidenceError("span recipes exist only for native and owner-directed role attempts")
     recipe = native_span_recipe(record)
     if arguments.intelligence_span_id:
         validate_span_identifier(arguments.intelligence_span_id, "intelligence span id")
@@ -1509,7 +2024,7 @@ def command_repin_tools(arguments: argparse.Namespace) -> None:
 def command_validate_role_attempt(arguments: argparse.Namespace) -> None:
     run = validate_run_dir(arguments.run_dir)
     registration = load_json(arguments.registration)
-    validate_role_record(registration, run)
+    validate_role_record(registration, run, load_directed_reviews(arguments.run_dir))
     matches = [
         item
         for item in load_jsonl(arguments.run_dir / "role-attempts.jsonl")
@@ -1561,7 +2076,7 @@ def validate_dispatch_span(
 def command_record_role_dispatch(arguments: argparse.Namespace) -> None:
     run = validate_run_dir(arguments.run_dir)
     registration = load_json(arguments.registration)
-    validate_role_record(registration, run)
+    validate_role_record(registration, run, load_directed_reviews(arguments.run_dir))
     if (
         sum(item == registration for item in load_jsonl(arguments.run_dir / "role-attempts.jsonl"))
         != 1
@@ -2140,10 +2655,42 @@ def validate_finding(value: Any, index: int) -> dict[str, Any]:
     }
 
 
+def command_grant_advice_exception(arguments: argparse.Namespace) -> None:
+    run = validate_run_dir(arguments.run_dir)
+    validate_kickoff_context(
+        Path(run["repository_root"]),
+        run["phase"],
+        run["telemetry_trace_id"],
+        run["telemetry_root_span_id"],
+        open_required=True,
+    )
+    record = load_json(arguments.registration)
+    validate_role_record(record, run, load_directed_reviews(arguments.run_dir))
+    if (
+        run["workflow"]["mode"] != "primary"
+        or record["operation"] != "role.code-review"
+        or record not in load_jsonl(arguments.run_dir / "role-attempts.jsonl")
+    ):
+        raise EvidenceError("exception requires a recorded primary code-advice registration")
+    try:
+        identifier = advisory.grant_exception(
+            Path(run["repository_root"]),
+            run["phase"],
+            arguments.run_dir,
+            record,
+            product_manifest(Path(run["repository_root"]))["candidate_id"],
+            arguments.scope,
+            load_json(arguments.owner_evidence),
+        )
+    except advisory.AdvisoryError as exc:
+        raise EvidenceError(str(exc)) from exc
+    print(f"OWNER EXCEPTION RECORDED {identifier}; one extra launch, default unchanged")
+
+
 def command_start_advice(arguments: argparse.Namespace) -> None:
     run = validate_run_dir(arguments.run_dir)
     record = load_json(arguments.registration)
-    validate_role_record(record, run)
+    validate_role_record(record, run, load_directed_reviews(arguments.run_dir))
     if record not in load_jsonl(arguments.run_dir / "role-attempts.jsonl"):
         raise EvidenceError("advice registration is not recorded")
     if run["workflow"]["mode"] != "primary":
@@ -2164,6 +2711,8 @@ def command_start_advice(arguments: argparse.Namespace) -> None:
             record["operation"],
             record["attempt"],
             cause,
+            registration=record,
+            candidate=product_manifest(Path(run["repository_root"]))["candidate_id"],
         )
     except advisory.AdvisoryError as exc:
         raise EvidenceError(str(exc)) from exc
@@ -2173,7 +2722,8 @@ def command_start_advice(arguments: argparse.Namespace) -> None:
     )
     if plan_id is not None:
         atomic_json(
-            arguments.run_dir / f"advice-plan-{record['attempt']}.json", {"plan_sha256": plan_id}
+            arguments.run_dir / f"advice-plan-{record['attempt']}.json",
+            {"plan_sha256": plan_id},
         )
     print("ADVICE LAUNCH RECORDED")
 
@@ -2292,9 +2842,10 @@ def command_reconcile_unstarted_advice(arguments: argparse.Namespace) -> None:
 
 def command_ingest_advice(arguments: argparse.Namespace) -> None:
     validate_run_dir(arguments.run_dir)
-    document = (
-        load_json(arguments.input) if arguments.input else read_role_artifact(arguments.artifact)
-    )
+    source = arguments.input or arguments.artifact
+    raw_digest = retain_evidence(arguments.run_dir, source.read_bytes())
+    retained = arguments.run_dir / "retained-artifacts" / raw_digest
+    document = load_json(retained) if arguments.input else read_role_artifact(retained)
     try:
         advisory.check_report(document)
     except advisory.AdvisoryError as exc:
@@ -2325,6 +2876,7 @@ def command_ingest_advice(arguments: argparse.Namespace) -> None:
     ]
     if len(claims) != 1:
         raise EvidenceError("advice requires its recorded phase launch")
+    require_directed_launch(arguments.run_dir, dispatch["operation"], dispatch["attempt"])
     identifier = f"{REVIEW_OPERATIONS[dispatch['operation']]}-{claims[0]['pass']}"
     row = {
         "report_id": identifier,
@@ -2339,29 +2891,69 @@ def command_ingest_advice(arguments: argparse.Namespace) -> None:
         )["plan_sha256"]
     if any(r["report_id"] == identifier for r in reports):
         raise EvidenceError("advisory report is immutable and already recorded")
+    row["raw_artifact_sha256"] = raw_digest
     reports.append(row)
     atomic_json(arguments.run_dir / "advisory-reports.json", reports)
     print("ADVICE RECORDED; primary disposition owns acceptance")
 
 
-def read_advice_source(source: Path) -> dict[str, Any]:
+def read_advice_source(source: Path, *, consumer: Path | None = None) -> dict[str, Any]:
+    source = source.resolve()
+    if consumer is not None:
+        attestations = load_advice_attestations(consumer)
+        matching = [item for item in attestations if item["source_run"] == str(source)]
+        if matching:
+            return validate_advice_attestation(consumer, matching[0])
+    try:
+        chain = json.loads(os.environ.get("KICKOFF_ADVICE_SOURCE_CHAIN", "[]"))
+    except json.JSONDecodeError as exc:
+        raise EvidenceError("invalid advisory source ancestry") from exc
+    if not isinstance(chain, list) or any(not isinstance(item, str) for item in chain):
+        raise EvidenceError("invalid advisory source ancestry")
+    if str(source) in chain:
+        raise EvidenceError("cyclic advisory source provenance")
+    registrations = (source / "role-attempts.jsonl").read_bytes()
     result = subprocess.run(
-        [str(source / "tools/kickoff-evidence"), "advice-source", "--run-dir", str(source)],
+        [
+            str(source / "tools/kickoff-evidence"),
+            "advice-source",
+            "--run-dir",
+            str(source),
+        ],
         capture_output=True,
         text=True,
         check=False,
+        env={
+            **os.environ,
+            "KICKOFF_ADVICE_SOURCE_CHAIN": json.dumps([*chain, str(source)]),
+        },
     )
     if result.returncode:
         raise EvidenceError(result.stderr.strip() or "prior advisory source validation failed")
-    return json.loads(result.stdout)
+    if (source / "role-attempts.jsonl").read_bytes() != registrations:
+        raise EvidenceError("advisory source registrations changed during validation")
+    verified = json.loads(result.stdout)
+    verified["registrations"] = [json.loads(line) for line in registrations.splitlines() if line]
+    return verified
+
+
+def validate_raw_advice(run_dir: Path, reports: list[dict[str, Any]]) -> None:
+    for report in reports:
+        if "raw_artifact_sha256" in report:
+            verify_retained_evidence(
+                Path(report.get("source_run", str(run_dir))), report["raw_artifact_sha256"]
+            )
 
 
 def command_advice_source(arguments: argparse.Namespace) -> None:
     run = validate_run_dir(arguments.run_dir)
+    for record in load_advice_attestations(arguments.run_dir):
+        validate_advice_attestation(arguments.run_dir, record)
     if run["workflow"]["mode"] != "primary":
         raise EvidenceError("advice source must have primary authority")
     validate_role_preflight_receipt(arguments.run_dir, Path(run["repository_root"]))
     validate_role_spans(arguments.run_dir, run, require_initial=False)
+    validate_raw_advice(arguments.run_dir, load_json(arguments.run_dir / "advisory-reports.json"))
     print(
         json.dumps(
             {
@@ -2379,7 +2971,13 @@ def report_dispatches(
     source = Path(report.get("source_run", str(run_dir))).resolve()
     if source == run_dir.resolve():
         return load_role_dispatches(source)
-    verified = read_advice_source(source)
+    return carried_advice_source(run_dir, run, report, source)["dispatches"]
+
+
+def carried_advice_source(
+    run_dir: Path, run: dict[str, Any], report: dict[str, Any], source: Path
+) -> dict[str, Any]:
+    verified = read_advice_source(source, consumer=run_dir)
     prior = verified["run"]
     if (prior["repository_root"], prior["phase"], prior["workflow"]["mode"]) != (
         run["repository_root"],
@@ -2390,12 +2988,365 @@ def report_dispatches(
     original = {key: value for key, value in report.items() if key != "source_run"}
     if original not in verified["reports"]:
         raise EvidenceError("carried advice differs from its original report")
-    return verified["dispatches"]
+    return verified
+
+
+def validate_role_continuity(
+    run_dir: Path,
+    run: dict[str, Any],
+    by_operation: dict[str, list[int]],
+    *,
+    predecessors: list[dict[str, Any]] | None = None,
+) -> None:
+    for operation, attempts in by_operation.items():
+        missing = set(range(1, max(attempts) + 1)) - set(attempts)
+        if not missing:
+            continue
+        if run["workflow"]["mode"] == "primary" and (
+            predecessors
+            or any("source_run" in item for item in load_json(run_dir / "advisory-reports.json"))
+        ):
+            root = Path(run["repository_root"])
+            try:
+                budget = advisory.budget_path(root, run["phase"])
+                claims = advisory.active_launches(
+                    advisory.validate_budget(root, run["phase"], budget.read_text())
+                )
+            except (OSError, advisory.AdvisoryError) as exc:
+                raise EvidenceError(f"invalid advisory predecessor budget: {exc}") from exc
+            local = [
+                claim["pass"]
+                for claim in claims
+                if claim["operation"] == operation and claim["run"] == str(run_dir.resolve())
+            ]
+            next_pass = 1 + sum(claim["operation"] == operation for claim in claims)
+            before_pass = min(local, default=next_pass)
+            covered: set[int] = set()
+            for report in load_json(run_dir / "advisory-reports.json"):
+                if report["kind"] != REVIEW_OPERATIONS.get(operation) or "source_run" not in report:
+                    continue
+                source = Path(report["source_run"]).resolve()
+                if source == run_dir.resolve():
+                    raise EvidenceError("advisory predecessor cannot name its own run")
+                verified = carried_advice_source(run_dir, run, report, source)
+                dispatches = [
+                    item
+                    for item in verified["dispatches"]
+                    if item["operation"] == operation
+                    and item["accepted"]
+                    and item["intelligence_span_id"] == report["span_id"]
+                    and item["dispatch_candidate_id"] == report["candidate_id"]
+                    and item["return_candidate_id"] == report["candidate_id"]
+                ]
+                if len(dispatches) != 1:
+                    raise EvidenceError("advisory predecessor lacks its original dispatch")
+                attempt = dispatches[0]["attempt"]
+                registrations = [
+                    item
+                    for item in verified["registrations"]
+                    if item["operation"] == operation and item["attempt"] == attempt
+                ]
+                launched = [
+                    item
+                    for item in claims
+                    if item["run"] == str(source)
+                    and item["operation"] == operation
+                    and item["attempt"] == attempt
+                ]
+                if (
+                    len(registrations) != 1
+                    or len(launched) != 1
+                    or launched[0]["pass"] >= before_pass
+                    or report["report_id"] != f"{report['kind']}-{launched[0]['pass']}"
+                ):
+                    raise EvidenceError("advisory predecessor lacks its original earlier launch")
+                if attempt in covered:
+                    raise EvidenceError("ambiguous advisory predecessor attempt")
+                covered.add(attempt)
+            for predecessor in predecessors or []:
+                prior_run = predecessor["run"]
+                if (
+                    prior_run["repository_root"],
+                    prior_run["phase"],
+                    prior_run["workflow"]["mode"],
+                ) != (run["repository_root"], run["phase"], "primary"):
+                    raise EvidenceError("attested predecessor belongs to another work item")
+                for dispatch in predecessor["dispatches"]:
+                    attempt = dispatch["attempt"]
+                    if dispatch["operation"] != operation or attempt not in missing:
+                        continue
+                    registrations = [
+                        item
+                        for item in predecessor["registrations"]
+                        if item["operation"] == operation and item["attempt"] == attempt
+                    ]
+                    launched = [
+                        item
+                        for item in claims
+                        if item["run"] == predecessor["source_run"]
+                        and item["operation"] == operation
+                        and item["attempt"] == attempt
+                    ]
+                    if (
+                        len(registrations) != 1
+                        or len(launched) != 1
+                        or launched[0]["pass"] >= before_pass
+                        or not dispatch["accepted"]
+                        or dispatch["dispatch_candidate_id"] != dispatch["return_candidate_id"]
+                        or dispatch["dispatch_candidate_id"] is None
+                        or attempt in covered
+                    ):
+                        raise EvidenceError(
+                            "attested predecessor lacks its unique earlier accepted launch"
+                        )
+                    covered.add(attempt)
+            missing -= covered
+        if missing:
+            raise EvidenceError(f"role attempts are not contiguous for {operation}")
+
+
+ATTESTATION_LEDGER = "advice-source-attestations.jsonl"
+
+
+def load_advice_attestations(run_dir: Path) -> list[dict[str, Any]]:
+    ledger = run_dir / ATTESTATION_LEDGER
+    if not ledger.exists():
+        return []
+    with ledger.open() as handle:
+        fcntl.flock(handle, fcntl.LOCK_SH)
+        return validate_advice_attestations([json.loads(line) for line in handle if line.strip()])
+
+
+def validate_advice_attestations(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    for record in records:
+        if (
+            not isinstance(record, dict)
+            or set(record)
+            != {
+                "schema_version",
+                "source_run",
+                "predecessor_runs",
+                "snapshot",
+                "budget_prefix",
+            }
+            or record["schema_version"] != 1
+            or not isinstance(record["source_run"], str)
+            or not isinstance(record["predecessor_runs"], list)
+            or not record["predecessor_runs"]
+            or any(not isinstance(item, str) for item in record["predecessor_runs"])
+            or not isinstance(record["snapshot"], dict)
+            or not isinstance(record["budget_prefix"], dict)
+            or record["source_run"] in seen
+        ):
+            raise EvidenceError("invalid or duplicate advice-source attestation")
+        seen.add(record["source_run"])
+    return records
+
+
+def advice_source_snapshot(source: Path) -> dict[str, Any]:
+    # Only evidence metadata and captured plans; never read native packets or product source.
+    files = sorted([*source.glob("*.json"), *source.glob("*.jsonl"), *source.glob("plans/*.md")])
+    metadata = load_json(source / "run.json")
+    spans = closed_spans(
+        engine_root=Path(metadata["repository_root"]),
+        trace_id=metadata["telemetry_trace_id"],
+    )
+    return {
+        "files": {
+            str(item.relative_to(source)): hashlib.sha256(item.read_bytes()).hexdigest()
+            for item in files
+        },
+        "spans_sha256": hashlib.sha256(json.dumps(spans, sort_keys=True).encode()).hexdigest(),
+    }
+
+
+def audit_historical_advice(source: Path, predecessors: list[Path]) -> dict[str, Any]:
+    if not predecessors or len(set(predecessors)) != len(predecessors) or source in predecessors:
+        raise EvidenceError("advice source requires distinct original predecessors")
+    run = validate_historical_run_metadata(source)
+    prior = []
+    for predecessor in predecessors:
+        prior_run = validate_historical_run_metadata(predecessor)
+        if run["workflow"]["mode"] != "primary" or (
+            prior_run["repository_root"],
+            prior_run["phase"],
+            prior_run["workflow"]["mode"],
+        ) != (run["repository_root"], run["phase"], "primary"):
+            raise EvidenceError("attestation requires the same primary work item")
+        # Each original independently passes strict continuity and every original join.
+        validate_role_preflight_receipt(predecessor, Path(run["repository_root"]))
+        validate_role_spans(predecessor, prior_run, require_initial=False)
+        prior.append(
+            {
+                "source_run": str(predecessor),
+                "run": prior_run,
+                "registrations": load_jsonl(predecessor / "role-attempts.jsonl"),
+                "dispatches": load_role_dispatches(predecessor),
+            }
+        )
+    validate_role_preflight_receipt(source, Path(run["repository_root"]))
+    records = load_jsonl(source / "role-attempts.jsonl")
+    if not any(
+        set(
+            range(
+                1,
+                max(item["attempt"] for item in records if item["operation"] == operation) + 1,
+            )
+        )
+        - {item["attempt"] for item in records if item["operation"] == operation}
+        for operation in {item["operation"] for item in records}
+    ):
+        raise EvidenceError("attestation requires an actual historical local numbering gap")
+    validate_role_spans(source, run, require_initial=False, predecessors=prior)
+    root = Path(run["repository_root"])
+    claims = advisory.active_launches(
+        advisory.validate_budget(
+            root, run["phase"], advisory.budget_path(root, run["phase"]).read_text()
+        )
+    )
+    for origin in (source, *predecessors):
+        for dispatch in load_role_dispatches(origin):
+            if (
+                dispatch["accepted"]
+                and len(
+                    [
+                        claim
+                        for claim in claims
+                        if claim["run"] == str(origin)
+                        and claim["operation"] == dispatch["operation"]
+                        and claim["attempt"] == dispatch["attempt"]
+                    ]
+                )
+                != 1
+            ):
+                raise EvidenceError("historical dispatch lacks one original phase launch")
+    return {
+        "run": run,
+        "reports": load_json(source / "advisory-reports.json"),
+        "dispatches": load_role_dispatches(source),
+        "registrations": records,
+    }
+
+
+def validate_advice_attestation(consumer: Path, record: dict[str, Any]) -> dict[str, Any]:
+    source = Path(record["source_run"])
+    predecessors = [Path(item) for item in record["predecessor_runs"]]
+    origins = (source, *predecessors)
+    if any(not item.is_absolute() or item.resolve() != item for item in origins):
+        raise EvidenceError("attestation source paths must be canonical absolute paths")
+    if consumer.resolve() in set(origins):
+        raise EvidenceError("attestation belongs in a separate continuation")
+    metadata = validate_historical_run_metadata(source)
+    budget = advisory.budget_path(Path(metadata["repository_root"]), metadata["phase"]).read_bytes()
+    prefix = record["budget_prefix"]
+    if (
+        set(prefix) != {"bytes", "sha256"}
+        or type(prefix["bytes"]) is not int
+        or prefix["bytes"] <= 0
+        or prefix["bytes"] > len(budget)
+        or hashlib.sha256(budget[: prefix["bytes"]]).hexdigest() != prefix["sha256"]
+    ):
+        raise EvidenceError("attested original phase-budget prefix changed")
+    before = {str(item): advice_source_snapshot(item) for item in origins}
+    if before != record["snapshot"]:
+        raise EvidenceError("attested original evidence changed")
+    previous_chain = os.environ.get("KICKOFF_ADVICE_SOURCE_CHAIN")
+    chain = json.loads(previous_chain or "[]")
+    if not isinstance(chain, list) or any(not isinstance(item, str) for item in chain):
+        raise EvidenceError("invalid advisory source ancestry")
+    if str(source) in chain:
+        raise EvidenceError("cyclic advisory source attestation")
+    os.environ["KICKOFF_ADVICE_SOURCE_CHAIN"] = json.dumps([*chain, str(source)])
+    try:
+        verified = audit_historical_advice(source, predecessors)
+    finally:
+        if previous_chain is None:
+            os.environ.pop("KICKOFF_ADVICE_SOURCE_CHAIN", None)
+        else:
+            os.environ["KICKOFF_ADVICE_SOURCE_CHAIN"] = previous_chain
+    current = validate_run_dir(consumer)
+    prior = verified["run"]
+    if (current["repository_root"], current["phase"], current["workflow"]["mode"]) != (
+        prior["repository_root"],
+        prior["phase"],
+        "primary",
+    ):
+        raise EvidenceError("attestation belongs to another continuation work item")
+    if before != {str(item): advice_source_snapshot(item) for item in origins}:
+        raise EvidenceError("original evidence changed during attestation validation")
+    if (
+        hashlib.sha256(
+            advisory.budget_path(Path(metadata["repository_root"]), metadata["phase"]).read_bytes()[
+                : prefix["bytes"]
+            ]
+        ).hexdigest()
+        != prefix["sha256"]
+    ):
+        raise EvidenceError("original phase-budget prefix changed during attestation validation")
+    return verified
+
+
+def append_advice_attestations(consumer: Path, incoming: list[dict[str, Any]]) -> None:
+    # One owner can still have simultaneous CLI calls. Compare the whole batch
+    # under the append lock before publishing any new immutable receipt.
+    with (consumer / ATTESTATION_LEDGER).open("a+") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        handle.seek(0)
+        existing = validate_advice_attestations(
+            [json.loads(line) for line in handle if line.strip()]
+        )
+        additions = []
+        for record in incoming:
+            matches = [
+                item
+                for item in [*existing, *additions]
+                if item["source_run"] == record["source_run"]
+            ]
+            if matches and matches != [record]:
+                raise EvidenceError("conflicting immutable advice-source attestation")
+            if not matches:
+                additions.append(record)
+        handle.write("".join(json.dumps(item, sort_keys=True) + "\n" for item in additions))
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def command_attest_advice_source(arguments: argparse.Namespace) -> None:
+    run = validate_run_dir(arguments.run_dir)
+    validate_kickoff_context(
+        Path(run["repository_root"]),
+        run["phase"],
+        run["telemetry_trace_id"],
+        run["telemetry_root_span_id"],
+        open_required=True,
+    )
+    source = arguments.source_run.resolve()
+    predecessors = [item.resolve() for item in arguments.predecessor_run]
+    origins = (source, *predecessors)
+    prior = validate_historical_run_metadata(source)
+    budget = advisory.budget_path(Path(prior["repository_root"]), prior["phase"]).read_bytes()
+    record = {
+        "schema_version": 1,
+        "source_run": str(source),
+        "predecessor_runs": [str(item) for item in predecessors],
+        "snapshot": {str(item): advice_source_snapshot(item) for item in origins},
+        "budget_prefix": {
+            "bytes": len(budget),
+            "sha256": hashlib.sha256(budget).hexdigest(),
+        },
+    }
+    validate_advice_attestation(arguments.run_dir, record)
+    append_advice_attestations(arguments.run_dir, [record])
+    print("ADVICE SOURCE ATTESTED; original evidence and phase accounting unchanged")
 
 
 def command_carry_advice(arguments: argparse.Namespace) -> None:
     run = validate_run_dir(arguments.run_dir)
-    prior = read_advice_source(arguments.source_run)["run"]
+    incoming = load_advice_attestations(arguments.source_run)
+    for item in incoming:
+        validate_advice_attestation(arguments.run_dir, item)
+    prior = read_advice_source(arguments.source_run, consumer=arguments.run_dir)["run"]
     if arguments.run_dir.resolve() == arguments.source_run.resolve():
         raise EvidenceError("carry-advice requires a prior run")
     if (prior["repository_root"], prior["phase"], prior["workflow"]["mode"]) != (
@@ -2408,11 +3359,21 @@ def command_carry_advice(arguments: argparse.Namespace) -> None:
     for report in load_json(arguments.source_run / "advisory-reports.json"):
         source = Path(report.get("source_run", str(arguments.source_run))).resolve()
         carried = {**report, "source_run": str(source)}
-        report_dispatches(arguments.run_dir, run, carried)
+        source_receipt = next(
+            (item for item in incoming if item["source_run"] == str(source)), None
+        )
+        if source_receipt is not None:
+            verified = validate_advice_attestation(arguments.run_dir, source_receipt)
+            original = {key: value for key, value in carried.items() if key != "source_run"}
+            if original not in verified["reports"]:
+                raise EvidenceError("carried advice differs from attested original report")
+        else:
+            report_dispatches(arguments.run_dir, run, carried)
         if any(r["report_id"] == report["report_id"] and r != carried for r in reports):
             raise EvidenceError("conflicting carried advisory report identity")
         if carried not in reports:
             reports.append(carried)
+    append_advice_attestations(arguments.run_dir, incoming)
     atomic_json(arguments.run_dir / "advisory-reports.json", reports)
     print("ADVICE CARRIED; original identities and pass budget retained; reassess final delta")
 
@@ -2444,10 +3405,41 @@ def validate_primary_acceptance(run_dir: Path, run: dict[str, Any]) -> None:
         ]
         if dispatch["accepted"] and len(claimed) != 1:
             raise EvidenceError("advisory dispatch lacks one phase-bound launch claim")
-    for operation in REVIEW_OPERATIONS:
-        matching = [r for r in starts if r["operation"] == operation]
-        if len(matching) > 2 or any(r["pass"] == 2 and not r["cause"].strip() for r in matching):
-            raise EvidenceError("advisory pass budget or second-pass cause violated")
+    try:
+        budget = advisory.budget_path(Path(run["repository_root"]), run["phase"])
+        advisory.validate_budget(
+            Path(run["repository_root"]),
+            run["phase"],
+            budget.read_text() if budget.exists() else "",
+        )
+    except advisory.AdvisoryError as exc:
+        raise EvidenceError(str(exc)) from exc
+    for claim in starts:
+        if "exception_sha256" not in claim:
+            continue
+        origin = Path(claim["run"])
+        registrations = [
+            r
+            for r in load_jsonl(origin / "role-attempts.jsonl")
+            if r["operation"] == claim["operation"] and r["attempt"] == claim["attempt"]
+        ]
+        if (
+            len(registrations) != 1
+            or advisory.digest(registrations[0]) != claim["registration_sha256"]
+        ):
+            raise EvidenceError("exception registration differs from admitted claim")
+        for dispatch in load_role_dispatches(origin):
+            if (
+                dispatch["accepted"]
+                and dispatch["operation"] == claim["operation"]
+                and dispatch["attempt"] == claim["attempt"]
+                and (
+                    claim["candidate_id"] != dispatch["dispatch_candidate_id"]
+                    or claim["candidate_id"] != dispatch["return_candidate_id"]
+                )
+            ):
+                raise EvidenceError("exception candidate differs from independent dispatch")
+    validate_raw_advice(run_dir, reports)
     for report in reports:
         if report["kind"] == "plan":
             plan_id = validate_candidate_id(report.get("plan_sha256"), "advised plan identity")
@@ -2517,14 +3509,13 @@ def command_ingest_findings(arguments: argparse.Namespace) -> None:
             f"candidate mismatch: expected {expected_candidate}, found {current['candidate_id']}"
         )
     source_path = arguments.input if arguments.input else arguments.artifact
-    incoming_document = (
-        load_json(arguments.input) if arguments.input else read_role_artifact(arguments.artifact)
-    )
+    artifact_sha256 = retain_evidence(arguments.run_dir, source_path.read_bytes())
+    retained = arguments.run_dir / "retained-artifacts" / artifact_sha256
+    incoming_document = load_json(retained) if arguments.input else read_role_artifact(retained)
     if not isinstance(incoming_document, dict) or not isinstance(
         incoming_document.get("findings"), list
     ):
         raise EvidenceError("finding input must be an object with a findings array")
-    artifact_sha256 = source_digest(source_path)
     reported = len(incoming_document["findings"])
     incoming: list[dict[str, Any]] = []
     validation_errors: list[tuple[str, str]] = []
@@ -2792,7 +3783,7 @@ def command_record_gate(arguments: argparse.Namespace) -> None:
     if arguments.artifact:
         if not arguments.artifact.is_file():
             raise EvidenceError(f"gate artifact does not exist: {arguments.artifact}")
-        artifact_digest = hashlib.sha256(arguments.artifact.read_bytes()).hexdigest()
+        artifact_digest = retain_evidence(arguments.run_dir, arguments.artifact.read_bytes())
     if arguments.final:
         raise EvidenceError("managed final gates must use run-gate")
     full_candidate = tree_manifest(root)["candidate_id"]
@@ -2813,6 +3804,8 @@ def command_record_gate(arguments: argparse.Namespace) -> None:
         "outcome": "success" if arguments.exit_code == 0 else "error",
         "warning_count": arguments.warning_count,
         "artifact_sha256": artifact_digest,
+        "artifact_required": arguments.artifact is not None,
+        "diagnostics_sha256": None,
         "final": False,
         "telemetry_trace_id": run["telemetry_trace_id"],
         "telemetry_span_id": None,
@@ -2942,6 +3935,7 @@ def command_run_gate(arguments: argparse.Namespace) -> None:
         if not parent.is_dir():
             raise EvidenceError(f"gate artifact directory does not exist: {parent}")
     original_directory = Path.cwd()
+    diagnostics = arguments.run_dir.resolve() / ("gate-output-" + os.urandom(16).hex() + ".log")
     try:
         os.chdir(root)
         result = run_observed(
@@ -2953,15 +3947,19 @@ def command_run_gate(arguments: argparse.Namespace) -> None:
             attempt=arguments.attempt,
             timeout_seconds=arguments.timeout_seconds,
             argv=argv,
+            output_file=diagnostics,
         )
     finally:
         os.chdir(original_directory)
     after = tree_manifest(root)
+    diagnostic_bytes = diagnostics.read_bytes()
+    print(diagnostic_bytes.decode("utf-8", errors="replace"), end="", flush=True)
+    diagnostic_digest = retain_evidence(arguments.run_dir, diagnostic_bytes)
     product_after = product_manifest(root)
     artifact_digest = None
     if arguments.artifact:
         if arguments.artifact.is_file():
-            artifact_digest = hashlib.sha256(arguments.artifact.read_bytes()).hexdigest()
+            artifact_digest = retain_evidence(arguments.run_dir, arguments.artifact.read_bytes())
         else:
             # The command ran and its span is closed. Refusing here would orphan
             # that span permanently, so record the gate truthfully with no
@@ -2999,6 +3997,8 @@ def command_run_gate(arguments: argparse.Namespace) -> None:
         "outcome": result.outcome,
         "warning_count": None,
         "artifact_sha256": artifact_digest,
+        "artifact_required": arguments.artifact is not None,
+        "diagnostics_sha256": diagnostic_digest,
         "final": arguments.final,
         "telemetry_trace_id": run["telemetry_trace_id"],
         "telemetry_span_id": result.span_id if telemetry_complete else None,
@@ -3015,6 +4015,9 @@ def command_run_gate(arguments: argparse.Namespace) -> None:
         raise SystemExit(2)
     if not telemetry_complete:
         print("kickoff-evidence: gate telemetry is incomplete", file=sys.stderr)
+        raise SystemExit(result.exit_code or 2)
+    if arguments.artifact is not None and artifact_digest is None:
+        print("kickoff-evidence: required artifact capture is incomplete", file=sys.stderr)
         raise SystemExit(result.exit_code or 2)
     raise SystemExit(result.exit_code)
 
@@ -3113,7 +4116,11 @@ def accept_incomplete_wait_join(
 
 
 def validate_role_spans(
-    run_dir: Path, run: dict[str, Any], *, require_initial: bool = True
+    run_dir: Path,
+    run: dict[str, Any],
+    *,
+    require_initial: bool = True,
+    predecessors: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     declarations = load_telemetry_declarations(run_dir)
     degraded: list[dict[str, Any]] = []
@@ -3121,15 +4128,13 @@ def validate_role_spans(
     keys: set[tuple[str, int]] = set()
     by_operation: dict[str, list[int]] = {}
     for record in records:
-        validate_role_record(record, run)
+        validate_role_record(record, run, load_directed_reviews(run_dir))
         key = (record["operation"], record["attempt"])
         if key in keys:
             raise EvidenceError("duplicate role-attempt registration")
         keys.add(key)
         by_operation.setdefault(record["operation"], []).append(record["attempt"])
-    for operation, attempts in by_operation.items():
-        if sorted(attempts) != list(range(1, max(attempts) + 1)):
-            raise EvidenceError(f"role attempts are not contiguous for {operation}")
+    validate_role_continuity(run_dir, run, by_operation, predecessors=predecessors)
     for operation in run["required_initial_role_operations"]:
         if (
             require_initial
@@ -3175,8 +4180,19 @@ def validate_role_spans(
         if key in dispatch_by_key:
             raise EvidenceError("duplicate role-dispatch record")
         dispatch_by_key[key] = dispatch
-    if set(dispatch_by_key) != keys:
+    unlaunched = set(load_unlaunched_attempts(run_dir))
+    for key in sorted(unlaunched):
+        require_unlaunched(run_dir, run, key)
+    if require_initial:
+        for operation in {key[0] for key in unlaunched}:
+            if not any(key[0] == operation for key in keys - unlaunched):
+                raise EvidenceError(f"role has only unlaunched attempts: {operation}")
+    if set(dispatch_by_key) != keys - unlaunched:
         raise EvidenceError("role registrations and dispatch results do not agree")
+    load_directed_launches(run_dir)
+    for key, dispatch in sorted(dispatch_by_key.items()):
+        if dispatch["accepted"]:
+            require_directed_launch(run_dir, *key)
     try:
         spans = closed_spans(
             engine_root=Path(run["repository_root"]), trace_id=run["telemetry_trace_id"]
@@ -3195,6 +4211,10 @@ def validate_role_spans(
         ]
         intelligence = [item for item in matching if item["category"] == "intelligence"]
         waits = [item for item in matching if item["category"] == "wait"]
+        if (record["operation"], record["attempt"]) in unlaunched:
+            # require_unlaunched already proved no span, dispatch or claim exists.
+            observed.add((record["operation"], record["attempt"]))
+            continue
         dispatch = dispatch_by_key[(record["operation"], record["attempt"])]
         if len(intelligence) != 1:
             raise EvidenceError(
@@ -3892,8 +4912,7 @@ def unmeasured_review_passes(run_dir: Path, run: dict[str, Any]) -> list[dict[st
     """
     try:
         spans = closed_spans(
-            engine_root=Path(run["repository_root"]),
-            trace_id=run["telemetry_trace_id"],
+            engine_root=Path(run["repository_root"]), trace_id=run["telemetry_trace_id"]
         )
     except TelemetryError as exc:
         raise EvidenceError(f"cannot read review convergence metrics: {exc}") from exc
@@ -4190,6 +5209,8 @@ def validate_gate_record(
         "outcome",
         "warning_count",
         "artifact_sha256",
+        "artifact_required",
+        "diagnostics_sha256",
         "final",
         "telemetry_trace_id",
         "telemetry_span_id",
@@ -4261,7 +5282,10 @@ def validate_gate_span_join(gates: list[dict[str, Any]], run: dict[str, Any], ro
     if len(evidence_ids) != len(set(evidence_ids)):
         raise EvidenceError("multiple gate evidence rows reference one span")
     try:
-        spans = closed_spans(engine_root=root, trace_id=run["telemetry_trace_id"])
+        spans = closed_spans(
+            engine_root=root,
+            trace_id=run["telemetry_trace_id"],
+        )
     except TelemetryError as exc:
         raise EvidenceError(f"invalid runtime trace: {exc}") from exc
     # Only gates the orchestrator ran are evidence-bearing. A gate span nested
@@ -4623,6 +5647,7 @@ def command_packet(arguments: argparse.Namespace) -> None:
         ]
     )
     text = "\n".join(lines)
+    retain_evidence(arguments.run_dir, text.encode())
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(text)
     packet_record = {
@@ -4651,7 +5676,10 @@ def command_packet(arguments: argparse.Namespace) -> None:
 
 
 def command_validate(arguments: argparse.Namespace) -> None:
-    run = validate_run_dir(arguments.run_dir)
+    _validate_loaded_evidence(arguments, validate_run_dir(arguments.run_dir))
+
+
+def _validate_loaded_evidence(arguments: argparse.Namespace, run: dict[str, Any]) -> None:
     root = Path(run["repository_root"])
     acceptance = arguments.level == "acceptance"
     authority = load_json(arguments.run_dir / "authority.json")
@@ -4792,11 +5820,23 @@ def command_validate(arguments: argparse.Namespace) -> None:
                 )
             records.append(record)
         ledgers[ledger_name] = records
+    for entry in load_ingest_journal(arguments.run_dir):
+        verify_retained_evidence(arguments.run_dir, entry["artifact_sha256"])
     for line_number, gate in enumerate(ledgers["gates.jsonl"], 1):
         validate_gate_record(gate, run, root, label=f"gates.jsonl line {line_number}")
         artifact_hash = gate.get("artifact_sha256")
+        if type(gate.get("artifact_required")) is not bool:
+            raise EvidenceError("invalid gate artifact requirement")
+        # A missing output remains truthful incomplete history, not a
+        # permanent integrity failure. It cannot qualify a successful seal.
         if artifact_hash is not None:
             validate_candidate_id(artifact_hash, f"artifact hash in gates.jsonl line {line_number}")
+            verify_retained_evidence(arguments.run_dir, artifact_hash)
+        diagnostics_hash = gate["diagnostics_sha256"]
+        if gate["operation"] != "gate.imported" or diagnostics_hash is not None:
+            if diagnostics_hash is None:
+                raise EvidenceError("managed gate diagnostics are missing")
+            verify_retained_evidence(arguments.run_dir, diagnostics_hash)
     if acceptance:
         validate_gate_span_join(ledgers["gates.jsonl"], run, root)
     reviews = gate_reviews(arguments.run_dir, ledgers["gates.jsonl"])
@@ -4823,6 +5863,9 @@ def command_validate(arguments: argparse.Namespace) -> None:
         ):
             raise EvidenceError(f"invalid packet record in packets.jsonl line {line_number}")
         validate_candidate_id(packet.get("sha256"), "packet hash")
+        retained = verify_retained_evidence(arguments.run_dir, packet["sha256"])
+        if len(retained) != packet["bytes"]:
+            raise EvidenceError("retained packet size differs from record")
         source_hashes = packet.get("source_sha256")
         if not isinstance(source_hashes, dict):
             raise EvidenceError(f"invalid packet sources in packets.jsonl line {line_number}")
@@ -4856,6 +5899,7 @@ def command_validate(arguments: argparse.Namespace) -> None:
             and gate["product_candidate_after_id"] == current_product_id
             and gate["exit_code"] == 0
             and gate["outcome"] == "success"
+            and (not gate["artifact_required"] or gate["artifact_sha256"] is not None)
         ]
         if not successful_final:
             raise EvidenceError(
@@ -4944,74 +5988,6 @@ def _append_failure_once(path: Path, record: dict[str, Any]) -> None:
     append_jsonl(path, record)
 
 
-def _validate_phase_close(root: Path, phase: str, ledger: Path | None = None) -> None:
-    checker = root / "bin" / "check-catalogs"
-    process = subprocess.run(
-        [
-            str(checker),
-            "--closing-phase",
-            phase,
-            *(["--ledger-file", str(ledger)] if ledger else []),
-        ],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if process.returncode != 0:
-        detail = (process.stdout + process.stderr).strip()
-        raise EvidenceError(f"phase ledger refuses close: {detail}")
-
-
-def _close_transition(
-    root: Path, phase: str, ledger: Path | None, parents: list[str] | None = None
-) -> dict[str, Any] | None:
-    """Bind an exact status-only transition without changing reviewed authority."""
-    if ledger is None:
-        return None
-    before = (root / "plan/INDEX.md").read_bytes()
-    after = ledger.read_bytes()
-    original = before.decode("utf-8").splitlines(keepends=True)
-    proposed = after.decode("utf-8").splitlines(keepends=True)
-    if len(original) != len(proposed):
-        raise EvidenceError("close transition may change only the closing phase status")
-    changes = []
-    next_changes = 0
-    allowed = {phase, *(parents or [])}
-    for old, new in zip(original, proposed, strict=True):
-        if old == new:
-            continue
-        if (
-            old.lstrip().startswith("|")
-            and re.search(r"\bPhase\s+\d+(?:\.\d+)*", old)
-            and old.count("⏳") == 1
-            and new == old.replace("⏳", "⬅️")
-        ):
-            next_changes += 1
-            if next_changes > 1:
-                raise EvidenceError("close transition may queue at most one next phase")
-            continue
-        if (
-            not old.lstrip().startswith("|")
-            or not any(re.search(rf"\bPhase\s+{re.escape(item)}(?![\d.])", old) for item in allowed)
-            or old.count("🚧") != 1
-            or new != old.replace("🚧", "✅")
-        ):
-            raise EvidenceError("close transition may change only the closing phase status")
-        changes.extend(
-            item for item in allowed if re.search(rf"\bPhase\s+{re.escape(item)}(?![\d.])", old)
-        )
-    if set(changes) != allowed or len(changes) != len(allowed):
-        raise EvidenceError(
-            "close transition requires exactly the authorized active phase completions"
-        )
-    return {
-        "before_sha256": hashlib.sha256(before).hexdigest(),
-        "after_sha256": hashlib.sha256(after).hexdigest(),
-        "completed_phases": sorted(allowed),
-    }
-
-
 def command_status(arguments: argparse.Namespace) -> None:
     run = validate_run_dir(arguments.run_dir)
     closure_path = arguments.run_dir / "closure.json"
@@ -5035,6 +6011,7 @@ def command_status(arguments: argparse.Namespace) -> None:
                 "phase": run["phase"],
                 "workflow": run["workflow"],
                 "advisory_reports": advisory.read(arguments.run_dir / "advisory-reports.json", []),
+                "owner_directed_reviews": directed_review_summary(arguments.run_dir),
                 "closure": closure,
                 "observed_role_operations": present,
                 "missing_acceptance_role_operations": missing,
@@ -5044,31 +6021,6 @@ def command_status(arguments: argparse.Namespace) -> None:
             separators=(",", ":"),
         )
     )
-
-
-def require_persistent_directory(directory: Path | str) -> Path:
-    """Reject known ephemeral storage, including symlink aliases.
-
-    This verifies location, not the mount's backup or reboot guarantees. The
-    operator must provide a persistent local filesystem, not a RAM disk.
-    """
-    resolved = Path(directory).expanduser().resolve()
-    roots = {
-        Path("/tmp"),
-        Path("/private/tmp"),
-        Path("/var/tmp"),
-        Path("/dev/shm"),
-        Path("/run"),
-        Path("/private/var/tmp"),
-        Path("/var/folders"),
-        Path("/private/var/folders"),
-        Path(tempfile.gettempdir()),
-    }
-    for item in roots:
-        temporary = item.resolve()
-        if resolved == temporary or temporary in resolved.parents:
-            raise EvidenceError("required evidence cannot use temporary storage")
-    return resolved
 
 
 def command_verify_completion(arguments: argparse.Namespace) -> int:
@@ -5200,219 +6152,252 @@ def command_verify_completion(arguments: argparse.Namespace) -> int:
     return 2 if blocked else 0
 
 
+def _captured_phase_custody(root: Path, run_dir: Path, run: dict[str, Any]) -> dict[str, Any]:
+    rows = [
+        row
+        for row in load_json(run_dir / "authority.json")["authorities"]
+        if row.get("locator") == "phase-custody"
+    ]
+    if len(rows) != 1:
+        raise EvidenceError("phase close requires an init-time captured canonical phase claim")
+    row = rows[0]
+    source = multioperator.safe(root, row["path"])
+    if hashlib.sha256(source.read_bytes()).hexdigest() != row["content_sha256"]:
+        raise EvidenceError("captured phase custody changed")
+    value = load_json(source)
+    if (
+        value.get("phase") != run["phase"]
+        or value.get("state") != "in-progress"
+        or not value.get("owner")
+        or not value.get("claim")
+    ):
+        raise EvidenceError("run has no active canonical phase owner/claim")
+    return value
+
+
+def _verify_accepted_closure(root: Path, run_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    run = validate_historical_run_metadata(run_dir)
+    closure = load_json(run_dir / "closure.json")
+    request = {
+        k: v for k, v in closure.items() if k not in {"closure_id", "status", "completed_at"}
+    }
+    if (
+        closure.get("closure_id") != _closure_digest(request)
+        or closure.get("status") != "complete"
+        or closure.get("outcome") != "accepted"
+        or closure.get("phase") != run["phase"]
+        or Path(run["repository_root"]) != root
+    ):
+        raise EvidenceError("phase acceptance is not a genuine matching accepted closure")
+    multioperator.verify_qualification_snapshot(root, closure.get("qualification"))
+    custody = _captured_phase_custody(root, run_dir, run)
+    if closure.get("phase_custody") != custody:
+        raise EvidenceError("accepted phase differs from captured custody")
+    return run, closure
+
+
+def command_audit_phase_acceptance(arguments: argparse.Namespace) -> None:
+    """Read-only receiving-code verification; never launches artifact-supplied code."""
+    metadata = load_json(arguments.run_dir / "run.json")
+    root = Path(metadata["repository_root"])
+    run, closure = _verify_accepted_closure(root, arguments.run_dir)
+    manifest = load_json(arguments.run_dir / "tools/manifest.json")
+    trusted = tool_sources()
+    for item in manifest["files"]:
+        relative = item["path"]
+        if relative == "kickoff.yaml":
+            continue
+        source = trusted.get(relative)
+        if source is None or hashlib.sha256(source.read_bytes()).hexdigest() != item["sha256"]:
+            raise EvidenceError(
+                "fresh phase admission requires the receiving qualified tool code: " + relative
+            )
+    if product_manifest(root)["candidate_id"] != closure["product_candidate_id"]:
+        raise EvidenceError("phase completion candidate differs from accepted implementation")
+    _validate_loaded_evidence(
+        argparse.Namespace(
+            run_dir=arguments.run_dir, level="acceptance", required_final_command=None
+        ),
+        run,
+    )
+    finalized_trace(engine_root=root, trace_id=run["telemetry_trace_id"])
+    print("PHASE ACCEPTANCE VALID")
+
+
+def _validate_phase_close(
+    root: Path, phase: str, ledger: Path | None = None, next_marker_reason: str | None = None
+) -> None:
+    state = multioperator.validate(root)
+    if phase not in state["heads"]:
+        raise EvidenceError("closing phase is absent from canonical records")
+    if ledger is None and state["heads"][phase]["state"] != "completed":
+        raise EvidenceError("closing phase has no accepted completion event")
+
+
+def _close_transition(
+    root: Path, phase: str, ledger: Path | None, parents: list[str] | None = None
+) -> dict[str, Any] | None:
+    return (
+        multioperator.completion_plan(root, phase, load_json(ledger), parents) if ledger else None
+    )
+
+
 def command_close(arguments: argparse.Namespace) -> int:
-    """Materialize one truthful, idempotent accepted/parked/failed close."""
+    """Close once; accepted implementation and phase-event publication are separate facts."""
     run = validate_run_dir(arguments.run_dir)
     root = Path(run["repository_root"])
+    custody = _captured_phase_custody(root, arguments.run_dir, run)
+    closure_path = arguments.run_dir / "closure.json"
     if arguments.verify_handoff:
-        closure = load_json(arguments.run_dir / "closure.json")
-        bound_request = {
-            key: value
-            for key, value in closure.items()
-            if key not in {"closure_id", "status", "completed_at"}
-        }
-        if closure.get("closure_id") != _closure_digest(bound_request):
-            raise EvidenceError("closure identity does not match its accepted request")
+        _, closure = _verify_accepted_closure(root, arguments.run_dir)
         transition = closure.get("ledger_transition")
-        if (
-            closure.get("outcome") != "accepted"
-            or closure.get("status") != "complete"
-            or not transition
-        ):
+        if not transition:
             raise EvidenceError("no accepted prospective close to verify")
-        if product_manifest(root)["candidate_id"] != closure.get("product_candidate_id"):
+        if product_manifest(root)["candidate_id"] != closure["product_candidate_id"]:
             raise EvidenceError("handoff product differs from accepted candidate")
-        actual = hashlib.sha256((root / "plan/INDEX.md").read_bytes()).hexdigest()
-        if actual != transition["after_sha256"]:
-            raise EvidenceError("handoff ledger differs from accepted transition")
+        if (
+            multioperator.phase_heads_digest(root, transition["completed_phases"])
+            != transition["after_sha256"]
+        ):
+            raise EvidenceError("handoff phase events differ from accepted transition")
         _validate_phase_close(root, run["phase"])
-        print("close ledger verified; full handoff gate remains required")
+        print("close phase events verified; full handoff gate remains required")
         return 0
     outcome = arguments.outcome
-    reason_code = arguments.reason_code.strip()
-    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", reason_code):
+    reason = arguments.reason_code.strip()
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", reason):
         raise EvidenceError("reason-code must be lowercase kebab-case")
-    log_block = arguments.log_block.read_text(encoding="utf-8")
-    failure_record: dict[str, Any] | None = None
+    body = arguments.log_block.read_bytes()
+    multioperator.terminal_body(body)
+    failure = None
     if outcome == "accepted":
         if arguments.failure_record is not None:
             raise EvidenceError("accepted close cannot carry a failure record")
     else:
         if arguments.failure_record is None:
             raise EvidenceError("parked and failed closes require --failure-record")
-        failure_record = _validate_failure_record(
+        failure = _validate_failure_record(
             load_json(arguments.failure_record), run=run, outcome=outcome
         )
-    request = {
-        "schema_version": SCHEMA_VERSION,
-        "phase": run["phase"],
-        "trace_id": run["telemetry_trace_id"],
-        "outcome": outcome,
-        "reason_code": reason_code,
-        "log_sha256": hashlib.sha256(log_block.encode()).hexdigest(),
-        "failure_sha256": _closure_digest(failure_record) if failure_record else None,
-    }
-    if outcome != "accepted" and (
-        arguments.ledger_after is not None or arguments.parent_run is not None
-    ):
-        raise EvidenceError("only accepted close may carry a ledger transition")
+        if arguments.ledger_after is not None or arguments.parent_run is not None:
+            raise EvidenceError("only accepted close may carry a phase transition")
+    definitions, _ = multioperator.records(root)
+    accepted_ancestors = {}
     parents = None
-    if arguments.parent_run is not None:
-        parent_tool = arguments.parent_run / "tools/kickoff-evidence"
-        inspected = subprocess.run(
-            [
-                sys.executable,
-                str(parent_tool),
-                "status",
-                "--run-dir",
-                str(arguments.parent_run),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=60,
-        )
-        if inspected.returncode:
-            raise EvidenceError("parent evidence validation failed: " + inspected.stderr.strip())
-        parent_run = load_json(arguments.parent_run / "run.json")
-        parent = run["phase"].rsplit(".", 1)[0]
-        if (
-            "." not in run["phase"]
-            or parent_run["phase"] != parent
-            or Path(parent_run["repository_root"]) != root
-        ):
+    if arguments.parent_run:
+        parent_run, parent_close = _verify_accepted_closure(root, arguments.parent_run)
+        parent = definitions[run["phase"]].get("parent")
+        if parent is None or parent_run["phase"] != parent:
             raise EvidenceError(
-                "parent acceptance must belong to this phase's parent and repository"
+                "parent acceptance must belong to this phase's declared parent and repository"
             )
-        parent_close = load_json(arguments.parent_run / "closure.json")
-        parent_request = {
-            key: value
-            for key, value in parent_close.items()
-            if key not in {"closure_id", "status", "completed_at"}
-        }
-        if (
-            parent_close.get("closure_id") != _closure_digest(parent_request)
-            or parent_close.get("phase") != parent
-        ):
-            raise EvidenceError("parent closure identity does not match its accepted request")
-        if parent_close.get("status") != "complete" or parent_close.get("outcome") != "accepted":
-            raise EvidenceError("parent implementation is not independently accepted")
-        if arguments.ledger_after is None:
-            raise EvidenceError("parent acceptance requires a prospective ledger")
-        parents = parent_close.get("ledger_transition", {}).get("completed_phases", [parent])
-        if (
-            not isinstance(parents, list)
-            or parent not in parents
-            or any(
-                not isinstance(item, str) or not run["phase"].startswith(item + ".")
-                for item in parents
-            )
-        ):
-            raise EvidenceError("parent transition has invalid ancestor completions")
-        prior_transition = parent_close.get("ledger_transition")
-        if (
-            prior_transition
-            and not (arguments.run_dir / "closure.json").exists()
-            and prior_transition["before_sha256"]
-            != hashlib.sha256((root / "plan/INDEX.md").read_bytes()).hexdigest()
-        ):
-            raise EvidenceError("parent transition was accepted against a different ledger")
-        request["parent_closure_id"] = parent_close["closure_id"]
-    if arguments.ledger_after is not None:
-        previous_path = arguments.run_dir / "closure.json"
-        if previous_path.exists():
-            previous = load_json(previous_path)
-            transition = previous.get("ledger_transition")
-            if (
-                not transition
-                or hashlib.sha256(arguments.ledger_after.read_bytes()).hexdigest()
-                != transition["after_sha256"]
-            ):
-                raise EvidenceError("close transition conflicts with recorded close")
-        else:
-            transition = _close_transition(root, run["phase"], arguments.ledger_after, parents)
-        request["ledger_transition"] = transition
-        request["product_candidate_id"] = product_manifest(root)["candidate_id"]
-    closure_id = _closure_digest(request)
-    closure_path = arguments.run_dir / "closure.json"
-    lock_path = arguments.run_dir / "closure.lock"
-    with lock_path.open("a+b") as lock:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        existing = load_json(closure_path) if closure_path.exists() else None
-        if existing is not None and existing.get("closure_id") != closure_id:
-            raise EvidenceError("closure request conflicts with the recorded close")
-        if existing is not None and existing.get("status") == "complete":
-            if transition := existing.get("ledger_transition"):
-                actual = hashlib.sha256((root / "plan/INDEX.md").read_bytes()).hexdigest()
-                if actual not in {
-                    transition["before_sha256"],
-                    transition["after_sha256"],
-                }:
-                    raise EvidenceError("repeated close ledger differs from recorded transition")
-            print("closure complete")
-            return 0
-        if outcome in {"parked", "failed"}:
-            try:
-                finalized_trace(engine_root=root, trace_id=run["telemetry_trace_id"])
-            except TelemetryError:
-                recover_trace(engine_root=root, trace_id=run["telemetry_trace_id"])
-            assert failure_record is not None
-            _append_failure_once(root / ".kickoff" / "failure-signatures.jsonl", failure_record)
-            append_text_once(root / "LOG.md", log_block)
-        else:
-            command_validate(
-                argparse.Namespace(
-                    run_dir=arguments.run_dir,
-                    level="acceptance",
-                    required_final_command=arguments.required_final_command,
-                )
-            )
-            try:
-                finalized_trace(engine_root=root, trace_id=run["telemetry_trace_id"])
-            except TelemetryError as exc:
-                raise EvidenceError(f"accepted trace is not durably finalized: {exc}") from exc
-            if arguments.parent_run is not None:
-                checked_parent = subprocess.run(
-                    [
-                        sys.executable,
-                        str(parent_tool),
-                        "validate",
-                        "--run-dir",
-                        str(arguments.parent_run),
-                        "--level",
-                        "acceptance",
-                        *(
-                            [
-                                "--required-final-command",
-                                arguments.required_final_command,
-                            ]
-                            if arguments.required_final_command
-                            else []
-                        ),
-                    ],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                    timeout=60,
-                )
-                if checked_parent.returncode:
-                    raise EvidenceError(
-                        "parent acceptance failed: " + checked_parent.stderr.strip()
-                    )
-                finalized_trace(engine_root=root, trace_id=parent_run["telemetry_trace_id"])
-            _validate_phase_close(root, run["phase"], arguments.ledger_after)
-            append_text_once(root / "LOG.md", log_block)
-        atomic_json(
-            closure_path,
-            {
-                **request,
-                "closure_id": closure_id,
-                "status": "complete",
-                "completed_at": now(),
+        accepted_ancestors = {
+            **parent_close.get("ancestor_acceptance", {}),
+            parent: {
+                "path": (arguments.parent_run / "closure.json").relative_to(root).as_posix(),
+                "sha256": hashlib.sha256(
+                    (arguments.parent_run / "closure.json").read_bytes()
+                ).hexdigest(),
             },
+        }
+        parents = list(accepted_ancestors)
+        expected = parent
+        for ancestor in parents:
+            if ancestor not in definitions:
+                raise EvidenceError("accepted ancestor is absent")
+        while expected is not None:
+            if expected in parents:
+                expected = definitions[expected].get("parent")
+            else:
+                break
+        if any(
+            ancestor != parent and ancestor not in _ancestors(definitions, parent)
+            for ancestor in parents
+        ):
+            raise EvidenceError("independently accepted ancestor is outside this parent chain")
+    lock_path = arguments.run_dir / "closure.lock"
+    with lock_path.open("a+b") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        existing = load_json(closure_path) if closure_path.exists() else None
+        transition = None
+        if arguments.ledger_after:
+            proposed = load_json(arguments.ledger_after)
+            if existing:
+                transition = existing.get("ledger_transition")
+                if not transition or proposed != transition["proposal"]:
+                    raise EvidenceError("close transition conflicts with recorded close")
+            else:
+                transition = _close_transition(root, run["phase"], arguments.ledger_after, parents)
+        request = {
+            "schema_version": SCHEMA_VERSION,
+            "phase": run["phase"],
+            "trace_id": run["telemetry_trace_id"],
+            "outcome": outcome,
+            "reason_code": reason,
+            "log_sha256": hashlib.sha256(body).hexdigest(),
+            "failure_sha256": _closure_digest(failure) if failure else None,
+            "phase_custody": custody,
+            "product_candidate_id": product_manifest(root)["candidate_id"],
+            "ancestor_acceptance": accepted_ancestors,
+        }
+        if transition:
+            request["ledger_transition"] = transition
+        if existing:
+            request["qualification"] = existing["qualification"]
+        else:
+            if outcome == "accepted":
+                command_validate(
+                    argparse.Namespace(
+                        run_dir=arguments.run_dir,
+                        level="acceptance",
+                        required_final_command=arguments.required_final_command,
+                    )
+                )
+                finalized_trace(engine_root=root, trace_id=run["telemetry_trace_id"])
+                if multioperator.phase_custody(root, run["phase"])["id"] != custody["id"]:
+                    raise EvidenceError("phase custody changed since init")
+            else:
+                try:
+                    finalized_trace(engine_root=root, trace_id=run["telemetry_trace_id"])
+                except TelemetryError:
+                    recover_trace(engine_root=root, trace_id=run["telemetry_trace_id"])
+            request["qualification"] = multioperator.snapshot_acceptance(root, arguments.run_dir)
+        identifier = _closure_digest(request)
+        if existing and existing.get("closure_id") != identifier:
+            raise EvidenceError("closure request conflicts with recorded close")
+        if existing:
+            multioperator.verify_qualification_snapshot(root, existing["qualification"])
+        if not existing:
+            if failure is not None:
+                _append_failure_once(root / ".kickoff/failure-signatures.jsonl", failure)
+            multioperator.append(root, custody["owner"], body, now(), idempotency_key=identifier)
+            atomic_json(
+                closure_path,
+                {**request, "closure_id": identifier, "status": "complete", "completed_at": now()},
+            )
+        if transition:
+            multioperator.apply_completion(
+                root, transition, arguments.run_dir, arguments.parent_run
+            )
+        else:
+            multioperator.render(root)
+    print(
+        "closure complete"
+        + (
+            "; phase completion events applied"
+            if transition
+            else "; no phase state change requested"
         )
-    print("closure complete")
+    )
     return 0
+
+
+def _ancestors(definitions: dict[str, Any], phase: str) -> list[str]:
+    result = []
+    while definitions[phase].get("parent") is not None:
+        phase = definitions[phase]["parent"]
+        result.append(phase)
+    return result
 
 
 def add_run_dir(parser: argparse.ArgumentParser) -> None:
@@ -5423,6 +6408,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="action", required=True)
 
+    attest = subparsers.add_parser("attest-advice-source")
+    add_run_dir(attest)
+    attest.add_argument("--source-run", type=Path, required=True)
+    attest.add_argument("--predecessor-run", type=Path, required=True, action="append")
+    attest.set_defaults(handler=command_attest_advice_source)
     source = subparsers.add_parser("advice-source")
     add_run_dir(source)
     source.set_defaults(handler=command_advice_source)
@@ -5430,6 +6420,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_run_dir(carry)
     carry.add_argument("--source-run", type=Path, required=True)
     carry.set_defaults(handler=command_carry_advice)
+    exception = subparsers.add_parser("grant-advice-exception")
+    add_run_dir(exception)
+    exception.add_argument("--registration", type=Path, required=True)
+    exception.add_argument("--owner-evidence", type=Path, required=True)
+    exception.add_argument("--scope", required=True)
+    exception.set_defaults(handler=command_grant_advice_exception)
     start_advice = subparsers.add_parser("start-advice")
     add_run_dir(start_advice)
     start_advice.add_argument("--registration", type=Path, required=True)
@@ -5448,7 +6444,11 @@ def build_parser() -> argparse.ArgumentParser:
     accept_primary.set_defaults(handler=command_accept_primary)
 
     init = subparsers.add_parser("init")
-    init.add_argument("--run-dir", type=Path, required=True)
+    init.add_argument(
+        "--run-dir",
+        type=Path,
+        help="Persistent evidence directory; default .kickoff/runs/<opaque-id>",
+    )
     init.add_argument("--root", type=Path, default=Path.cwd())
     init.add_argument("--phase", required=True)
     init.add_argument("--authority", action="append", default=[])
@@ -5473,6 +6473,33 @@ def build_parser() -> argparse.ArgumentParser:
     register.add_argument("--output", type=Path, required=True)
     register.add_argument("--cause", default="")
     register.set_defaults(handler=command_register_role_attempt)
+
+    unlaunched = subparsers.add_parser("record-unlaunched-attempt")
+    add_run_dir(unlaunched)
+    unlaunched.add_argument("--registration", type=Path, required=True)
+    unlaunched.add_argument("--refusal-artifact", type=Path, required=True)
+    unlaunched.set_defaults(handler=command_record_unlaunched_attempt)
+
+    directed = subparsers.add_parser("record-owner-directed-review")
+    add_run_dir(directed)
+    directed.add_argument("--operation", choices=sorted(REVIEW_OPERATIONS), required=True)
+    directed.add_argument("--harness", choices=sorted(ROLE_HARNESSES - {"native"}), required=True)
+    directed.add_argument("--model", required=True)
+    directed.add_argument("--effort")
+    directed.add_argument("--launcher", required=True, help="what started the reviewer")
+    directed.add_argument("--scope", required=True, help="the exact task the direction covers")
+    directed.add_argument("--owner-evidence", type=Path, required=True)
+    directed.set_defaults(handler=command_record_owner_directed_review)
+
+    attested = subparsers.add_parser("attest-directed-launch")
+    add_run_dir(attested)
+    attested.add_argument("--registration", type=Path, required=True)
+    attested.add_argument("--launch-evidence", type=Path, required=True)
+    attested.add_argument("--prompt", type=Path, required=True)
+    attested.add_argument("--observed-model", required=True, help="as reported, or 'unknown'")
+    attested.add_argument("--observed-effort", required=True, help="as reported, or 'unknown'")
+    attested.add_argument("--posture", choices=DIRECTED_POSTURES, required=True)
+    attested.set_defaults(handler=command_attest_directed_launch)
 
     role_validate = subparsers.add_parser("validate-role-attempt")
     add_run_dir(role_validate)
@@ -5752,9 +6779,17 @@ def build_parser() -> argparse.ArgumentParser:
     close.add_argument("--failure-record", type=Path)
     close.add_argument("--ledger-after", type=Path)
     close.add_argument("--parent-run", type=Path)
+    close.add_argument(
+        "--next-marker-reason",
+        help="why this close queues work outside the closing parent's subtree",
+    )
     close.add_argument("--verify-handoff", action="store_true")
     close.add_argument("--required-final-command")
     close.set_defaults(handler=command_close)
+
+    phase_audit = subparsers.add_parser("audit-phase-acceptance")
+    add_run_dir(phase_audit)
+    phase_audit.set_defaults(handler=command_audit_phase_acceptance)
 
     validate = subparsers.add_parser("validate")
     add_run_dir(validate)
@@ -5773,7 +6808,15 @@ def main() -> int:
     arguments = build_parser().parse_args()
     try:
         result = arguments.handler(arguments)
-    except (AttributeError, EvidenceError, KeyError, OSError, TypeError) as exc:
+    except (
+        AttributeError,
+        EvidenceError,
+        TelemetryError,
+        multioperator.Refusal,
+        KeyError,
+        OSError,
+        TypeError,
+    ) as exc:
         print(f"kickoff-evidence: {exc}", file=sys.stderr)
         return 2
     return 0 if result is None else result

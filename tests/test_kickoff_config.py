@@ -8,23 +8,34 @@ import json
 import os
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 import time
+import uuid
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
 sys.path.insert(0, str(ROOT / "lib"))
 
+
 MANAGER = ROOT / "bin" / "kickoff-config"
-# Test-owned seed with the shipped-default pins. Never seed from the live
-# repo-root kickoff.yaml: it is operator-editable, so tests coupled to its
-# content break on every pin change.
+
+
 SEED_CONFIG = ROOT / "tests" / "fixtures" / "kickoff_config_seed.yaml"
+
+
 EVIDENCE = ROOT / "bin" / "kickoff-evidence"
+
+
 UV = shutil.which("uv")
+
+
 assert UV is not None
 
 
@@ -41,6 +52,7 @@ def run_manager(
     cli: Path | None = None,
     manager: Path | None = None,
     usage_data: dict | None = None,
+    cwd: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["KICKOFF_CONFIG_FILE"] = str(config)
@@ -77,7 +89,7 @@ def run_manager(
         environment["PATH"] = str(config.parent) + os.pathsep + environment.get("PATH", "")
     return subprocess.run(
         [UV, "run", "--script", str(manager or MANAGER), *arguments],
-        cwd=ROOT,
+        cwd=cwd or ROOT,
         env=environment,
         capture_output=True,
         text=True,
@@ -159,9 +171,12 @@ def watch_arguments(
         ),
         "--phase",
         "test",
-        *(() if "--first-event-timeout" in extra_watch else ("--first-event-timeout", "1")),
-        *(() if "--idle-timeout" in extra_watch else ("--idle-timeout", "1")),
-        *(() if "--hard-timeout" in extra_watch else ("--hard-timeout", "2")),
+        # A stub that answers finishes at once, so a generous clock costs nothing and a
+        # loaded machine cannot turn a slow interpreter start into a false timeout. A test
+        # that proves a timeout passes its own short clock.
+        *(() if "--first-event-timeout" in extra_watch else ("--first-event-timeout", "30")),
+        *(() if "--idle-timeout" in extra_watch else ("--idle-timeout", "30")),
+        *(() if "--hard-timeout" in extra_watch else ("--hard-timeout", "60")),
     )
 
 
@@ -174,7 +189,6 @@ def test_show_validates_seed_config(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert "Delegated resolution for this harness" in result.stdout
-    assert "claude turns" in result.stdout
 
 
 def test_scoped_edit_preserves_extensions_comments_and_timeouts(tmp_path: Path) -> None:
@@ -223,6 +237,8 @@ def test_scoped_edit_preserves_extensions_comments_and_timeouts(tmp_path: Path) 
             ("opus", "sol", "opus", "sol"),
         ),
     }
+    # Independent oracle: the effort adopted per model for high-quality coding (As of 2026-10-07).
+    starting_effort = {"opus": "high", "sol": "high", "fable": "high", "astra": "high"}
     for (preset, review), expected in matrices.items():
         options = () if review == "same-harness" else ("--review", review)
         result = run_manager(config, "apply-preset", preset, *options)
@@ -232,7 +248,7 @@ def test_scoped_edit_preserves_extensions_comments_and_timeouts(tmp_path: Path) 
         assert document["role_models"]["default"] == base
         for harness, models in zip(("codex", "claude"), expected, strict=True):
             assert document["role_models"][harness] == {
-                role: {"model": model, "effort": "high"}
+                role: {"model": model, "effort": starting_effort[model]}
                 for role, model in zip(
                     ("planner", "reviewer", "coder", "critic"), models, strict=True
                 )
@@ -246,9 +262,10 @@ def test_scoped_edit_preserves_extensions_comments_and_timeouts(tmp_path: Path) 
     seed_models = yaml.safe_load(SEED_CONFIG.read_text())["role_models"]
     assert yaml.safe_load(config.read_text())["role_models"] == seed_models
     assert list(yaml.safe_load(config.read_text())["role_models"]) == list(seed_models)
+    # The shipped pins are each provider's lead coding model; the quality preset is not them.
     explicit = run_manager(config, "apply-preset", "quality", "--review", "same-harness")
     assert explicit.returncode == 0, explicit.stderr
-    assert yaml.safe_load(config.read_text())["role_models"] == seed_models
+    assert yaml.safe_load(config.read_text())["role_models"] != seed_models
     config.unlink()
     assert run_manager(config, "reset", "all").returncode == 0
     assert yaml.safe_load(config.read_text())["role_models"] == seed_models
@@ -422,7 +439,12 @@ def stubborn_descendant_cli(tmp_path: Path, pid_file: Path) -> Path:
     return fake_cli(
         tmp_path,
         "claude",
-        f"""( trap '' TERM; echo $$ > {pid_file}; while :; do sleep 1; done ) &
+        # The leader waits for the descendant to record itself before it speaks and exits,
+        # so a slow start under load delays the proof instead of failing its setup.
+        # A subshell's `$$` is its parent's, so the descendant is its own shell: the recorded
+        # process is the one that ignores TERM and outlives the leader.
+        f"""sh -c 'trap "" TERM; echo $$ > {pid_file}; while :; do sleep 1; done' &
+while [ ! -s {pid_file} ]; do sleep 0.01; done
 printf '%s\\n' '{{"type":"assistant","message":{{"content":"working"}}}}'
 exit 0""",
     )
@@ -435,13 +457,16 @@ def test_timeout_kills_descendant_after_group_leader_exits(tmp_path: Path) -> No
         seeded_config(tmp_path),
         *watch_arguments(
             tmp_path,
+            # Only the idle clock is the subject: it fires once the leader has exited and
+            # the descendant stays silent. The other two clocks cover a loaded machine's
+            # process start and must not be able to end the run first.
             extra_watch=(
                 "--hard-timeout",
-                "0.2",
+                "60",
                 "--idle-timeout",
                 "0.1",
                 "--first-event-timeout",
-                "1",
+                "30",
             ),
         ),
         extra_env={"KICKOFF_TIMING_LOG": str(tmp_path / "timings.jsonl")},
@@ -449,10 +474,15 @@ def test_timeout_kills_descendant_after_group_leader_exits(tmp_path: Path) -> No
     )
     assert result.returncode == 124, result.stderr
     descendant = int(pid_file.read_text())
-    deadline = time.monotonic() + 2
-    while process_exists(descendant) and time.monotonic() < deadline:
-        time.sleep(0.02)
-    assert not process_exists(descendant)
+    try:
+        deadline = time.monotonic() + 2
+        while process_exists(descendant) and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert not process_exists(descendant), "DESCENDANT SURVIVED THE TIMEOUT"
+    finally:
+        # The descendant ignores TERM; a failing proof must not leave it running.
+        if process_exists(descendant):
+            os.kill(descendant, signal.SIGKILL)
 
 
 def test_watch_preserves_codex_artifact_when_terminal_stream_is_incomplete(
@@ -527,7 +557,6 @@ class TestGeneratedInvocationRecipes:
         assert coder[coder.index("--allowedTools") + 1] == (
             "Read,Grep,Glob,Write,Edit,Bash,WebFetch"
         )
-        assert coder[coder.index("--max-turns") + 1] == "200"
 
         expected = {
             "planner": "Read,Grep,Glob,WebFetch,WebSearch",
@@ -540,9 +569,9 @@ class TestGeneratedInvocationRecipes:
 
         for model, venue, wire in (
             ("astra", "codex", "gpt-6-astra"),
-            ("sol", "codex", "gpt-5.6-sol"),
+            ("sol", "codex", "gpt-6.1-sol"),
             ("terra", "codex", "gpt-5.6-terra"),
-            ("luna", "codex", "gpt-5.6-luna"),
+            ("luna", "codex", "gpt-6-luna"),
             ("fable", "claude", "fable"),
             ("opus", "claude", "opus"),
         ):
@@ -580,8 +609,6 @@ class TestGeneratedInvocationRecipes:
             _, result = rendered(tmp_path, venue=venue, model=model, effort=effort)
             assert result.returncode != 0
 
-
-# --- The dispatch-open/amend lifecycle and the candidate the watcher observes --
 
 RESULT_EVENT = (
     """printf '%s\\n' '{"type":"result","result":"OK","""
@@ -729,13 +756,17 @@ else:
             assert document["targets"]
             assert all(target["cli"] == venue for target in document["targets"])
             assert all(
-                target["model"] == ("opus" if venue == "claude" else "gpt-5.6-sol")
+                target["model"] == ("opus" if venue == "claude" else "gpt-6.1-sol")
                 for target in document["targets"]
             )
             assert all(
                 target["probe_sha256"] == hashlib.sha256(token.encode("ascii")).hexdigest()
                 for target in document["targets"]
             )
+            # The receipt names the executable it proved, so a later dispatch
+            # can be held to the same one.
+            assert all(target["executable"] == str(executable) for target in document["targets"])
+            assert all(target["version"] for target in document["targets"])
             verified = run_manager(config, "verify-preflight-receipt", "--receipt", str(receipt))
             assert verified.returncode == 0, verified.stderr
             assert "PREFLIGHT RECEIPT VALID" in verified.stdout
@@ -764,17 +795,21 @@ def _assert_primary_routing_and_usage(tmp_path: Path) -> None:
         "inline",
         "inline",
     ]
+    assert routed["primary_model"] == "sol"
     assert [routed["roles"][r]["model"] for r in ("reviewer", "critic")] == [
         "opus",
         "opus",
     ]
+    assert workflow.resolve(document, "claude")["primary_model"] == "opus"
+    for escalation, harness in (("astra", "codex"), ("fable", "claude")):
+        assert workflow.resolve(document, harness, escalation)["mode"] == "primary"
     config["allowed_harnesses"] = ["codex"]
-    assert workflow.resolve(document, "codex")["roles"]["reviewer"]["model"] == "astra"
+    assert workflow.resolve(document, "codex")["roles"]["reviewer"]["model"] == "sol"
     config["allowed_harnesses"] = ["codex", "claude"]
-    assert workflow.resolve(document, "codex", "sol")["mode"] == "delegated"
+    assert workflow.resolve(document, "codex", "terra")["mode"] == "delegated"
     config["mode"] = "primary"
     with pytest.raises(workflow.WorkflowError, match="eligible"):
-        workflow.resolve(document, "codex", "sol")
+        workflow.resolve(document, "codex", "terra")
     config["mode"] = "auto"
 
     snapshot = {
@@ -806,7 +841,7 @@ def _assert_primary_routing_and_usage(tmp_path: Path) -> None:
                 )
     for window, percent, wanted in [
         ("week", 95, "opus"),
-        ("week", 95.001, "astra"),
+        ("week", 95.001, "sol"),
         ("short", 100, "opus"),
     ]:
         data = copy.deepcopy(snapshot)
@@ -863,6 +898,13 @@ def _assert_primary_routing_and_usage(tmp_path: Path) -> None:
     data["openai"]["ok"] = False
     with pytest.raises(workflow.WorkflowError):
         workflow.apply_usage(routed, config, data)
+    # Castle keeps its stale-reading refusal (above); an age that is not a real,
+    # non-negative number also refuses.
+    aged = copy.deepcopy(snapshot)
+    for bad_age in [float("nan"), True, "900", -1]:
+        aged["openai"]["cache_age_seconds"] = bad_age
+        with pytest.raises(workflow.WorkflowError, match="invalid cache age"):
+            workflow.apply_usage(routed, config, aged)
     # Distinct configured advisers are resolved independently before usage routing.
     config["adviser_models"]["codex"]["critic"] = ["astra"]
     separate = workflow.resolve(document, "codex")
@@ -870,34 +912,54 @@ def _assert_primary_routing_and_usage(tmp_path: Path) -> None:
     saturated["anthropic"]["windows"]["week"]["utilization"] = 99
     assert separate["roles"]["reviewer"]["model"] == "opus"
     assert separate["roles"]["critic"]["model"] == "astra"
-    assert (
-        workflow.apply_usage(separate, config, saturated)["roles"]["reviewer"]["model"] == "astra"
-    )
+    assert workflow.apply_usage(separate, config, saturated)["roles"]["reviewer"]["model"] == "sol"
     config["adviser_models"]["codex"]["critic"] = ["opus"]
     # Shared limits cannot be excluded by model-specific mappings.
     scoped = copy.deepcopy(snapshot)
     scoped["openai"]["windows"] = {"primary_window": {"utilization": 96, "window_seconds": 18000}}
     scoped["openai"]["additional_rate_limits"] = [
         {
-            "metered_feature": "astra",
+            "metered_feature": "sol",
             "windows": {"secondary_window": {"utilization": 1, "window_seconds": 604800}},
         }
     ]
-    deployment = workflow.target("astra", config)
-    deployment["usage_windows"] = ["astra/secondary_window"]
+    deployment = workflow.target("sol", config)
+    deployment["usage_windows"] = ["sol/secondary_window"]
     assert len(workflow.usage_windows(scoped, deployment)) == 2
     mapped = copy.deepcopy(config)
-    mapped["targets"]["astra"] = {
+    mapped["targets"]["sol"] = {
         key: value for key, value in deployment.items() if key != "selector"
     }
     workflow.validate(mapped)
-    assert workflow.target("astra", mapped)["usage_windows"] == ["astra/secondary_window"]
+    assert workflow.target("sol", mapped)["usage_windows"] == ["sol/secondary_window"]
     bad_alias = copy.deepcopy(mapped)
-    bad_alias["targets"]["duplicate"] = bad_alias["targets"].pop("astra")
+    bad_alias["targets"]["duplicate"] = bad_alias["targets"].pop("sol")
     with pytest.raises(workflow.WorkflowError, match="canonical selector"):
         workflow.validate(bad_alias)
     with pytest.raises(workflow.WorkflowError, match="primary"):
         workflow.apply_usage(routed, config, scoped)
+    # A shared window flagged inactive still binds a model with no scoped window of its own;
+    # only a scoped window is dropped by the flag.
+    flagged = copy.deepcopy(snapshot)
+    flagged["anthropic"]["windows"] = {
+        "seven_day": {"utilization": 38, "window_seconds": 604800, "is_active": False},
+        "five_hour": {"utilization": 7, "window_seconds": 18000, "is_active": False},
+        "seven_day_fable": {
+            "utilization": 61,
+            "window_seconds": 604800,
+            "is_active": True,
+        },
+        "seven_day_opus": {
+            "utilization": 99,
+            "window_seconds": 604800,
+            "is_active": False,
+        },
+    }
+    measured = workflow.usage_windows(flagged, workflow.target("opus", config))
+    assert sorted(window["window"] for window in measured) == ["five_hour", "seven_day"]
+    flagged["anthropic"]["windows"]["seven_day"]["utilization"] = 95
+    with pytest.raises(workflow.WorkflowError, match="primary"):
+        workflow.apply_usage(workflow.resolve(document, "claude"), config, flagged)
     # A group that names the model it meters binds that model only; an unnamed one refuses.
     reserve = copy.deepcopy(snapshot)
     reserve["openai"]["additional_rate_limits"] = [
@@ -907,32 +969,19 @@ def _assert_primary_routing_and_usage(tmp_path: Path) -> None:
             "windows": {"primary_window": {"utilization": 99, "window_seconds": 604800}},
         }
     ]
-    unmapped = workflow.target("sol", {**config, "targets": {}})
+    unmapped = workflow.target("sol", config)
     shared = len(workflow.usage_windows(snapshot, unmapped))
     assert len(workflow.usage_windows(reserve, unmapped)) == shared
     reserve["openai"]["additional_rate_limits"][0]["normal_model_slug"] = unmapped["model"]
     assert len(workflow.usage_windows(reserve, unmapped)) == shared + 1
     del reserve["openai"]["additional_rate_limits"][0]["normal_model_slug"]
-    with pytest.raises(workflow.WorkflowError, match="ambiguous additional usage group"):
+    with pytest.raises(workflow.WorkflowError, match="ambiguous additional usage group reserve"):
         workflow.usage_windows(reserve, unmapped)
     reserve["openai"]["additional_rate_limits"][0]["normal_model_slug"] = ""
     with pytest.raises(workflow.WorkflowError, match="malformed additional usage group"):
         workflow.usage_windows(reserve, unmapped)
-    idle = copy.deepcopy(snapshot)
-    idle["anthropic"] = {
-        "ok": True,
-        "windows": {
-            "seven_day": {"utilization": 52, "window_seconds": 604800, "is_active": False},
-            "seven_day_fable": {"utilization": 66, "window_seconds": 604800, "is_active": True},
-            "five_hour": {"utilization": 3, "window_seconds": 18000, "is_active": False},
-        },
-    }
-    assert workflow.usage_windows(idle, workflow.target("opus", config)) == []
-    assert [
-        window["window"]
-        for window in workflow.usage_windows(idle, workflow.target("fable", config))
-    ] == ["seven_day_fable"]
-    unrelated = copy.deepcopy(idle)
+    unrelated = copy.deepcopy(snapshot)
+    unrelated["anthropic"] = {"ok": True, "windows": {}}
     unrelated["anthropic"]["windows"] = {
         "seven_day_fable": {"utilization": 66, "window_seconds": 604800, "is_active": True}
     }
@@ -944,7 +993,9 @@ def _assert_primary_routing_and_usage(tmp_path: Path) -> None:
     original = quota_config.read_bytes()
     attempted = tmp_path / "model-called"
     fake = fake_cli(
-        tmp_path, "claude", f"from pathlib import Path\nPath({str(attempted)!r}).touch()\n"
+        tmp_path,
+        "claude",
+        f"from pathlib import Path\nPath({str(attempted)!r}).touch()\n",
     )
     saturated["openai"]["windows"]["week"]["utilization"] = 95
     refusal = run_manager(
@@ -1109,3 +1160,215 @@ def _prompt(tmp_path: Path) -> Path:
     path = tmp_path / "prompt.txt"
     path.write_text("Inspect the candidate against the requirements.")
     return path
+
+
+def test_watch_registered_review_durability_and_child_environment(
+    tmp_path: Path,
+) -> None:
+    """Registered review IO stays durable and the child gets the delegated environment."""
+    import test_kickoff_evidence as evidence
+
+    for role, resume in (("reviewer", None), ("critic", str(uuid.uuid4()))):
+        case = tmp_path / role
+        case.mkdir()
+        repository = evidence.repository.__wrapped__(case)
+        run_dir = case / "run"
+        evidence.initialize(repository, run_dir)
+        operation = "role.plan-review" if role == "reviewer" else "role.code-review"
+        registration = run_dir / (
+            "plan-registration.json" if role == "reviewer" else "code-registration.json"
+        )
+        registered = evidence.run(
+            "register-role-attempt",
+            "--run-dir",
+            str(run_dir),
+            "--operation",
+            operation,
+            "--attempt",
+            "1",
+            "--role",
+            role,
+            "--harness",
+            "claude",
+            "--model",
+            "opus",
+            "--effort",
+            "high",
+            "--reason",
+            "initial",
+            "--output",
+            str(registration),
+        )
+        assert registered.returncode == 0, registered.stderr
+        receipt = case / "observed.json"
+        cli = case / "claude"
+        cli.write_text(
+            f"#!{sys.executable}\n"
+            "import os,sys,json\n"
+            "if sys.argv[1:] == ['--version']: print('test-cli 1.0'); sys.exit(0)\n"
+            f"open({str(receipt)!r},'w').write(json.dumps({{'argv':sys.argv[1:],'depth':os.environ.get('KICKOFF_DELEGATION_DEPTH'),'api_key':os.environ.get('ANTHROPIC_API_KEY')}}))\n"
+            "print(json.dumps({'type':'result','result':'BOUND'}))\n"
+        )
+        cli.chmod(0o755)
+        evidence.write_fixture_receipt(run_dir / "role-preflight.json", executable=cli)
+        config = seeded_config(case)
+        args = list(
+            watch_arguments(
+                case,
+                role=role,
+                extra_watch=(
+                    "--telemetry-role-registration",
+                    str(registration),
+                    "--hard-timeout",
+                    "60",
+                ),
+            )
+        )
+        args[args.index("--phase") + 1] = "1.1"
+        if resume:
+            args.extend(("--resume-session", resume))
+        if not resume:
+            with tempfile.TemporaryDirectory() as temporary:
+                for flag in (
+                    "--prompt-file",
+                    "--result-file",
+                    "--stdout-file",
+                    "--stderr-file",
+                ):
+                    invalid = args.copy()
+                    location = Path(temporary) / "unretained.txt"
+                    if flag in invalid:
+                        location.write_text("nonprivate fixture prompt")
+                        invalid[invalid.index(flag) + 1] = str(location)
+                    else:
+                        invalid.extend((flag, str(location)))
+                    refused = run_manager(
+                        config,
+                        *invalid,
+                        manager=run_dir / "tools/kickoff-config",
+                        cwd=repository,
+                        extra_env={"PATH": str(case) + os.pathsep + os.environ.get("PATH", "")},
+                    )
+                    assert refused.returncode != 0 and "temporary storage" in refused.stderr, (
+                        "DURABILITY WATCHER TEMPORARY IO ADMITTED: " + flag + refused.stderr
+                    )
+                    assert not receipt.exists(), "DURABILITY REFUSED WATCHER CREATED CHILD"
+                    assert not (run_dir / "role-dispatch.jsonl").read_text().strip(), (
+                        "DURABILITY REFUSED WATCHER CLAIMED DISPATCH"
+                    )
+        watched = run_manager(
+            config,
+            *args,
+            manager=run_dir / "tools/kickoff-config",
+            cwd=repository,
+            cli=cli if resume else None,
+            extra_env={
+                "ANTHROPIC_API_KEY": "synthetic",
+                "KICKOFF_CLI_CLAUDE": str(cli) if resume else "claude",
+                "PATH": str(case) + os.pathsep + os.environ.get("PATH", ""),
+            },
+        )
+        assert watched.returncode == 0, watched.stderr
+        captures = list(run_dir.glob("native-*-stdout.jsonl"))
+        errors = list(run_dir.glob("native-*-stderr.log"))
+        assert len(captures) == len(errors) == 1 and "BOUND" in captures[0].read_text(), (
+            "DURABILITY DEFAULT NATIVE CAPTURE LOST"
+        )
+        value = json.loads(receipt.read_text())
+        assert value["api_key"] is None, "REVIEW CHILD INHERITED API KEY"
+        assert value["depth"] == "1", "REVIEW CHILD MISSING DELEGATION DEPTH"
+        argv = value["argv"]
+        assert argv[argv.index("--permission-mode") + 1] == "dontAsk", "REVIEW PERMISSION MODE"
+        if resume:
+            assert argv[argv.index("--resume") + 1] == resume, "REVIEW RESUME NOT FORWARDED"
+
+
+def test_preflight_groups_only_identical_readiness_commands(tmp_path: Path) -> None:
+    """One command's read challenge may qualify several roles, never different access/tools.
+
+    Five bounded real-manager cases cover the demonstrated duplicate cost and the
+    security-relevant separation of tool capability, effort, model and write access.
+    Existing command/role-authority proofs still own production dispatch permissions.
+    Only local stub processes run; no provider, model, credential or approval is used.
+    """
+    cases = (
+        ("codex", {"reviewer": ("sol", "high"), "critic": ("sol", "high")}, 1),
+        ("claude", {"reviewer": ("opus", "high"), "critic": ("opus", "high")}, 2),
+        ("codex", {"reviewer": ("sol", "high"), "critic": ("sol", "medium")}, 2),
+        ("codex", {"reviewer": ("sol", "high"), "coder": ("sol", "high")}, 2),
+        ("codex", {"reviewer": ("sol", "high"), "critic": ("astra", "high")}, 2),
+    )
+    for index, (venue, pins, expected) in enumerate(cases):
+        work = tmp_path / str(index)
+        work.mkdir()
+        config = seeded_config(work)
+        document = yaml.safe_load(config.read_text())
+        routing = {
+            role: {"model": "default"} for role in ("planner", "reviewer", "coder", "critic")
+        }
+        routing.update(
+            {role: dict(model=model, effort=effort) for role, (model, effort) in pins.items()}
+        )
+        document["role_models"] = {"default": routing, "claude": {}, "codex": {}}
+        config.write_text(yaml.safe_dump(document))
+        calls = work / "calls.jsonl"
+        executable = work / venue
+        executable.write_text(
+            f"#!{sys.executable}\n"
+            + r"""import json
+import os
+import sys
+from pathlib import Path
+
+if sys.argv[1:] == ["--version"]:
+    print("test-cli 1.0")
+    raise SystemExit(0)
+probe = Path(".kickoff-capability-probe")
+if probe.is_file():
+    token = probe.read_text()
+    prompt = sys.argv[sys.argv.index("-p") + 1] if "-p" in sys.argv else sys.argv[-1]
+    assert token not in prompt and len(token) == 64
+    kind = "readiness"
+    answer = "KICKOFF_PREFLIGHT_OK " + token
+else:
+    kind = "toolchain"
+    answer = "KICKOFF_TOOLCHAIN_OK"
+with Path(os.environ["PREFLIGHT_CALLS"]).open("a") as handle:
+    handle.write(json.dumps({"kind": kind, "argv": sys.argv[1:]}) + "\n")
+if "--output-last-message" in sys.argv:
+    Path(sys.argv[sys.argv.index("--output-last-message") + 1]).write_text(answer)
+else:
+    print(json.dumps({"result": answer}))
+"""
+        )
+        executable.chmod(0o755)
+        receipt = work / "receipt.json"
+        result = run_manager(
+            config,
+            "preflight",
+            "--receipt",
+            str(receipt),
+            cli=executable,
+            extra_env={"PREFLIGHT_CALLS": str(calls)},
+        )
+        observed = (
+            []
+            if not calls.exists()
+            else [json.loads(line) for line in calls.read_text().splitlines()]
+        )
+        rows = [] if not receipt.exists() else json.loads(receipt.read_text())["targets"]
+        grouped = sorted(tuple(row["roles"]) for row in rows)
+        expected_groups = (
+            [tuple(sorted(pins))] if expected == 1 else sorted((role,) for role in pins)
+        )
+        verified = run_manager(config, "verify-preflight-receipt", "--receipt", str(receipt))
+        assert (
+            result.returncode == 0
+            and sum(call["kind"] == "readiness" for call in observed) == expected
+            and sum(call["kind"] == "toolchain" for call in observed)
+            == (1 if "coder" in pins else 0)
+            and grouped == expected_groups
+            and verified.returncode == 0
+        ), "READINESS PROBE GROUPING LOST: " + repr(
+            (index, observed, rows, result.stderr, verified.stderr)
+        )

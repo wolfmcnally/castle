@@ -1,0 +1,11 @@
+{
+  "from": null,
+  "id": "2406a2c6888b5f9b9fee002465265ab7",
+  "owner": null,
+  "phase": "folder-admission-snapshots",
+  "previous": null,
+  "reason": "Imported source state, not a new acceptance or lease",
+  "source_phase": "5",
+  "state": "completed",
+  "writer": "castle-operator"
+}

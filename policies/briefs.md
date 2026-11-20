@@ -27,9 +27,7 @@ Write a brief when:
 - A non-trivial decision is made whose reasoning matters more than its outcome.
 - An audit, evaluation, or discrepancy review produces findings that will inform future work.
 - A snapshot of an external system's *observed state or behavior* (cloud infrastructure as configured, how a third-party service actually responded) is worth pinning at a specific date. The vendor's own published document is a different thing: that goes under `docs/`, and the brief records what was observed and concluded against it.
-- An outward explanation, white paper, or treatise needs a canonical internal
-  source. Repair the owning brief before rendering derivative formats; see
-  [`treatise.md`](treatise.md).
+- An outward explanation, white paper, or treatise needs a canonical internal source. Repair the owning brief before rendering derivative formats; see [`treatise.md`](treatise.md).
 
 Don't write a brief for ephemeral state, single-session decisions, or anything that fits inside a commit message.
 
@@ -41,18 +39,14 @@ Don't write a brief for ephemeral state, single-session decisions, or anything t
   - `date:` — ISO date authored or last revised.
   - `status:` — one of `draft` | `methodology` | `implemented` | `historical`.
   - `scope:` — one sentence describing the brief's purpose.
-  - `treatise:` — **only on a treatise brief.** A mapping holding that
-    treatise's editorial record: purpose, audience, register, coverage, the
-    operator's dated directives, renderings, and external facts. Its presence is
-    what marks the brief as governed by [`treatise.md`](treatise.md), and
-    `bin/treatise validate` enforces its shape. Ordinary briefs never carry it.
+  - `treatise:` — **only on a treatise brief.** A mapping holding that treatise's editorial record: purpose, audience, register, coverage, the operator's dated directives, renderings, and external facts. Its presence is what marks the brief as governed by [`treatise.md`](treatise.md), and `bin/treatise validate` enforces its shape. Ordinary briefs never carry it.
 - **Body:** purpose paragraph, then numbered or named sections, then a Sources section if applicable.
 - **Cross-references:** when one brief depends on another's numbers or methodology, link explicitly so the dependency is auditable.
 
 ## Status lifecycle
 
 - `draft` — still being shaped; numbers and conclusions tentative.
-- `methodology` — defines an approach the project defers to. This is a *lifecycle* value like the other three, and **not** a portability marker: a brief earns it by stating an approach the project defers to, whether or not that brief travels to another repo, and a methodology brief later realized in code correctly moves on to `implemented`. **Portability is decided by the `CLAUDE.md` catalog, not by `status`** — the Project briefs / Methodology briefs split there is what `stamp` copies from and what a cross-repo `learn` or `teach` pass reads. Do not infer either fact from the other.
+- `methodology` — defines an approach the project defers to. This is a *lifecycle* value like the other three, and **not** a portability marker: a brief earns it by stating an approach the project defers to, whether or not that brief travels to another repo, and a methodology brief later realized in code correctly moves on to `implemented`. **Portability is decided by the `AGENTS.md` catalog, not by `status`** — the Project briefs / Methodology briefs split there is what `stamp` copies from and what a cross-repo `learn` or `teach` pass reads. Do not infer either fact from the other.
 - `implemented` — the position has been realized in code or operational practice.
 - `historical` — superseded by a later brief or by changed reality; kept for the audit trail.
 
@@ -63,3 +57,7 @@ When reality changes, prefer updating the brief to retiring it; mark superseded 
 Briefs are subordinate to active `policies/` for next-action questions. They are *authoritative* for cross-session reasoning, methodology, and snapshot-of-the-world claims.
 
 When a brief and a more current source disagree, prefer the live source — but update or annotate the brief to reflect the new reality. Briefs decay if not maintained.
+
+## Mechanical authoring
+
+Create a document skeleton with `./bin/check-catalogs --create-input <semantic-document.json>`. Supply path, title and body, plus explicit scope/status for a brief. The tool composes structural metadata and checks links/citation direction at the owning path before creating it without overwrite. Register the existing document with `--register-input <registration.json> --expect-sha256 <catalog-digest>`; supply path and label, plus project/methodology zone for briefs. It generates the link in the existing authoritative catalog and checks structural limits. Registering a document that is already registered writes nothing and succeeds, so a rerun after an interrupted delivery is safe; the first registration's label and placement stand. Paths are canonical repository-relative owning-subtree paths. Skeleton creation and catalog registration are separate observable operations; a partial sequence is not a delivered complete document. Run the full catalog check after both. Content, reference pins, status, scope and zone remain supplied judgments.

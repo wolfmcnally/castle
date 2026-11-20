@@ -1,0 +1,11 @@
+{
+  "from": null,
+  "id": "e36889dfbc955d83b04bc5373b471c05",
+  "owner": null,
+  "phase": "excision-epoch-fencing",
+  "previous": null,
+  "reason": "Imported source state, not a new acceptance or lease",
+  "source_phase": "6",
+  "state": "completed",
+  "writer": "castle-operator"
+}

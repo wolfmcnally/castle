@@ -152,6 +152,10 @@ def test_unread_identifier_refuses_and_declared_new_passes(tmp_path: Path) -> No
     assert "`provision_json`" in result.stdout
     # `frobnicate_widget` is cited in the plan but declared new, so it is fine.
     assert "frobnicate_widget" not in result.stdout
+    _assert_refuses_oversized_plan(tmp_path / "oversized")
+    _assert_refuses_more_than_one_third_growth(tmp_path / "large-growth")
+    _assert_refuses_second_growth_event(tmp_path / "second-growth")
+    _assert_one_bounded_growth_event_passes(tmp_path / "bounded-growth")
 
 
 def test_node_ids_and_line_ranges_resolve_to_members(tmp_path: Path) -> None:

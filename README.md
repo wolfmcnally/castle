@@ -22,7 +22,7 @@ Requires [uv](https://docs.astral.sh/uv/) >=0.9.26. The checkout provisions its 
 ./bin/check all
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CLAUDE.md](CLAUDE.md), [policies](policies/README.md) and [briefs](briefs/BRIEF.md). Canonical agent resources are in `.claude/`; `.agents/` and `.codex/` retain portable mirrors, including teach/learn workflows.
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [AGENTS.md](AGENTS.md), [policies](policies/README.md) and [briefs](briefs/BRIEF.md). Canonical agent resources are in `.claude/`; `.agents/` and `.codex/` retain portable mirrors, including teach/learn workflows.
 
 ## Product scope
 

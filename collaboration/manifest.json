@@ -1,0 +1,29 @@
+{
+  "active_imports": [
+    "11"
+  ],
+  "adopted": false,
+  "format": "starter.multioperator.v1",
+  "migration_tool_sha256": "23bee483da3fed98d00883735a3f2ef99796b5395cdede00e02813293c5e3d09",
+  "original_log_bytes": 300539,
+  "original_log_sha256": "524989e3d5b769eca06c6c8b202636f145aa05abb92e1792c16c091b9696a53a",
+  "phase_mapping": {
+    "1": "namespace-contract-refinement",
+    "10": "readonly-namespace-access",
+    "11": "incremental-admission-design",
+    "12": "touched-record-admission",
+    "13": "incremental-content-publication",
+    "2": "existing-content-operations",
+    "3": "bounded-interruption-recovery",
+    "4": "transactional-namespace-crud",
+    "5": "folder-admission-snapshots",
+    "6": "excision-epoch-fencing",
+    "7": "consumer-surface-qualification",
+    "8": "version-two-release",
+    "9": "delete-excise-correction",
+    "release": "public-release-preparation"
+  },
+  "source_archive_sha256": "320107d5b4b227d38a52ab2e22bef8de501b6e137d2b1ccca2ab38a46e36165b",
+  "source_commit": "0e8931252ac3d032c12efb847f4593c7487547e6",
+  "writer": "castle-operator"
+}

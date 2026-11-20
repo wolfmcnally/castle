@@ -1,0 +1,11 @@
+{
+  "from": null,
+  "id": "f28646afdddc53158b139b4d29106fa8",
+  "owner": null,
+  "phase": "consumer-surface-qualification",
+  "previous": null,
+  "reason": "Imported source state, not a new acceptance or lease",
+  "source_phase": "7",
+  "state": "completed",
+  "writer": "castle-operator"
+}

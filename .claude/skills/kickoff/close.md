@@ -2,54 +2,28 @@
 
 ## Authority-mode interpretation
 
-Read the frozen workflow mode. Product primary mode dispatches only independent advisory reviewers, retains planning/coding on the invoking instance, and accepts through a current primary decision plus required checks. A reviewer verdict or remaining suggestion cannot block it. Second review/critique requires recorded cause; two passes per stage is the maximum across continuations. Candidate changes require truthful delta assessment and fresh tests, not mandatory additional advice. Delegated product mode retains the approval/revision procedures below. Methodology work follows the separate primary one-shot route with no delegated role or independent review and with commit/push authority after required checks.
+Read the frozen workflow mode. Product primary mode dispatches only independent advisory reviewers, retains planning/coding on the invoking instance, and accepts through a current primary decision plus required checks. A reviewer verdict or remaining suggestion cannot block it. Second review/critique requires recorded cause; two passes per stage is the default maximum across continuations, subject only to the explicit single-use User exception in [orchestration-evidence.md](../../../policies/orchestration-evidence.md#single-use-owner-exception). Candidate changes require truthful delta assessment and fresh tests, not mandatory additional advice. Delegated product mode retains the approval/revision procedures below. Methodology work follows the separate primary one-shot route with no delegated role or independent review and with commit/push authority after required checks.
 
+
+Inter-phase corrections use the append-only `END (correction)` format in [`policies/log-discipline.md`](../../../policies/log-discipline.md#follow-up-correction-format), recording the phase recommendation and operator ruling without formal reviews or fabricated phase evidence. Preserve completed status/history; the normal phase status, acceptance-close and END machinery below applies only to actual phase/sub-phase work. Validation and the final full handoff gate still apply to both routes.
 
 Read this resource before executing its branch. Enter through [SKILL.md](SKILL.md); its resource table defines the order. Before any failure, resume or operator-input branch, read [recovery.md](recovery.md).
 
-### Step 9: Update status markers
+### Step 9: Verify the accepted phase event
 
-For a major phase, enter only after [acceptance.md](acceptance.md) Step 8c materialized accepted close against unchanged authorities. For a child, apply and verify the exact accepted prospective ledger described there before any further bookkeeping. In `plan/INDEX.md`'s phase table (and only there):
+Accepted close binds the proposed JSON completion to the real run and its captured owner/claim, retains qualification bytes and appends the terminal log entry. It then publishes completion events; verify with the same close invocation plus `--verify-handoff` before other bookkeeping. Never edit `plan/INDEX.md`, phase frontmatter or an earlier event to reflect status. A failed publication stays visible and is retried only against the exact original close request. A park leaves the phase in progress.
 
-1. Flip the completed phase's status cell from `🚧` to `✅`.
-2. **If the closed phase was a sub-phase** (`phase-N.M.md`), go to Step 9a. Step 9a owns next-sub-phase drafting, the ripple sub-step, and (if the parent rolled up) handing off to Step 9b.
-3. **Otherwise** (closed phase was a monolithic major phase with no sub-phases), go to Step 9b. Step 9b owns the major-phase ripple pass and advancing `⬅️`.
+### Step 9a: Complete children and independently accepted parents
 
-If the phase is only partially complete (the user paused mid-way), leave it `🚧` and do not advance `⬅️`.
-
-**Never edit the per-phase file's frontmatter or body to record status.** Per-phase frontmatter is `id` / `title` / `depends_on` / `informs` plus optional `review_lane` ([`policies/review-lanes.md`](../../../policies/review-lanes.md)) only.
-
-### Step 9a: Complete the prepared child transition
-
-The next real child, when needed, was drafted and captured before final review as required by [acceptance.md](acceptance.md). Do not add an uncaptured sibling after acceptance to satisfy the child-close check. The accepted prospective ledger either completes the current child while retaining its active parent and a drafted incomplete sibling, or completes child and parent together using separately accepted parent evidence.
-
-Apply the accepted ledger and verify it before subsequent ripple edits. Include the one required next-phase arrow in the prospective ledger when parent completion would otherwise leave an idle incomplete ledger. If the parent remains active, its existing next child supplies continuation. If separately accepted parent completion was included, run Step 9b. Any newly discovered change to the parent's deliverables remains an operator decision, not a bookkeeping edit.
+Prepare the real successor and relevant authorities before final review. A child completes under its own acceptance; an actual incomplete sibling or a truthful parent-continuation reason permits the parent to remain active. Parent completion additionally needs `--parent-run` with separately accepted current parent implementation and its exact ancestor chain. Parents cannot complete over incomplete children. Accepted parent implementation may remain without a completion event until its children finish. See [phase-status.md](../../../policies/phase-status.md).
 
 ### Shared ripple procedure (child and major close)
 
 Before acceptance, read the prepared END block, reviewer and critic verdicts, and affected downstream phase files. Identify every pinned name, path, value and decision; classify each propagation as AUTO or DECIDE under [phase-ripple.md](../../../policies/phase-ripple.md). Resolve every DECIDE gate before accepted close. After the recorded ledger transition is verified, apply the prepared AUTO edits to incomplete downstream phases and append actual outcomes before the final handoff gate. A non-final child runs this procedure against its drafted successor and affected later phases; parent completion runs it against subsequent major phases. Never edit the completed phase or claim a planned edit already happened.
 
-### Step 9b: Major-phase close — ripple and advance ⬅️ (major-phase close only)
+### Step 9b: Ripple and select the next real work
 
-Runs when a major phase's row was just flipped to `✅` — either by Step 9.3 directly (the closed phase was a monolithic major phase) or by Step 9a's parent-rollup branch (the closed phase was the last sub-phase under its parent).
-
-1. **Ripple pass** against the next drafted major phase (`phase-(N+1).md`) and any subsequent sketched phases. Use the shared ripple procedure above. The major-phase ripple is more likely to touch Goal and Deliverables (lower-fidelity sketches have more headroom) and Acceptance (sketched criteria need tightening once the upstream phase pins them).
-2. **Advance `⬅️`.** Preserve any next marker already applied by the accepted transition; do not advance it again. Otherwise find the next `⏳` row in the dependency graph order (honoring parallel opportunities). Change it to `⬅️`. At most one row is `⬅️`; when no downstream phase exists, zero is the valid completed state.
-3. **Sketched-phase completeness check.** If the new `⬅️` row points at a `phase-N.md` that doesn't exist as a file (only a row in INDEX.md), this is a bootstrap-completeness failure — flag in the END block. Do not auto-draft it; per [`briefs/agentic-bootstrap.md`](../../../briefs/agentic-bootstrap.md) §8, every major phase the brief surfaces should have been sketched at bootstrap.
-
-If no downstream major phase exists (project complete), Step 9b's ripple is a no-op and `⬅️` advances to nothing — the project is done. Surface this to the user in the report.
-
-### Step 9c: Harvest lessons (every END or PARK)
-
-Runs on **every** truthful terminal record, per [`policies/lessons.md`](../../../policies/lessons.md). For a major END, gather and classify lessons during close preparation before Step 8c, then file/validate them after the ripple writes and record actual outcomes before Step 11. The accepted block identifies any pending lesson writes truthfully. For PARK, it runs immediately from the evidence available at the stop; status and ripple work do not run. This is the capture stage of the improvement flywheel: the question is mandatory; "no lessons" is a permitted, recorded answer.
-
-1. **Gather the sensor feed.** Re-read the close-out artifacts the ripple pass already collected (END-adjacent material, the plan-reviewer's and code-critic's verdict bodies) plus: every role's **Process Observations** output (planner, reviewer, coder, critic), the coder's **Failure Analysis** from any revision rounds, wall-clock observations, and any `user-actions` dispositions filed during the phase.
-2. **Distill candidate lessons.** A candidate lesson is a specific, generalizable process learning — friction or ambiguity in a brief, policy, plan, skill, or tool that a future phase (or a future repo) should not re-derive. Discard one-off situational notes; keep what would change behavior next time.
-3. **File or recur.** For each candidate, check `lessons/` and `lessons-archived/` for an existing entry stating the same lesson. Append an occurrence (`{date, ref}` — use the phase id) to an existing entry, or write a new `lessons/<slug>.md` with `status: candidate` and a scope classification by the scope test in `policies/lessons.md` (`local` — binds only this project, including sound general engineering practice; `methodology` — its remedy would change the methodology itself and is an upstream candidate for `learn`). Follow the slug recipe and collision check in the policy.
-4. **Validate and tally.** Run `./bin/lessons validate` (must pass — fix any schema error now), then `./bin/lessons candidates`. Carry every graduation-ready lesson (≥3 occurrences) forward to the END block as a graduation DECIDE item.
-5. **Surface the telemetry recommendation.** Run `./bin/kickoff-config recommend-timeouts`. Summarize per-target output for the END block: the recommendation when a target has crossed the sample threshold, otherwise `insufficient samples (<n>/<minimum>)`. Never edit `kickoff.yaml` from this output — recalibration is a human decision per [`policies/role-timeouts.md`](../../../policies/role-timeouts.md).
-
-**Hard boundary:** filing and occurrence-appending in `lessons/` are the *only* writes this step performs. Codifying a lesson — editing `CLAUDE.md`, `policies/`, `briefs/`, a skill, or an agent definition because of it — requires the user's explicit ratification of a surfaced DECIDE item. Never apply a graduation autonomously, and never rewrite rule documents wholesale from session memory.
+Perform the prepared AUTO ripple against incomplete downstream definitions after verified accepted close. Consequential new scope still goes to the operator. Select a dependency-ready phase by rational order and permanent id under the current owner's queue, append a predecessor-bound `next` event and render the local view. Do not overwrite another operator's selection or infer custody from selection. No next selection is required while work remains active; explicit resume is valid. Missing selected definitions are a bootstrap defect, never a reason to fabricate work at close.
 
 ### Step 10: Close the log and report
 
@@ -59,7 +33,7 @@ Gate executions are the rows in `gates.jsonl`; diagnostic reviews and their corr
 
 The END block and the report that accompanies it are addressed to the operator, so both are composed in the [`plain`](../../../.claude/skills/plain/SKILL.md) register: lead with what is true now and what it means, name every parked criterion the operator still owns, and keep ids, paths, and stage mechanics available on request rather than ambient. Identifiers the operator must act on are given exactly.
 
-Construct the complete END entry in a temporary file. For a major phase, this block is prepared and materialized at [acceptance.md](acceptance.md) Step 8c, before captured status changes. State planned close writes as pending, never as already done. After Steps 9–9c, append actual bookkeeping outcomes through `bin/log-append` before Step 11’s final tracked report write; preserve the original block. Execute the accepted close call only at Step 8c, not a second time when reading this section after bookkeeping. Materialize acceptance and append the exact prepared block at true EOF with `$EVIDENCE_TOOL close --run-dir <run> --outcome accepted --reason-code gates-green --log-block <block-file> --required-final-command "./bin/check all"`:
+Compose the complete END entry in the durable run directory with `./bin/multioperator compose-terminal --content <content.json> --output <fresh-block.md>` using the explicit substantive fields and lessons contract in [log discipline](../../../policies/log-discipline.md#follow-up-correction-format); do not hand-copy the illustrative layout below. For a major phase, this block is prepared and materialized at [acceptance.md](acceptance.md) Step 8c, before captured status changes. State planned close writes as pending, never as already done. After Steps 9–9c, append actual bookkeeping outcomes through `bin/multioperator append-terminal` before Step 11’s final tracked report write; preserve the original block. Execute the accepted close call only at Step 8c, not a second time when reading this section after bookkeeping. Materialize acceptance and append the exact prepared body as an immutable attributed entry with `$EVIDENCE_TOOL close --run-dir <run> --outcome accepted --reason-code gates-green --log-block <block-file> --required-final-command "./bin/test --changed-from '@{upstream}'"`:
 
 ```
 ## <YYYY-MM-DD HH:MM> — END
@@ -83,7 +57,8 @@ Evidence lane (per `policies/review-lanes.md`):
 - full | light | light → full (orchestrator upgrade: <reason>) | light refused (<trigger>) → full
 
 Follow-up route (per `policies/review-lanes.md`):
-- N/A (initial implementation) | direct fix — <risk/size reason> | coder only — <risk/size reason> | full cycle — <risk/size reason>
+- N/A (initial implementation) | inserted phase/sub-phase with formal planning/reviews — <risk/size reason>
+- Phase recommendation and operator ruling: <inserted sub-phase recommendation and attributable choice, or existing authority for a small low-risk correction>
 
 Role model/venue (per `policies/role-models.md`) — orchestrated by <claude|codex>:
 - Preflight: OK (<validated targets>) | N/A (every role native)
@@ -118,7 +93,7 @@ Candidate-bound evidence (per `policies/orchestration-evidence.md`):
 - Revision packets: <count>; <total bytes>; source hashes recorded
 - Findings: open=<n> addressed=<n> verified=<n> closed=<n> blocked=<n>; reopened=<n>; missed-in-full-pass=<n>
 - Gates: focused=<n> implementation-final=<n>; all recorded against approved implementation candidate=<yes|no>
-- Evidence validation: `bin/kickoff-evidence validate --require-final` <OK|failed>
+- Evidence validation: `$EVIDENCE_TOOL validate --run-dir <run> --level acceptance --required-final-command "./bin/test --changed-from '@{upstream}'"` <OK|failed>
 
 Wall-clock observations:
 - <material operation; substantial safe improvement used or surfaced; why guarantees were preserved> | None
@@ -135,7 +110,7 @@ Ripple (per `policies/phase-ripple.md`):
 - DECIDE: <downstream phase file> — <one-line: candidate ripple, why it needs human judgment> | None
 <If no downstream drafted phase files exist, state "none — no downstream sketches".>
 
-Lessons (per `policies/lessons.md`):
+Lessons:
 - filed or pending: <slug> — <one-line lesson, scope, actual state> | none
 - occurrences added or pending: <slug> (<measured current n> total) — <ref, actual state> | none
 - graduation DECIDE: <slug> → <proposed_surface> — <one-line why it is ready> | none
@@ -193,7 +168,7 @@ When to skip: mandatory unless the phase is a pure internal refactor with no use
 
 ### Step 11: Generate the tracked phase report
 
-After status, ripple, lessons harvest, next-phase selection, and the END block are complete, write `$RUN_DIR/dashboard-handoff.json` using the exact schema in [`policies/execution-telemetry.md`](../../../policies/execution-telemetry.md). Ground `what_just_landed`, `see_for_yourself`, `coming_up_next`, and `recommended_steps` in accepted work, the User Demo, applied ripple, and real operator prerequisites. Never discuss commit state or place arbitrary HTML, prompts, responses, secrets, absolute paths, or private source material in the handoff.
+After status, ripple, lessons harvest, next-phase selection, and the END block are complete, write `$RUN_DIR/dashboard-handoff.json` using the exact schema in [`policies/execution-telemetry.md`](../../../policies/execution-telemetry.md). Set `project` to the project's name as its README titles it. Ground `what_just_landed`, `see_for_yourself`, `coming_up_next`, and `recommended_steps` in accepted work, the User Demo, applied ripple, and real operator prerequisites. Never discuss commit state or place arbitrary HTML, prompts, responses, secrets, absolute paths, or private source material in the handoff.
 
 Invoke the pinned command without `--open`:
 
@@ -201,13 +176,13 @@ Invoke the pinned command without `--open`:
 $TELEMETRY_TOOL dashboard --phase "$PHASE_ID" --accepted-trace-id "$TRACE_ID" --handoff "$RUN_DIR/dashboard-handoff.json"
 ```
 
-It validates and archives the sanitized handoff and regenerates the chronological offline report under `reports/execution/`. This is the final tracked close write. A render failure keeps the phase unreported and routes to the close-repair path in Step 12. When report presentation code changed, the localhost desktop/mobile, interaction, chart/table agreement, and console protocol in the telemetry policy must already have passed.
+It validates and archives the sanitized handoff and regenerates the chronological offline report under `reports/execution/`. This is the final tracked close write. If a later bookkeeping write to the trace ledger leaves an archived file stale, `./bin/check-execution-dashboards --regenerate` rewrites it from tracked inputs; run that before the handoff gate rather than discovering it there. A render failure keeps the phase unreported and routes to the close-repair path in Step 12. When report presentation code changed, the localhost desktop/mobile, interaction, chart/table agreement, and console protocol in the telemetry policy must already have passed.
 
 ### Step 12: Prove the actual handoff tree
 
-Run a **bare** `./bin/check all` after every tracked close write—status, ripple, lessons, END block, dashboard handoff, report, and index—is present. This is the handoff gate. It is deliberately outside the candidate-bound implementation ledger because the close writes changed the tree; its ignored full-gate receipt binds the actual tree handed to the user.
+Run a **bare** `./bin/check all` after every tracked close write—status, ripple, lessons, END block, dashboard handoff, report, and index—is present. This is the handoff gate and the phase's one full run; its receipt qualifies the push. It is deliberately outside the candidate-bound implementation ledger because the close writes changed the tree; its ignored full-gate receipt binds the actual tree handed to the user.
 
-No tracked write may follow a successful handoff gate. Opening the already generated local report is read-only and may follow. If the gate fails, do not report completion. Append a truthful PARK block with the failing evidence and Lessons witness, restore the phase to `🚧` when necessary, then correct or regenerate the failing close artifact. A resumed close appends a new terminal block; it never amends, truncates, or context-patches an earlier block. Rerun the bare gate only after `bin/check-log` proves the resulting append-only log. If the failure exposes an implementation defect rather than close bookkeeping, return to Step 7's proportional correction route; the prior implementation gate is invalidated by any implementation-candidate change.
+No tracked write may follow a successful handoff gate. Opening the already generated local report is read-only and may follow. If the gate fails, do not report completion. Append a truthful PARK block with the failing evidence and Lessons witness, preserve the accepted completion and report the later delivery failure separately, then correct or regenerate the failing close artifact. A resumed close appends a new terminal block; it never amends, truncates, or context-patches an earlier block. Rerun the bare gate only after `bin/multioperator validate --root .` proves the resulting append-only log. If the failure exposes an implementation defect rather than close bookkeeping, return to the correction-routing rule: recommend an inserted sub-phase when risk or size warrants it and honor the operator's phase versus inter-phase ruling. The prior implementation gate is invalidated by any implementation-candidate change.
 
 ### Step 13: Deliver the accepted phase
 
@@ -215,17 +190,17 @@ Runs after the handoff gate is green. Parked acceptance criteria do not hold it 
 
 1. **Re-read the tree.** Run `git status` and read the complete final diff. Every path must be one this phase touched. An unexpected path means a concurrent session shares this checkout — park and report it; never sweep it in.
 2. **Stage explicitly and verify the staging assertions.** `git add <exact paths>`. Commit from the index without a pathspec after shared-file hunk partitioning; a commit pathspec takes whole working-tree content. **Never `git add -A` or `git add .`.** Re-read `git status --porcelain` immediately before staging. Partition any shared-file hunks, stage moved destinations rather than vanished sources, and read the staged diff before committing. If ownership cannot be established safely, park delivery.
-3. **Commit and verify its file set.** Use an ordinary factual message describing the change. No agent credit, no `--no-verify`. A pre-commit hook refusal parks the commit and is reported truthfully — never retried around. Compare `git show --stat --oneline HEAD` with the intended file list before pushing.
+3. **Commit and verify its file set.** Use an ordinary factual message describing the change. No agent credit, no `--no-verify`. A pre-commit hook refusal whose cause or safe correction is unresolved parks the commit and is reported truthfully — never retried around. A diagnosed, agent-owned refusal is corrected and requalified under [`human-in-the-loop.md`](../../../policies/human-in-the-loop.md) § Correcting a diagnosed hook refusal. Compare `git show --stat --oneline HEAD` with the intended file list before pushing.
 4. **Push**, only when the current branch has exactly one unambiguous configured upstream and the update is a fast-forward. Never force. Never create an upstream, select a remote, tag, rebase, or repair history — those belong to the user.
 5. **Verify.** Fetch, then prove `HEAD`, the tracking ref, and the remote tip agree and the tree is clean.
 
-Any of the parks in the policy — unexpected path, hook refusal, missing or ambiguous upstream, rejected push, divergence, residual dirt — stops delivery, is reported, and is never worked around. An open parked criterion is not one of them. A user restriction recorded in the END block (`Delivery: restricted — …`) makes the run local-only or uncommitted; a restriction narrows delivery only and never relaxes a gate.
+Any of the parks in the policy — unexpected path, unresolved hook refusal, missing or ambiguous upstream, rejected push, divergence, residual dirt — stops delivery, is reported, and is never worked around. An open parked criterion is not one of them. A user restriction recorded in the END block (`Delivery: restricted — …`) makes the run local-only or uncommitted; a restriction narrows delivery only and never relaxes a gate.
 
 Commit and push change no tracked content, so they legitimately follow the handoff gate. **No later tracked write records their outcome** — the outcome is reported to the user and nowhere else.
 
 ### Step 14: Open the report and hand off
 
-Before reporting delivery completion, perform the resource disposition procedure in [human-in-the-loop.md](../../../policies/human-in-the-loop.md#delivery-resource-disposition). Inventory scope-created temporary worktrees, temporary branches and generated outputs, including none explicitly. Retire only after verified integration, released ownership, preserved required evidence and terminal commands; otherwise retain for a named current purpose or report an exact blocker. Useful incremental build directories, dependency caches and environments may remain. Use the live `bin/kickoff-evidence verify-completion` against the durable disposition record after actual readback; never alter closed pinned tools or accepted evidence. This applies to inter-phase and methodology delivery too and creates no new phase run. A blocked cleanup is reported separately from successful source delivery; it cannot be called completed cleanup. Preserve the record and command output outside the reviewable tree, so post-delivery readback changes no gate-qualified tracked bytes.
+Before reporting delivery completion, perform the resource disposition procedure in [human-in-the-loop.md](../../../policies/human-in-the-loop.md#delivery-resource-disposition). Inventory scope-created temporary worktrees, temporary branches and generated outputs, including none explicitly; each temporary worktree was recorded with its owner and purpose when it was created, and at this handback its unique work and evidence are confirmed delivered or recoverably preserved before an eligible one is retired. A dirty or abandoned worktree keeps a named owner and a precise hold; it is never discarded to finish the close. Retire only after verified integration, released ownership, preserved required evidence and terminal commands; otherwise retain for a named current purpose or report an exact blocker. Useful incremental build directories, dependency caches and environments may remain. Use the live `bin/kickoff-evidence verify-completion` against the durable disposition record after actual readback; never alter closed pinned tools or accepted evidence. This applies to inter-phase and methodology delivery too and creates no new phase run. A blocked cleanup is reported separately from successful source delivery; it cannot be called completed cleanup. Preserve the record and command output outside the reviewable tree, so post-delivery readback changes no gate-qualified tracked bytes.
 
 Open the already generated phase page without modifying it. A browser-open failure is presentation-only and may be retried; it changes no artifact. Then report to the user.
 
@@ -235,7 +210,7 @@ Report to the user, in this order:
 - **What to try: the user testing protocol** for what's new or changed (Step 10a). This leads because it is what the user does next — the phase is already delivered, so the demo, not a commit instruction, is the handoff (`policies/user-demo-protocols.md`).
 - **Acceptance:** what closed objectively on gate evidence, and what is parked for the user's judgment. Both halves, even when one is `None`.
 - **Delivery:** the commit id and the push result — or the park and its reason, or the user's restriction verbatim.
-- Which phase was completed and which is next (`⬅️`).
+- Which phase was completed and which phase is selected next for this operator.
 - Files created/modified, grouped by surface.
 - Build and gate status.
 - Resource disposition: retired / retained with named current purposes / blocked with exact reasons; durable record and actual readback. Source delivery and cleanup completion are separate claims.

@@ -1,0 +1,11 @@
+{
+  "from": null,
+  "id": "3a482b13c963551dafd9d67bc49597ed",
+  "owner": null,
+  "phase": "delete-excise-correction",
+  "previous": null,
+  "reason": "Imported source state, not a new acceptance or lease",
+  "source_phase": "9",
+  "state": "completed",
+  "writer": "castle-operator"
+}

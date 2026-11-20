@@ -1,0 +1,1006 @@
+{
+  "audit": {
+    "historical_text_exempt": [
+      "docs",
+      "lessons",
+      "lessons-archived",
+      "log",
+      "reports",
+      "user-actions-archived"
+    ],
+    "intentional_selectors": [
+      "lib/agentic_starter/multioperator.py",
+      "lib/agentic_starter/multioperator_transition.py",
+      "tests/test_multioperator.py"
+    ],
+    "obsolete_absent": true,
+    "retired_reference_tokens_absent": true
+  },
+  "changes": [
+    {
+      "action": "retired",
+      "path": "bin/log-append",
+      "pre_sha256": "497c9ef09113fd61bfb4f58ad0ce5492dcab193aed79ef3cd5b7c94286f6b009"
+    },
+    {
+      "action": "retired",
+      "path": "bin/log-relocate",
+      "pre_sha256": "8ebb9d66755d70798c3be60297a6d65ffbca6d7162dce8e0cb0f32afb88afbce"
+    },
+    {
+      "action": "retired",
+      "path": "bin/check-log",
+      "pre_sha256": "395d543fc87143d0d1f77f67af122d56053dca4b497290b31c9ba5abbb99cd26"
+    },
+    {
+      "action": "retired",
+      "path": "bin/check-log-prefix",
+      "pre_sha256": "b6db354ca272017009a6bc4066282248033169625440380bc639deebfd9184c7"
+    },
+    {
+      "action": "retired",
+      "path": "bin/check-log-monotonic",
+      "pre_sha256": "0c9e842c5e4a818dc797b5fae96d49ee71c6233136b4ee5b30497352d4897d0d"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": "bin/README.md",
+      "post_sha256": "8c87cf3d7775b99fcbe25dfbae2695e54f25539949e96f00918d62c6111eaf3d",
+      "pre_sha256": "add68c2f3a66d626a4bc4dcf4f0a65f1f8b7e6e82523e70c0e4b0ca28ab3e3ce"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": "bin/check",
+      "post_sha256": "1f6aaf93258b264ece6e2ce31e54d9b47e679d289cfb63a862464163cfebeb07",
+      "pre_sha256": "f8ee9b39386ed63bda34288997e53bb1ada4835efd242e86b7fb0e1767ff5757"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": "tests/test_log_control_plane.py",
+      "post_sha256": "7f91226b94bb37afceb5f4d96883d5977b74232444db2867dd6375481f9cfe06",
+      "pre_sha256": "e8628c95a2645222b21029ac9f243937ef482674b84112a143dba47e82c3bd29"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": "tests/test_kickoff_tree_id.py",
+      "post_sha256": "7c3fa14fd7b56fdbf71c0ce8af8d7505193a466bc8ce4a57f7c32c25f143b56a",
+      "pre_sha256": "7446409b45f6c02e14cf108fa041fd7709fce328dbd2b9f33694573256a5c274"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": "tests/proof-estate.yaml",
+      "post_sha256": "84c7564997d9c7bae47b8cb3883990b492cceefa925df818882c49caff1b9839",
+      "pre_sha256": "4aa8f3959ffc83bae43b5a74020afacfb5f1cb3268307dbfbf5c083f3f73ece4"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": "tests/test_check.py",
+      "post_sha256": "a90d9545f7628c044329f59844d289bdcab2b4fff842e669149b5a3ae598e2be",
+      "pre_sha256": "55c71135f200c98905ac2e08effef537fe16d0a26fb4c207bdbe28beefe7fe6d"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": "tests/test_pre_commit.py",
+      "post_sha256": "679281ee52be396c74645404ff52b81b66b88282e525fd9b75e2e91321a924f8",
+      "pre_sha256": "3100be7f6b003eeb5e7bb09c106358d9df3fbf88b77e30ec4692319c1d1284f8"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": "tests/test_kickoff_control_plane.py",
+      "post_sha256": "7c2330bb28080c07c80695d4151f9da05394f64e2c866e2162f6d55fcd27f15e",
+      "pre_sha256": "c1ea1cb01f4bd859695010f1583626ba44dd1a52e33eccb1169890ceed6fe107"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": ".claude/skills/kickoff/preflight.md",
+      "post_sha256": "f2c07ef406a6701c9f5c78d028f58fdd911f8703405fb3f8cef74ff4adc91634",
+      "pre_sha256": "bc7693bd83ae3e8e9e20365168076b3829b1e39cf0479ff666ebd5762091128e"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": ".claude/skills/kickoff/close.md",
+      "post_sha256": "2919cf9a92f025960f68957b6a3b60933674fc3a87c421ad2538189347580d34",
+      "pre_sha256": "3e37cc081caaa7f3375321322e5b18a97617ecdbfd99b49d99896889276d77c6"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": ".claude/skills/kickoff/recovery.md",
+      "post_sha256": "ace1ff217307be87f2f7719d022dd4803f4ff9efc0a98151a61a5d3ca7784ac6",
+      "pre_sha256": "658c7f289113caacc3ba53cf2c14290ef6607bb00ae3b9a412b66fe7a6a3dc87"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": ".claude/skills/learn/SKILL.md",
+      "post_sha256": "1a06a14d0333ac622a66370303754f228123ad1c30220df1ae354a0c40fe6c5b",
+      "pre_sha256": "9ea49be450f04055955d5a1f06d47c1ede643098e821444bb7dc68d667769ed0"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": ".claude/skills/teach/SKILL.md",
+      "post_sha256": "e8705b22fff1325f5d07f2c3ea28062a12c77e986d09cf406371c8b0386396a7",
+      "pre_sha256": "97929e6c88395739fead2dd1c0b6afb22998d20b60b0f9cbaac0a01dbc0f6f68"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": "policies/review-lanes.md",
+      "post_sha256": "33e73540c17785900f7d021bd9198d2ddf2b952b9a70c6ad8699684f33ea4bcf",
+      "pre_sha256": "e301306c419803cb257b243c9e0425d16698e47ae948ca434afbce37231b131f"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": "policies/orchestration-control-plane.md",
+      "post_sha256": "159e91ad286db00cfd626a46f915052a8677df83f8716310c1ed1ccfcef694e7",
+      "pre_sha256": "9c4e6daeb101d52183c489854dbca3f847939716de852d35589e7d705e42c4c4"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": "policies/log-discipline.md",
+      "post_sha256": "fafb41749f81e4e7325c626eae9bc6234e2f81a0476e68665d9787ac736e59d8",
+      "pre_sha256": "96494a7933041c34cb8985c50056da8a19ed784dc7646cabb8fbc3e73b01e8ca"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": "briefs/agentic-bootstrap.md",
+      "post_sha256": "0b4fac83fcd68af4e023b557bd5d894f0e53fd4384a866e6e34ff1796be697da",
+      "pre_sha256": "eecbf609ed669c1033bdcdfe7099c398b39f883c26a21e587caeffaf5801943a"
+    },
+    {
+      "action": "caller/reference-cleanup",
+      "path": "briefs/deterministic-orchestration-control-plane.md",
+      "post_sha256": "4982aafc0f929673b247927aa1d49a20c0d20750f8d3a6fe509ce0bed78b0ac6",
+      "pre_sha256": "fa1de7cca647c3f10f9aa50ea4477486dd2f9386cab8dfdb65fb86285927f43a"
+    },
+    {
+      "action": "rewrite-shared-normalization-proof",
+      "path": "tests/test_log_control_plane.py"
+    }
+  ],
+  "constitution": {
+    "left_for_review": [
+      {
+        "line": 25,
+        "path": "README.md",
+        "text": "See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [CLAUDE.md](AGENTS.md), [policies](policies/README.md) and [briefs](briefs/BRIEF.md). Canonical agent resources are in `.claude/`; `.agents/` and `.codex/` retain portable mirrors, including teach/learn workflows."
+      },
+      {
+        "line": 36,
+        "path": ".claude/skills/learn/SKILL.md",
+        "text": "   - `AGENTS.md` is a symlink to `CLAUDE.md` (or both files exist and have identical content)."
+      },
+      {
+        "line": 60,
+        "path": ".claude/skills/learn/SKILL.md",
+        "text": "1. **Top-level inventory.** `ls -la <donor-dir>`. Note root files (READMEs, AGENTS.md, CLAUDE.md, language metadata) and directory shape."
+      },
+      {
+        "line": 45,
+        "path": ".claude/skills/teach/SKILL.md",
+        "text": "   - `AGENTS.md` is a symlink to `CLAUDE.md` (or both files exist and have identical content)."
+      },
+      {
+        "line": 58,
+        "path": ".claude/skills/teach/SKILL.md",
+        "text": "4. **Target's harness compatibility.** Note which agent harnesses the target appears to use (`CLAUDE.md` / `AGENTS.md` at root; `.claude/` and/or `.codex/` directories). Some teachings only apply if a particular harness is in use."
+      },
+      {
+        "line": 72,
+        "path": ".claude/skills/teach/SKILL.md",
+        "text": "1. **Top-level inventory.** `ls -la <target-dir>`. Note root files (READMEs, AGENTS.md, CLAUDE.md, language metadata) and directory shape."
+      },
+      {
+        "line": 87,
+        "path": ".claude/skills/teach/SKILL.md",
+        "text": "   - **`AGENTS.md` not a symlink.** If `<target>/CLAUDE.md` exists and `<target>/AGENTS.md` is either absent or is a regular file (not a symlink to `CLAUDE.md`). Heal: `rm -f <target>/AGENTS.md && ln -s CLAUDE.md <target>/AGENTS.md`. Exception: if the regular `AGENTS.md` content differs meaningfully from `CLAUDE.md`, downgrade to DECIDE — the target may be intentionally splitting them."
+      },
+      {
+        "line": 299,
+        "path": ".claude/skills/teach/SKILL.md",
+        "text": "1. **Execute approved mechanical parity heals first**, before any other change. Walk the \"Mechanical parity heals\" section of the approved plan and execute every AUTO entry. This runs *before* adding NEW files so the rest of Apply lands on a parity-clean substrate. Repairs include: `AGENTS.md` regular-file → symlink to `CLAUDE.md`; `.agents/skills/<name>` file-symlink-or-non-symlink-directory → directory symlink to `../../.claude/skills/<name>`; missing `.codex/agents/<role>.toml` → generate thin wrapper. DECIDE entries are *not* auto-executed; they stay listed in the LOG entry as manual follow-ups."
+      },
+      {
+        "line": 303,
+        "path": ".claude/skills/teach/SKILL.md",
+        "text": "   - **Top-level instructions** — `CLAUDE.md` ↔ `AGENTS.md` symlink. If a fresh `CLAUDE.md` was created in step 2, also create the `AGENTS.md → CLAUDE.md` symlink (the parity-heal pass in step 1 only repairs existing-`CLAUDE.md` mismatches)."
+      },
+      {
+        "line": 13,
+        "path": "policies/cross-harness-parity.md",
+        "text": "| Project instructions | `CLAUDE.md` | `AGENTS.md` → symlink to `CLAUDE.md` |"
+      },
+      {
+        "line": 26,
+        "path": "policies/cross-harness-parity.md",
+        "text": "This shape follows the harnesses' discovery contracts: Claude Code reads `CLAUDE.md`, `.claude/skills/`, and `.claude/agents/`; Codex reads `AGENTS.md`, `.codex/agents/` (agent definitions), and `.agents/skills/` (native project-skill discovery, per [developers.openai.com/codex/skills](https://developers.openai.com/codex/skills)). Repo-level Codex skills are invoked with `$name` (or selected through `/skills`), not `/name`. Deprecated custom prompts live only under the user's `~/.codex/prompts/` and are not a repo-level mirror surface."
+      },
+      {
+        "line": 46,
+        "path": "policies/cross-harness-parity.md",
+        "text": "   - `AGENTS.md` is a symlink to `CLAUDE.md`. Verify with `readlink AGENTS.md`."
+      },
+      {
+        "line": 47,
+        "path": "policies/project-isolation.md",
+        "text": "- `CLAUDE.md` / `AGENTS.md` — top-level agent guidance"
+      },
+      {
+        "line": 28,
+        "path": "policies/lessons.md",
+        "text": "- Not agent-side memory. Per [`CLAUDE.md`](../AGENTS.md)'s \"Rules, not memory\" invariant, the ledger is a committed repo surface visible to every operator and harness — never a local memory store."
+      },
+      {
+        "line": 54,
+        "path": "briefs/agentic-bootstrap.md",
+        "text": "  AGENTS.md                # Symlink → CLAUDE.md (for Codex/aider/OpenHands)"
+      },
+      {
+        "line": 293,
+        "path": "briefs/agentic-bootstrap.md",
+        "text": "- `AGENTS.md` symlink → `CLAUDE.md`"
+      },
+      {
+        "line": 457,
+        "path": "briefs/agentic-bootstrap.md",
+        "text": "3. **`AGENTS.md`** — symlink to `CLAUDE.md`:"
+      },
+      {
+        "line": 459,
+        "path": "briefs/agentic-bootstrap.md",
+        "text": "   ln -s CLAUDE.md AGENTS.md"
+      },
+      {
+        "line": 461,
+        "path": "briefs/agentic-bootstrap.md",
+        "text": "   Codex and aider read `AGENTS.md`; Claude Code reads `CLAUDE.md`; the symlink keeps both honest from a single source."
+      },
+      {
+        "line": 621,
+        "path": "briefs/agentic-bootstrap.md",
+        "text": "- `readlink AGENTS.md` returns `CLAUDE.md`."
+      },
+      {
+        "line": 697,
+        "path": "briefs/agentic-bootstrap.md",
+        "text": "[ ] AGENTS.md is a symlink to CLAUDE.md"
+      },
+      {
+        "line": 37,
+        "path": "briefs/cross-agent-invocation.md",
+        "text": "- **Instruction parity is automatic.** Codex auto-ingests `AGENTS.md` (→ `CLAUDE.md` via symlink); `claude` auto-loads `CLAUDE.md`. An external reviewer invoked from the repo root is bound by the same policies, invariants, and verdict contract as a native subagent, with no extra plumbing."
+      },
+      {
+        "line": 49,
+        "path": "briefs/BRIEF.md",
+        "text": "See [`CLAUDE.md`](../AGENTS.md) for the index of sibling briefs and the policies catalog."
+      }
+    ],
+    "original_sha256": "beccf81d8414fd546869c6ad8940b449cdc0f894e3a1ece54cb15de9c24639e4",
+    "primary_sha256": "053a3ba720153103b2cbe9467cb8320857d6fba38535ee9aaeac49a8d63f725d",
+    "rewritten_lines": [
+      {
+        "after": "# AGENTS.md",
+        "before": "# CLAUDE.md",
+        "line": 1,
+        "path": "AGENTS.md"
+      },
+      {
+        "after": "        report(directory, f\"{directory}/{name}\", \"file is not indexed in AGENTS.md\")",
+        "before": "        report(directory, f\"{directory}/{name}\", \"file is not indexed in CLAUDE.md\")",
+        "line": 74,
+        "path": "bin/check-catalogs"
+      },
+      {
+        "after": "        report(directory, f\"{directory}/{name}\", \"AGENTS.md references a missing file\")",
+        "before": "        report(directory, f\"{directory}/{name}\", \"CLAUDE.md references a missing file\")",
+        "line": 76,
+        "path": "bin/check-catalogs"
+      },
+      {
+        "after": "        (\"AGENTS.md\", instructions, 20480),",
+        "before": "        (\"CLAUDE.md\", instructions, 20480),",
+        "line": 89,
+        "path": "bin/check-catalogs"
+      },
+      {
+        "after": "        report(\"instructions\", \"AGENTS.md\", \"zone markers must each occur exactly once\")",
+        "before": "        report(\"instructions\", \"CLAUDE.md\", \"zone markers must each occur exactly once\")",
+        "line": 106,
+        "path": "bin/check-catalogs"
+      },
+      {
+        "after": "        report(\"instructions\", \"AGENTS.md\", \"zone markers must occur in declared order\")",
+        "before": "        report(\"instructions\", \"CLAUDE.md\", \"zone markers must occur in declared order\")",
+        "line": 110,
+        "path": "bin/check-catalogs"
+      },
+      {
+        "after": "        instructions = (ROOT / \"AGENTS.md\").read_bytes().decode(\"utf-8\")",
+        "before": "        instructions = (ROOT / \"CLAUDE.md\").read_bytes().decode(\"utf-8\")",
+        "line": 649,
+        "path": "bin/check-catalogs"
+      },
+      {
+        "after": "        report(\"instructions\", \"AGENTS.md\", str(exc))",
+        "before": "        report(\"instructions\", \"CLAUDE.md\", str(exc))",
+        "line": 651,
+        "path": "bin/check-catalogs"
+      },
+      {
+        "after": "`policies/*.md` and `briefs/*.md` file is indexed in `AGENTS.md` and every",
+        "before": "`policies/*.md` and `briefs/*.md` file is indexed in `CLAUDE.md` and every",
+        "line": 426,
+        "path": "bin/README.md"
+      },
+      {
+        "after": "# SHARED reserved port (AGENTS.md reserves it for ad-hoc rendered-book/static",
+        "before": "# SHARED reserved port (CLAUDE.md reserves it for ad-hoc rendered-book/static",
+        "line": 15,
+        "path": "bin/serve-execution-dashboard"
+      },
+      {
+        "after": "SCAN_FILES = (\"AGENTS.md\",)",
+        "before": "SCAN_FILES = (\"CLAUDE.md\",)",
+        "line": 37,
+        "path": "bin/check-toolchain-callers"
+      },
+      {
+        "after": "            relative in {\"AGENTS.md\", \"policies/build-gates.md\"}",
+        "before": "            relative in {\"CLAUDE.md\", \"policies/build-gates.md\"}",
+        "line": 80,
+        "path": "bin/check-toolchain-callers"
+      },
+      {
+        "after": "    if os.readlink(link) != \"AGENTS.md\":",
+        "before": "    if os.readlink(link) != \"CLAUDE.md\":",
+        "line": 60,
+        "path": "bin/check-harness-parity"
+      },
+      {
+        "after": "        report(\"instructions\", \"AGENTS.md\", \"must target AGENTS.md\")",
+        "before": "        report(\"instructions\", \"AGENTS.md\", \"must target CLAUDE.md\")",
+        "line": 61,
+        "path": "bin/check-harness-parity"
+      },
+      {
+        "after": "CLAUDE = _normalized(REPO_ROOT / \"AGENTS.md\")",
+        "before": "CLAUDE = _normalized(REPO_ROOT / \"CLAUDE.md\")",
+        "line": 21,
+        "path": "tests/test_methodology_toolchain_contract.py"
+      },
+      {
+        "after": "    (root / \"AGENTS.md\").write_text(",
+        "before": "    (root / \"CLAUDE.md\").write_text(",
+        "line": 83,
+        "path": "tests/test_check_catalogs.py"
+      },
+      {
+        "after": "    instructions = root / \"AGENTS.md\"",
+        "before": "    instructions = root / \"CLAUDE.md\"",
+        "line": 126,
+        "path": "tests/test_check_catalogs.py"
+      },
+      {
+        "after": "    (root / \"AGENTS.md\").write_text(\"# synthetic engine\\n\", encoding=\"utf-8\")",
+        "before": "    (root / \"CLAUDE.md\").write_text(\"# synthetic engine\\n\", encoding=\"utf-8\")",
+        "line": 66,
+        "path": "tests/test_execution_telemetry.py"
+      },
+      {
+        "after": "    (root / \"AGENTS.md\").write_text(\"# Synthetic engine\\n\")",
+        "before": "    (root / \"CLAUDE.md\").write_text(\"# Synthetic engine\\n\")",
+        "line": 74,
+        "path": "tests/test_kickoff_evidence.py"
+      },
+      {
+        "after": "    (repository / \"AGENTS.md\").write_text(",
+        "before": "    (repository / \"CLAUDE.md\").write_text(",
+        "line": 924,
+        "path": "tests/test_kickoff_evidence.py"
+      },
+      {
+        "after": "        \"AGENTS.md\",",
+        "before": "        \"CLAUDE.md\",",
+        "line": 986,
+        "path": "tests/test_kickoff_evidence.py"
+      },
+      {
+        "after": "    (engine / \"AGENTS.md\").write_text(\"# fixture\\n\", encoding=\"utf-8\")",
+        "before": "    (engine / \"CLAUDE.md\").write_text(\"# fixture\\n\", encoding=\"utf-8\")",
+        "line": 85,
+        "path": "tests/test_execution_dashboard.py"
+      },
+      {
+        "after": "    shutil.copy2(ROOT / \"AGENTS.md\", tmp_path / \"AGENTS.md\")",
+        "before": "    shutil.copy2(ROOT / \"CLAUDE.md\", tmp_path / \"CLAUDE.md\")",
+        "line": 35,
+        "path": "tests/test_mirror_parity.py"
+      },
+      {
+        "after": "    (tmp_path / \"AGENTS.md\").symlink_to(\"AGENTS.md\")",
+        "before": "    (tmp_path / \"AGENTS.md\").symlink_to(\"CLAUDE.md\")",
+        "line": 36,
+        "path": "tests/test_mirror_parity.py"
+      },
+      {
+        "after": "    (root / \"AGENTS.md\").symlink_to(\"AGENTS.md\")",
+        "before": "    (root / \"AGENTS.md\").symlink_to(\"CLAUDE.md\")",
+        "line": 50,
+        "path": "tests/test_check.py"
+      },
+      {
+        "after": "    (root / \"AGENTS.md\").write_text(\"# Fixture\\n\")",
+        "before": "    (root / \"CLAUDE.md\").write_text(\"# Fixture\\n\")",
+        "line": 51,
+        "path": "tests/test_check.py"
+      },
+      {
+        "after": "    (engine / \"AGENTS.md\").write_text(\"# Visual fixture\\n\", encoding=\"utf-8\")",
+        "before": "    (engine / \"CLAUDE.md\").write_text(\"# Visual fixture\\n\", encoding=\"utf-8\")",
+        "line": 31,
+        "path": "tests/render_execution_dashboard_fixture.py"
+      },
+      {
+        "after": "6. **`AGENTS.md`** for invariants.",
+        "before": "6. **`CLAUDE.md`** for invariants.",
+        "line": 39,
+        "path": ".claude/agents/code-critic.md"
+      },
+      {
+        "after": "- The code follows the language's idiomatic patterns and the project's conventions (from `AGENTS.md`).",
+        "before": "- The code follows the language's idiomatic patterns and the project's conventions (from `CLAUDE.md`).",
+        "line": 97,
+        "path": ".claude/agents/code-critic.md"
+      },
+      {
+        "after": "6. **`AGENTS.md`** for invariants and the project's conventions (language, tooling, formatting, file shapes).",
+        "before": "6. **`CLAUDE.md`** for invariants and the project's conventions (language, tooling, formatting, file shapes).",
+        "line": 36,
+        "path": ".claude/agents/phase-coder.md"
+      },
+      {
+        "after": "6. **`AGENTS.md`** for architectural invariants and the project's conventions.",
+        "before": "6. **`CLAUDE.md`** for architectural invariants and the project's conventions.",
+        "line": 34,
+        "path": ".claude/agents/phase-planner.md"
+      },
+      {
+        "after": "AGENTS.md and the policies in `policies/`:",
+        "before": "CLAUDE.md and the policies in `policies/`:",
+        "line": 130,
+        "path": ".claude/agents/phase-planner.md"
+      },
+      {
+        "after": "Review an implementation plan produced for a phase in `plan/`. Verify that it correctly implements the referenced phase, faithfully realizes the cited briefs, honors every applicable policy, upholds the architectural invariants in `AGENTS.md`, and is concrete enough to guide implementation. Issue `APPROVED` or `REVISE`.",
+        "before": "Review an implementation plan produced for a phase in `plan/`. Verify that it correctly implements the referenced phase, faithfully realizes the cited briefs, honors every applicable policy, upholds the architectural invariants in `CLAUDE.md`, and is concrete enough to guide implementation. Issue `APPROVED` or `REVISE`.",
+        "line": 9,
+        "path": ".claude/agents/plan-reviewer.md"
+      },
+      {
+        "after": "6. **`AGENTS.md`** for architectural invariants.",
+        "before": "6. **`CLAUDE.md`** for architectural invariants.",
+        "line": 38,
+        "path": ".claude/agents/plan-reviewer.md"
+      },
+      {
+        "after": "- **Lane fit.** Per `policies/review-lanes.md`, check any declared `evidence_lane: light` against the plan's actual blast radius: a `light` declaration over an authority surface (`policies/`, schemas, agent definitions, skills, evidence/gate tooling, `AGENTS.md`), irreversible or external state, or a deploy seam is a **blocking issue**.",
+        "before": "- **Lane fit.** Per `policies/review-lanes.md`, check any declared `evidence_lane: light` against the plan's actual blast radius: a `light` declaration over an authority surface (`policies/`, schemas, agent definitions, skills, evidence/gate tooling, `CLAUDE.md`), irreversible or external state, or a deploy seam is a **blocking issue**.",
+        "line": 84,
+        "path": ".claude/agents/plan-reviewer.md"
+      },
+      {
+        "after": "- If an Open Question is resolvable from `plan/`, the cited briefs, `policies/`, `AGENTS.md`, or the current codebase, resolve it yourself and mention that in the verdict. A plan that parks such a lookup as a question is `REVISE` on that point — the lookup was the planner's job.",
+        "before": "- If an Open Question is resolvable from `plan/`, the cited briefs, `policies/`, `CLAUDE.md`, or the current codebase, resolve it yourself and mention that in the verdict. A plan that parks such a lookup as a question is `REVISE` on that point — the lookup was the planner's job.",
+        "line": 102,
+        "path": ".claude/agents/plan-reviewer.md"
+      },
+      {
+        "after": "Allocate a **new** opaque run directory with `mktemp -d`; never reuse a path from an earlier or interrupted run. Initialize it through `./bin/kickoff-evidence init` per [the orchestration-evidence policy](../../../policies/orchestration-evidence.md). Pass the phase id, authority list, trace id, root span id, open setup span id, resolved review lane, resolved evidence lane, and follow-up route. Authorities, in governing order, are `plan/INDEX.md`; target and parent phase files; cited briefs; declared dependencies; the immediately preceding completed phase; `AGENTS.md`; and every applicable policy. Also pass `--preflight-receipt \"$PREFLIGHT_DIR/role-preflight.json\"`; initialization copies and revalidates the receipt against the current routing configuration. Use repo-relative paths with optional `::locator` suffixes. Initialization failure stops the run; preserve the already-in-progress marker and report the failed initialization without claiming role work began.",
+        "before": "Allocate a **new** opaque run directory with `mktemp -d`; never reuse a path from an earlier or interrupted run. Initialize it through `./bin/kickoff-evidence init` per [the orchestration-evidence policy](../../../policies/orchestration-evidence.md). Pass the phase id, authority list, trace id, root span id, open setup span id, resolved review lane, resolved evidence lane, and follow-up route. Authorities, in governing order, are `plan/INDEX.md`; target and parent phase files; cited briefs; declared dependencies; the immediately preceding completed phase; `CLAUDE.md`; and every applicable policy. Also pass `--preflight-receipt \"$PREFLIGHT_DIR/role-preflight.json\"`; initialization copies and revalidates the receipt against the current routing configuration. Use repo-relative paths with optional `::locator` suffixes. Initialization failure stops the run; preserve the already-in-progress marker and report the failed initialization without claiming role work began.",
+        "line": 103,
+        "path": ".claude/skills/kickoff/preflight.md"
+      },
+      {
+        "after": "**Hard boundary:** filing and occurrence-appending in `lessons/` are the *only* writes this step performs. Codifying a lesson — editing `AGENTS.md`, `policies/`, `briefs/`, a skill, or an agent definition because of it — requires the user's explicit ratification of a surfaced DECIDE item. Never apply a graduation autonomously, and never rewrite rule documents wholesale from session memory.",
+        "before": "**Hard boundary:** filing and occurrence-appending in `lessons/` are the *only* writes this step performs. Codifying a lesson — editing `CLAUDE.md`, `policies/`, `briefs/`, a skill, or an agent definition because of it — requires the user's explicit ratification of a surfaced DECIDE item. Never apply a graduation autonomously, and never rewrite rule documents wholesale from session memory.",
+        "line": 52,
+        "path": ".claude/skills/kickoff/close.md"
+      },
+      {
+        "after": "  AGENTS.md and phase file declare which build gates to run.",
+        "before": "  CLAUDE.md and phase file declare which build gates to run.",
+        "line": 8,
+        "path": ".claude/skills/kickoff/SKILL.md"
+      },
+      {
+        "after": "Orchestrate one independently acceptable phase under `plan/`: plan → independent plan review → implementation → independent code critique → candidate gate → accepted evidence close → bookkeeping → handoff gate → delivery. This is the entry point; the adjacent resources carry the execution procedure. Read `AGENTS.md`, the phase and its named authorities. The invoking session owns orchestration, logs, telemetry and both close gates; the primary owns inline implementation in primary mode; the coder owns it in delegated mode. Do not proceed to another phase without authorization.",
+        "before": "Orchestrate one independently acceptable phase under `plan/`: plan → independent plan review → implementation → independent code critique → candidate gate → accepted evidence close → bookkeeping → handoff gate → delivery. This is the entry point; the adjacent resources carry the execution procedure. Read `CLAUDE.md`, the phase and its named authorities. The invoking session owns orchestration, logs, telemetry and both close gates; the primary owns inline implementation in primary mode; the coder owns it in delegated mode. Do not proceed to another phase without authorization.",
+        "line": 23,
+        "path": ".claude/skills/kickoff/SKILL.md"
+      },
+      {
+        "after": "5. Update `AGENTS.md`'s catalogs (briefs catalog, policies catalog) so every new file is indexed.",
+        "before": "5. Update `CLAUDE.md`'s catalogs (briefs catalog, policies catalog) so every new file is indexed.",
+        "line": 220,
+        "path": ".claude/skills/learn/SKILL.md"
+      },
+      {
+        "after": "- **Catalog drift is forbidden.** `AGENTS.md`'s catalogs reflect every file in `briefs/` and `policies/` after the apply finishes, and `docs/README.md` links every entry under `docs/`. Verify before reporting done.",
+        "before": "- **Catalog drift is forbidden.** `CLAUDE.md`'s catalogs reflect every file in `briefs/` and `policies/` after the apply finishes, and `docs/README.md` links every entry under `docs/`. Verify before reporting done.",
+        "line": 237,
+        "path": ".claude/skills/learn/SKILL.md"
+      },
+      {
+        "after": "| **Scope, authority, inventory** | reassigning a parent deliverable as settled, asserting an approval nobody recorded, an inventory (`AGENTS.md`, a manifest, a floor) not updated | planner did not sweep the inventories the change makes required |",
+        "before": "| **Scope, authority, inventory** | reassigning a parent deliverable as settled, asserting an approval nobody recorded, an inventory (`CLAUDE.md`, a manifest, a floor) not updated | planner did not sweep the inventories the change makes required |",
+        "line": 201,
+        "path": ".claude/skills/sweep-planning/SKILL.md"
+      },
+      {
+        "after": "   **Mini-method target.** If the target's `AGENTS.md` carries the `<!-- mini-method: agentic-coding-starter -->` marker (see `briefs/mini-method.md`), classify the run as a **graduation**, not divergence: `briefs/`, `policies/`, `docs/`, and `bin/` transfer as they stand; the `briefs/README.md` and `policies/README.md` catalogs fold into the new `AGENTS.md`'s catalogs while `docs/README.md` and `bin/README.md` remain the catalog files the full methodology also uses; the mini `AGENTS.md` is replaced wholesale by the two-zone form, carrying its \"Project\" paragraph into the Project Context zone; and the absence of `plan/`, `LOG.md`, the ledgers, roles, skills, and gates is absent-by-design — every one of them is an ordinary Tier-1/Tier-2 addition, not a drift finding.",
+        "before": "   **Mini-method target.** If the target's `CLAUDE.md` carries the `<!-- mini-method: agentic-coding-starter -->` marker (see `briefs/mini-method.md`), classify the run as a **graduation**, not divergence: `briefs/`, `policies/`, `docs/`, and `bin/` transfer as they stand; the `briefs/README.md` and `policies/README.md` catalogs fold into the new `CLAUDE.md`'s catalogs while `docs/README.md` and `bin/README.md` remain the catalog files the full methodology also uses; the mini `CLAUDE.md` is replaced wholesale by the two-zone form, carrying its \"Project\" paragraph into the Project Context zone; and the absence of `plan/`, `LOG.md`, the ledgers, roles, skills, and gates is absent-by-design — every one of them is an ordinary Tier-1/Tier-2 addition, not a drift finding.",
+        "line": 75,
+        "path": ".claude/skills/teach/SKILL.md"
+      },
+      {
+        "after": "- **Catalog drift.** Does the target's `AGENTS.md` carry a briefs catalog, policies catalog, or critical-files map? Every new brief, policy, or anchor file added by this teach pass must be indexed there. Missing catalogs (target lacks them entirely) → add the catalog as part of the apply, not as a follow-up.",
+        "before": "- **Catalog drift.** Does the target's `CLAUDE.md` carry a briefs catalog, policies catalog, or critical-files map? Every new brief, policy, or anchor file added by this teach pass must be indexed there. Missing catalogs (target lacks them entirely) → add the catalog as part of the apply, not as a follow-up.",
+        "line": 138,
+        "path": ".claude/skills/teach/SKILL.md"
+      },
+      {
+        "after": "- **Description drift.** Does the target's `AGENTS.md` (or any other top-level doc) describe behavior the new policy now codifies more thoroughly? Augment the existing description to point at the new policy and pick up its richer conventions. Do not duplicate the policy body — link to it.",
+        "before": "- **Description drift.** Does the target's `CLAUDE.md` (or any other top-level doc) describe behavior the new policy now codifies more thoroughly? Augment the existing description to point at the new policy and pick up its richer conventions. Do not duplicate the policy body — link to it.",
+        "line": 140,
+        "path": ".claude/skills/teach/SKILL.md"
+      },
+      {
+        "after": "- **Lessons-ledger adoption.** Treat `lessons/` + `lessons-archived/` (with `.gitkeep`s), `policies/lessons.md`, `bin/lessons`, `tests/test_lessons.py`, `bin/check-catalogs`, `tests/test_check_catalogs.py`, the `bin/check` registrations, `.claude/skills/sweep/SKILL.md` (with its `.agents/skills/sweep` symlink), `.claude/skills/kickoff/close.md` Step 9c plus the END-block `Lessons:` field and `log-discipline.md`'s minimum-contract line, the four roles' Process Observations sections, the coder/evidence `failure_analysis` chain, `briefs/harness-self-improvement.md`, and the AGENTS.md invariant/catalog/glossary entries as **one atomic contract**. If absent, port the bundle with an empty ledger — never seed the target's ledger with starter lessons. If partially present, partial adoption is stale and blocking. The target's existing ledger *content* is target state: preserve it untouched.",
+        "before": "- **Lessons-ledger adoption.** Treat `lessons/` + `lessons-archived/` (with `.gitkeep`s), `policies/lessons.md`, `bin/lessons`, `tests/test_lessons.py`, `bin/check-catalogs`, `tests/test_check_catalogs.py`, the `bin/check` registrations, `.claude/skills/sweep/SKILL.md` (with its `.agents/skills/sweep` symlink), `.claude/skills/kickoff/close.md` Step 9c plus the END-block `Lessons:` field and `log-discipline.md`'s minimum-contract line, the four roles' Process Observations sections, the coder/evidence `failure_analysis` chain, `briefs/harness-self-improvement.md`, and the CLAUDE.md invariant/catalog/glossary entries as **one atomic contract**. If absent, port the bundle with an empty ledger — never seed the target's ledger with starter lessons. If partially present, partial adoption is stale and blocking. The target's existing ledger *content* is target state: preserve it untouched.",
+        "line": 149,
+        "path": ".claude/skills/teach/SKILL.md"
+      },
+      {
+        "after": "- **Pinned-documentation adoption.** Check for `<target>/docs/README.md` and `policies/docs.md`. If absent, port `policies/docs.md`, the `docs/README.md` catalog shape (header, no rows), the `docs/` checks in `bin/check-catalogs` with their `tests/test_check_catalogs.py` coverage, and the AGENTS.md layout, catalog, reading-protocol, and glossary entries as one contract — AUTO. Never seed the target's `docs/` with this repository's pins; and if the target already keeps third-party text pasted inside briefs, moving it under `docs/` is a DECIDE item for the target's owner, listed by brief.",
+        "before": "- **Pinned-documentation adoption.** Check for `<target>/docs/README.md` and `policies/docs.md`. If absent, port `policies/docs.md`, the `docs/README.md` catalog shape (header, no rows), the `docs/` checks in `bin/check-catalogs` with their `tests/test_check_catalogs.py` coverage, and the CLAUDE.md layout, catalog, reading-protocol, and glossary entries as one contract — AUTO. Never seed the target's `docs/` with this repository's pins; and if the target already keeps third-party text pasted inside briefs, moving it under `docs/` is a DECIDE item for the target's owner, listed by brief.",
+        "line": 150,
+        "path": ".claude/skills/teach/SKILL.md"
+      },
+      {
+        "after": "- **Execution-telemetry and dashboard adoption.** Treat `policies/execution-telemetry.md`, `lib/agentic_starter/`, `bin/execution-telemetry`, `bin/check-execution-dashboards`, `bin/serve-execution-dashboard`, `reports/execution/` (with `index.html`, `index-data.js`, and the vendored offline `assets/`), `tests/test_execution_telemetry.py`, `tests/test_execution_dashboard.py`, `tests/render_execution_dashboard_fixture.py`, `tests/fixtures/`, the `bin/check` registrations, and the AGENTS.md layout/invariant/glossary entries as one atomic contract. `bin/execution-telemetry` and `bin/check-execution-dashboards` import `lib/agentic_starter/`; porting either script without the library leaves `bin/check` failing at startup. Never transfer this repository's own phase reports — the target's archive starts empty, which the checker reports as `EXECUTION DASHBOARDS PASS (0 phases)`. Partial adoption is stale and blocking.",
+        "before": "- **Execution-telemetry and dashboard adoption.** Treat `policies/execution-telemetry.md`, `lib/agentic_starter/`, `bin/execution-telemetry`, `bin/check-execution-dashboards`, `bin/serve-execution-dashboard`, `reports/execution/` (with `index.html`, `index-data.js`, and the vendored offline `assets/`), `tests/test_execution_telemetry.py`, `tests/test_execution_dashboard.py`, `tests/render_execution_dashboard_fixture.py`, `tests/fixtures/`, the `bin/check` registrations, and the CLAUDE.md layout/invariant/glossary entries as one atomic contract. `bin/execution-telemetry` and `bin/check-execution-dashboards` import `lib/agentic_starter/`; porting either script without the library leaves `bin/check` failing at startup. Never transfer this repository's own phase reports — the target's archive starts empty, which the checker reports as `EXECUTION DASHBOARDS PASS (0 phases)`. Partial adoption is stale and blocking.",
+        "line": 155,
+        "path": ".claude/skills/teach/SKILL.md"
+      },
+      {
+        "after": "- **Operator-register adoption.** `.claude/skills/plain/SKILL.md` and its `.agents/skills/plain` directory symlink travel together with the AGENTS.md convention that every message addressed to the operator follows it. The operator-invoked `.claude/skills/ask/SKILL.md` and its `.agents/skills/ask` symlink travel the same way, with the AGENTS.md convention that names the two directions of operator decisions. `bin/check-harness-parity` fails closed on a canonical skill with no mirror, so a skill copied without its symlink breaks the target's gate.",
+        "before": "- **Operator-register adoption.** `.claude/skills/plain/SKILL.md` and its `.agents/skills/plain` directory symlink travel together with the CLAUDE.md convention that every message addressed to the operator follows it. The operator-invoked `.claude/skills/ask/SKILL.md` and its `.agents/skills/ask` symlink travel the same way, with the CLAUDE.md convention that names the two directions of operator decisions. `bin/check-harness-parity` fails closed on a canonical skill with no mirror, so a skill copied without its symlink breaks the target's gate.",
+        "line": 162,
+        "path": ".claude/skills/teach/SKILL.md"
+      },
+      {
+        "after": "5. Update the target's `AGENTS.md` catalogs (briefs catalog, policies catalog, critical-files map) so every new file is indexed. Add the catalog as a new section when the target lacks it.",
+        "before": "5. Update the target's `CLAUDE.md` catalogs (briefs catalog, policies catalog, critical-files map) so every new file is indexed. Add the catalog as a new section when the target lacks it.",
+        "line": 307,
+        "path": ".claude/skills/teach/SKILL.md"
+      },
+      {
+        "after": "- **Catalog drift is forbidden.** Target's `AGENTS.md` catalogs reflect every file in the target's `briefs/` and `policies/` after apply, and the target's `docs/README.md` links every entry under its `docs/`.",
+        "before": "- **Catalog drift is forbidden.** Target's `CLAUDE.md` catalogs reflect every file in the target's `briefs/` and `policies/` after apply, and the target's `docs/README.md` links every entry under its `docs/`.",
+        "line": 340,
+        "path": ".claude/skills/teach/SKILL.md"
+      },
+      {
+        "after": "   - Top-level instruction changes go in `AGENTS.md`.",
+        "before": "   - Top-level instruction changes go in `CLAUDE.md`.",
+        "line": 40,
+        "path": "policies/cross-harness-parity.md"
+      },
+      {
+        "after": "`AGENTS.md` must not exceed 20480 UTF-8 bytes and `.claude/skills/kickoff/SKILL.md` must not exceed 10240 UTF-8 bytes. The ceilings were raised from 16384 and 8192 on 2026-09-05 by operator decision, after the root file reached 8 bytes of headroom while every new brief or policy requires a catalog row in it; the budget constrains sprawl and must never be met by deleting an obligation. The root ceiling also spends a documented external budget: [`../briefs/session-context-compaction.md`](../briefs/session-context-compaction.md) records a 32 KiB default combined project-instruction budget of which this repository's root file is only one contribution, so the retired 16384 was half of it and 20480 is 62.5%, leaving 12288 bytes for every other instruction source in the chain — including the operator's own machine-wide and nested files, which this repository cannot see or bound. That arithmetic was put to the operator on 2026-09-05 with the raise already applied, and they ratified 20480 knowing it; the entry ceiling is unaffected, since skill bodies are progressively disclosed and sit outside that budget. Any further raise re-opens this question rather than inheriting the answer. Preserve the root hard-rule clauses and restriction/waiver paragraph, essential invariants, complete concise brief/policy/skill/role catalogs, reading order and toolchain/delivery boundaries. Its four zone markers occur exactly once in order: `PROJECT_CONTEXT_START`, `PROJECT_CONTEXT_END`, `METHODOLOGY_CONTRACT_START`, `METHODOLOGY_CONTRACT_END`, each in an HTML comment. Remove repetition before moving extended explanations to existing canonical owners; a byte ceiling never authorizes deleting an obligation.",
+        "before": "`CLAUDE.md` must not exceed 20480 UTF-8 bytes and `.claude/skills/kickoff/SKILL.md` must not exceed 10240 UTF-8 bytes. The ceilings were raised from 16384 and 8192 on 2026-09-05 by operator decision, after the root file reached 8 bytes of headroom while every new brief or policy requires a catalog row in it; the budget constrains sprawl and must never be met by deleting an obligation. The root ceiling also spends a documented external budget: [`../briefs/session-context-compaction.md`](../briefs/session-context-compaction.md) records a 32 KiB default combined project-instruction budget of which this repository's root file is only one contribution, so the retired 16384 was half of it and 20480 is 62.5%, leaving 12288 bytes for every other instruction source in the chain — including the operator's own machine-wide and nested files, which this repository cannot see or bound. That arithmetic was put to the operator on 2026-09-05 with the raise already applied, and they ratified 20480 knowing it; the entry ceiling is unaffected, since skill bodies are progressively disclosed and sit outside that budget. Any further raise re-opens this question rather than inheriting the answer. Preserve the root hard-rule clauses and restriction/waiver paragraph, essential invariants, complete concise brief/policy/skill/role catalogs, reading order and toolchain/delivery boundaries. Its four zone markers occur exactly once in order: `PROJECT_CONTEXT_START`, `PROJECT_CONTEXT_END`, `METHODOLOGY_CONTRACT_START`, `METHODOLOGY_CONTRACT_END`, each in an HTML comment. Remove repetition before moving extended explanations to existing canonical owners; a byte ceiling never authorizes deleting an obligation.",
+        "line": 69,
+        "path": "policies/cross-harness-parity.md"
+      },
+      {
+        "after": "1. Identify which file is canonical. (Hint: `.claude/` for agent definitions; the repo root `AGENTS.md` for top-level instructions.)",
+        "before": "1. Identify which file is canonical. (Hint: `.claude/` for agent definitions; the repo root `CLAUDE.md` for top-level instructions.)",
+        "line": 112,
+        "path": "policies/cross-harness-parity.md"
+      },
+      {
+        "after": "- `AGENTS.md` says \"the project lives under `project/`\".",
+        "before": "- `CLAUDE.md` says \"the project lives under `project/`\".",
+        "line": 70,
+        "path": "policies/project-isolation.md"
+      },
+      {
+        "after": "- **authority surfaces** — `policies/`, schemas, agent definitions, skills, the evidence/gate tooling, `AGENTS.md`;",
+        "before": "- **authority surfaces** — `policies/`, schemas, agent definitions, skills, the evidence/gate tooling, `CLAUDE.md`;",
+        "line": 105,
+        "path": "policies/review-lanes.md"
+      },
+      {
+        "after": "- Markdown documents (briefs, policies, plan files, README, AGENTS.md, LOG.md, etc.).",
+        "before": "- Markdown documents (briefs, policies, plan files, README, CLAUDE.md, LOG.md, etc.).",
+        "line": 9,
+        "path": "policies/repo-relative-paths.md"
+      },
+      {
+        "after": "- The scratch root is documented in `AGENTS.md`'s conventions section.",
+        "before": "- The scratch root is documented in `CLAUDE.md`'s conventions section.",
+        "line": 52,
+        "path": "policies/repo-relative-paths.md"
+      },
+      {
+        "after": "`AGENTS.md` carries:",
+        "before": "`CLAUDE.md` carries:",
+        "line": 45,
+        "path": "policies/briefs-and-policies.md"
+      },
+      {
+        "after": "`docs/` is cataloged in `docs/README.md` rather than in `AGENTS.md`: a pinned document is reached through the brief or policy that cites it, and `AGENTS.md` is read every turn. The same no-orphans rule applies there ([`docs.md`](docs.md)).",
+        "before": "`docs/` is cataloged in `docs/README.md` rather than in `CLAUDE.md`: a pinned document is reached through the brief or policy that cites it, and `CLAUDE.md` is read every turn. The same no-orphans rule applies there ([`docs.md`](docs.md)).",
+        "line": 52,
+        "path": "policies/briefs-and-policies.md"
+      },
+      {
+        "after": "- Identity / framing material that every agent needs every turn. That stays in `AGENTS.md`.",
+        "before": "- Identity / framing material that every agent needs every turn. That stays in `CLAUDE.md`.",
+        "line": 30,
+        "path": "policies/README.md"
+      },
+      {
+        "after": "2. The repo's `AGENTS.md` (Hard rules and architectural invariants) overrides individual policy files.",
+        "before": "2. The repo's `CLAUDE.md` (Hard rules and architectural invariants) overrides individual policy files.",
+        "line": 55,
+        "path": "policies/README.md"
+      },
+      {
+        "after": "- The input queue for rule-making: a lesson that recurs graduates — with the human's explicit approval — into a policy, brief, skill, agent definition, `bin/` script, test, or `AGENTS.md` invariant.",
+        "before": "- The input queue for rule-making: a lesson that recurs graduates — with the human's explicit approval — into a policy, brief, skill, agent definition, `bin/` script, test, or `CLAUDE.md` invariant.",
+        "line": 21,
+        "path": "policies/lessons.md"
+      },
+      {
+        "after": "- **Only the human** graduates, and only the human edits `policies/`, `briefs/`, `AGENTS.md`, skills, or agent definitions *because of* a lesson. Filing and occurrence-appending are the only ledger writes an agent performs autonomously.",
+        "before": "- **Only the human** graduates, and only the human edits `policies/`, `briefs/`, `CLAUDE.md`, skills, or agent definitions *because of* a lesson. Filing and occurrence-appending are the only ledger writes an agent performs autonomously.",
+        "line": 164,
+        "path": "policies/lessons.md"
+      },
+      {
+        "after": "Route the consolidated home by kind, per the *Rules, not memory* invariant in `AGENTS.md`: a universal rule to `policies/` or `AGENTS.md`, a scoped detail to the surface's own instruction file, a per-action workflow to the owning skill, a tunable to the policy holding its tunables, a pinned decision to a brief.",
+        "before": "Route the consolidated home by kind, per the *Rules, not memory* invariant in `CLAUDE.md`: a universal rule to `policies/` or `CLAUDE.md`, a scoped detail to the surface's own instruction file, a per-action workflow to the owning skill, a tunable to the policy holding its tunables, a pinned decision to a brief.",
+        "line": 53,
+        "path": "policies/simplicity-and-consolidation.md"
+      },
+      {
+        "after": "- `methodology` — defines an approach the project defers to. This is a *lifecycle* value like the other three, and **not** a portability marker: a brief earns it by stating an approach the project defers to, whether or not that brief travels to another repo, and a methodology brief later realized in code correctly moves on to `implemented`. **Portability is decided by the `AGENTS.md` catalog, not by `status`** — the Project briefs / Methodology briefs split there is what `stamp` copies from and what a cross-repo `learn` or `teach` pass reads. Do not infer either fact from the other.",
+        "before": "- `methodology` — defines an approach the project defers to. This is a *lifecycle* value like the other three, and **not** a portability marker: a brief earns it by stating an approach the project defers to, whether or not that brief travels to another repo, and a methodology brief later realized in code correctly moves on to `implemented`. **Portability is decided by the `CLAUDE.md` catalog, not by `status`** — the Project briefs / Methodology briefs split there is what `stamp` copies from and what a cross-repo `learn` or `teach` pass reads. Do not infer either fact from the other.",
+        "line": 55,
+        "path": "policies/briefs.md"
+      },
+      {
+        "after": "`docs/README.md` is the index of everything under `docs/`. It is required whenever the directory holds anything beyond the README itself, and it is the *only* catalog of pinned documents — `AGENTS.md` does not list them, because a pinned document is consulted through the brief or policy that cites it, and `AGENTS.md` is read every turn.",
+        "before": "`docs/README.md` is the index of everything under `docs/`. It is required whenever the directory holds anything beyond the README itself, and it is the *only* catalog of pinned documents — `CLAUDE.md` does not list them, because a pinned document is consulted through the brief or policy that cites it, and `CLAUDE.md` is read every turn.",
+        "line": 42,
+        "path": "policies/docs.md"
+      },
+      {
+        "after": "- `briefs/`, `policies/`, `plan/`, `AGENTS.md`, skills, and agent definitions may cite a file under `docs/`.",
+        "before": "- `briefs/`, `policies/`, `plan/`, `CLAUDE.md`, skills, and agent definitions may cite a file under `docs/`.",
+        "line": 63,
+        "path": "policies/docs.md"
+      },
+      {
+        "after": "- **Never modifies `policies/` or top-level `AGENTS.md` without explicit instruction.** Those are the rules of the road; the orchestrator and the four canonical agents serve them, they do not amend them.",
+        "before": "- **Never modifies `policies/` or top-level `CLAUDE.md` without explicit instruction.** Those are the rules of the road; the orchestrator and the four canonical agents serve them, they do not amend them.",
+        "line": 39,
+        "path": "policies/human-in-the-loop.md"
+      },
+      {
+        "after": "its cited briefs, applicable policies, `plan/INDEX.md`, `AGENTS.md`, declared",
+        "before": "its cited briefs, applicable policies, `plan/INDEX.md`, `CLAUDE.md`, declared",
+        "line": 28,
+        "path": "policies/orchestration-evidence.md"
+      },
+      {
+        "after": "            (candidate / \"AGENTS.md\").exists()",
+        "before": "            (candidate / \"CLAUDE.md\").exists()",
+        "line": 482,
+        "path": "lib/agentic_starter/execution_telemetry.py"
+      },
+      {
+        "after": "  AGENTS.md                # Top-level agent guidance, briefs + policies catalogs,",
+        "before": "  CLAUDE.md                # Top-level agent guidance, briefs + policies catalogs,",
+        "line": 52,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "- `AGENTS.md` — uses a two-zone structure delimited by HTML comment markers, with a **Hard rules** section above both. The `Methodology Contract` zone (between `<!-- METHODOLOGY_CONTRACT_START -->` and `<!-- METHODOLOGY_CONTRACT_END -->`) is copied verbatim — methodology briefs catalog, policies catalog, universal repo layout, phase-work protocol, status markers, reading protocol, architectural invariants, activity-log contract, universal conventions, glossary — **except for the starter-only members its catalogs name**. That zone lists what exists in *this* repository, so any entry pointing at a file the new project will not have (today: the `anonymize-log-references.md` policy bullet, and the `check-anonymization.sh` clause in the `bin/` layout bullet) comes out; left in, it is a `AGENTS.md` reference to a missing file, which `bin/check-catalogs` fails closed on. The Hard rules section above the zones drops **Hard rule 3**, the starter-only anonymization rule, and the sentence introducing the rules is repaired to say the two survivors are universal. The `Project Context` zone (between `<!-- PROJECT_CONTEXT_START -->` and `<!-- PROJECT_CONTEXT_END -->`) is rewritten for the new project — the project's thesis, project-specific briefs list, project surfaces description, project conventions, and any project-specific skills.",
+        "before": "- `CLAUDE.md` — uses a two-zone structure delimited by HTML comment markers, with a **Hard rules** section above both. The `Methodology Contract` zone (between `<!-- METHODOLOGY_CONTRACT_START -->` and `<!-- METHODOLOGY_CONTRACT_END -->`) is copied verbatim — methodology briefs catalog, policies catalog, universal repo layout, phase-work protocol, status markers, reading protocol, architectural invariants, activity-log contract, universal conventions, glossary — **except for the starter-only members its catalogs name**. That zone lists what exists in *this* repository, so any entry pointing at a file the new project will not have (today: the `anonymize-log-references.md` policy bullet, and the `check-anonymization.sh` clause in the `bin/` layout bullet) comes out; left in, it is a `CLAUDE.md` reference to a missing file, which `bin/check-catalogs` fails closed on. The Hard rules section above the zones drops **Hard rule 3**, the starter-only anonymization rule, and the sentence introducing the rules is repaired to say the two survivors are universal. The `Project Context` zone (between `<!-- PROJECT_CONTEXT_START -->` and `<!-- PROJECT_CONTEXT_END -->`) is rewritten for the new project — the project's thesis, project-specific briefs list, project surfaces description, project conventions, and any project-specific skills.",
+        "line": 333,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "  - **Full single-document brief.** Opens with thesis + a catalog pointer, then continues with the long-form spec under H2 sections. Use when the project's brief is comprehensive and fits in one document. In both shapes the catalog itself lives in `AGENTS.md`, not here.",
+        "before": "  - **Full single-document brief.** Opens with thesis + a catalog pointer, then continues with the long-form spec under H2 sections. Use when the project's brief is comprehensive and fits in one document. In both shapes the catalog itself lives in `CLAUDE.md`, not here.",
+        "line": 336,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "These three pieces drive the rest of the bootstrap. Anchor them in `AGENTS.md` first thing in Step 4.",
+        "before": "These three pieces drive the rest of the bootstrap. Anchor them in `CLAUDE.md` first thing in Step 4.",
+        "line": 376,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "1. **`briefs/BRIEF.md`** — the entry-point brief. Pick the thesis-stub or full-single-document shape from §2b. In both shapes, the catalog itself lives in `AGENTS.md`, not here.",
+        "before": "1. **`briefs/BRIEF.md`** — the entry-point brief. Pick the thesis-stub or full-single-document shape from §2b. In both shapes, the catalog itself lives in `CLAUDE.md`, not here.",
+        "line": 444,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "2. **`AGENTS.md`** — top-level guidance. The template's `AGENTS.md` ships with a two-zone structure. Bootstrap consists of:",
+        "before": "2. **`CLAUDE.md`** — top-level guidance. The template's `CLAUDE.md` ships with a two-zone structure. Bootstrap consists of:",
+        "line": 446,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "   - Copying the template's `AGENTS.md` as a whole, including the introductory paragraph that documents the two-zone contract.",
+        "before": "   - Copying the template's `CLAUDE.md` as a whole, including the introductory paragraph that documents the two-zone contract.",
+        "line": 447,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "5. **`README.md`** — didactic top-level for human readers. Apply the front-door contract in section 2b with project-specific content. If the seed carried a README, keep the user's text and add only the missing orientation, getting-started, essential-map, and documentation-guide material. The README is the human's entry point; AGENTS.md is the agent's.",
+        "before": "5. **`README.md`** — didactic top-level for human readers. Apply the front-door contract in section 2b with project-specific content. If the seed carried a README, keep the user's text and add only the missing orientation, getting-started, essential-map, and documentation-guide material. The README is the human's entry point; CLAUDE.md is the agent's.",
+        "line": 469,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "- `## Cross-Cutting Concerns` — the project's invariants, mirrored from `AGENTS.md`'s \"Architectural invariants\" section. Keep the two lists in sync.",
+        "before": "- `## Cross-Cutting Concerns` — the project's invariants, mirrored from `CLAUDE.md`'s \"Architectural invariants\" section. Keep the two lists in sync.",
+        "line": 552,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "`bin/check` preserves `all|lint|format|test|policy` and delegates `test` to `bin/test`. Immutable ecosystem modes include `uv --locked --managed-python`, frozen Node installs, Cargo `--locked`, Go `-mod=readonly`, or their equivalent. Make `kickoff`, the canonical agents, AGENTS.md, and phase acceptance use `./bin/test ...` for focused tests and `./bin/check all` for the full claim; callers do not duplicate the command mappings. Every `all` run captures a complete log and terminal metadata under the gitignored `.kickoff/check-all/` tree. A success receipt is bound to the exact candidate and environment fingerprint. The fingerprint is obtained through the repository-selected runtime path and records the implementation, actual version, resolved executable and base-executable identity and file digests, machine, platform, and package-manager version; it never substitutes the receipt helper's runtime or the declared version file. Candidate hashing stays separate and does not absorb a venv or external runtime tree. The pre-push hook reuses the receipt only for a clean current `HEAD`, and fails closed by running the full gate on every miss, descriptor failure, or query error.",
+        "before": "`bin/check` preserves `all|lint|format|test|policy` and delegates `test` to `bin/test`. Immutable ecosystem modes include `uv --locked --managed-python`, frozen Node installs, Cargo `--locked`, Go `-mod=readonly`, or their equivalent. Make `kickoff`, the canonical agents, CLAUDE.md, and phase acceptance use `./bin/test ...` for focused tests and `./bin/check all` for the full claim; callers do not duplicate the command mappings. Every `all` run captures a complete log and terminal metadata under the gitignored `.kickoff/check-all/` tree. A success receipt is bound to the exact candidate and environment fingerprint. The fingerprint is obtained through the repository-selected runtime path and records the implementation, actual version, resolved executable and base-executable identity and file digests, machine, platform, and package-manager version; it never substitutes the receipt helper's runtime or the declared version file. Candidate hashing stays separate and does not absorb a venv or external runtime tree. The pre-push hook reuses the receipt only for a clean current `HEAD`, and fails closed by running the full gate on every miss, descriptor failure, or query error.",
+        "line": 608,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "- The new `AGENTS.md` catalogs are bidirectionally complete, and every tracked repository-internal Markdown link resolves.",
+        "before": "- The new `CLAUDE.md` catalogs are bidirectionally complete, and every tracked repository-internal Markdown link resolves.",
+        "line": 635,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "- `AGENTS.md` — reflects all of them.",
+        "before": "- `CLAUDE.md` — reflects all of them.",
+        "line": 660,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "- `plan/INDEX.md` Cross-Cutting Concerns — duplicates the invariants from `AGENTS.md`.",
+        "before": "- `plan/INDEX.md` Cross-Cutting Concerns — duplicates the invariants from `CLAUDE.md`.",
+        "line": 661,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "- **Document drift.** `AGENTS.md`'s catalogs must be bidirectionally complete, and current-candidate internal Markdown links must resolve. Catalog membership alone does not prove that links inside transferred documents survived adaptation.",
+        "before": "- **Document drift.** `CLAUDE.md`'s catalogs must be bidirectionally complete, and current-candidate internal Markdown links must resolve. Catalog membership alone does not prove that links inside transferred documents survived adaptation.",
+        "line": 675,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "    full-spec-with-thesis-preamble) and references the catalog in AGENTS.md",
+        "before": "    full-spec-with-thesis-preamble) and references the catalog in CLAUDE.md",
+        "line": 695,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "[ ] AGENTS.md exists with all required sections (§3.4 above)",
+        "before": "[ ] CLAUDE.md exists with all required sections (§3.4 above)",
+        "line": 696,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "    cutting concerns (mirroring AGENTS.md), critical-files map",
+        "before": "    cutting concerns (mirroring CLAUDE.md), critical-files map",
+        "line": 702,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "    the new repo links or names them — including AGENTS.md's Hard rules",
+        "before": "    the new repo links or names them — including CLAUDE.md's Hard rules",
+        "line": 762,
+        "path": "briefs/agentic-bootstrap.md"
+      },
+      {
+        "after": "- **Rules, not memory.** Anything that should bind future sessions — across harnesses (Claude Code, Codex, and others), across operators, across machines — belongs in this repo. Route by kind: a universal rule → `policies/` or `AGENTS.md`; a scoped project detail → the surface's own instruction file; a per-action workflow → the owning skill; a tunable parameter → the policy that holds its tunables; longitudinal context or a pinned decision → a brief. Agent-side memory is local to one operator, one harness, one machine; it is the wrong place for engine knowledge — if a harness offers to save something to its memory, save it as a repo rule instead. When a learning is real but its surface is unknown — or it has been seen only once, and codifying now would lock in a rule its variations have not tested — file it in `lessons/`: the holding pen between noticing and knowing.",
+        "before": "- **Rules, not memory.** Anything that should bind future sessions — across harnesses (Claude Code, Codex, and others), across operators, across machines — belongs in this repo. Route by kind: a universal rule → `policies/` or `CLAUDE.md`; a scoped project detail → the surface's own instruction file; a per-action workflow → the owning skill; a tunable parameter → the policy that holds its tunables; longitudinal context or a pinned decision → a brief. Agent-side memory is local to one operator, one harness, one machine; it is the wrong place for engine knowledge — if a harness offers to save something to its memory, save it as a repo rule instead. When a learning is real but its surface is unknown — or it has been seen only once, and codifying now would lock in a rule its variations have not tested — file it in `lessons/`: the holding pen between noticing and knowing.",
+        "line": 161,
+        "path": "briefs/methodology.md"
+      },
+      {
+        "after": "3. **Codify.** Graduation is human-ratified, one lesson at a time, onto a named surface: a policy, a brief, a skill, an agent definition, a `bin/` script, a test, or a `AGENTS.md` invariant. Agents propose; the human edits (or approves the edit); the lesson archives with `graduated_to:` pointing at the rule it became. Every rule stays traceable to the incidents that earned it.",
+        "before": "3. **Codify.** Graduation is human-ratified, one lesson at a time, onto a named surface: a policy, a brief, a skill, an agent definition, a `bin/` script, a test, or a `CLAUDE.md` invariant. Agents propose; the human edits (or approves the edit); the lesson archives with `graduated_to:` pointing at the rule it became. Every rule stays traceable to the incidents that earned it.",
+        "line": 33,
+        "path": "briefs/harness-self-improvement.md"
+      },
+      {
+        "after": "- No agent-authored change to `policies/`, `briefs/`, `AGENTS.md`, skills, or agent definitions cites a lesson as its authority without a recorded human ratification.",
+        "before": "- No agent-authored change to `policies/`, `briefs/`, `CLAUDE.md`, skills, or agent definitions cites a lesson as its authority without a recorded human ratification.",
+        "line": 76,
+        "path": "briefs/harness-self-improvement.md"
+      },
+      {
+        "after": "- **AGENTS.md auto-loading.** A `claude -p` run inside a repo loads the repo's `AGENTS.md`, hooks, skills, and MCP servers like an interactive session would — desirable for cross-harness review (policy parity), avoidable with `--bare` when a context-free consult is wanted.",
+        "before": "- **CLAUDE.md auto-loading.** A `claude -p` run inside a repo loads the repo's `CLAUDE.md`, hooks, skills, and MCP servers like an interactive session would — desirable for cross-harness review (policy parity), avoidable with `--bare` when a context-free consult is wanted.",
+        "line": 144,
+        "path": "briefs/cross-agent-invocation.md"
+      },
+      {
+        "after": "title: Mini-method — a minimal AGENTS.md for small projects",
+        "before": "title: Mini-method — a minimal CLAUDE.md for small projects",
+        "line": 2,
+        "path": "briefs/mini-method.md"
+      },
+      {
+        "after": "scope: A verbatim, copy-pasteable AGENTS.md that idempotently provisions the smallest useful project shape — git repo, .gitignore, briefs/, policies/, docs/, bin/ — and graduates to the full methodology through teach.",
+        "before": "scope: A verbatim, copy-pasteable CLAUDE.md that idempotently provisions the smallest useful project shape — git repo, .gitignore, briefs/, policies/, docs/, bin/ — and graduates to the full methodology through teach.",
+        "line": 5,
+        "path": "briefs/mini-method.md"
+      },
+      {
+        "after": "# Mini-method — a minimal AGENTS.md for small projects",
+        "before": "# Mini-method — a minimal CLAUDE.md for small projects",
+        "line": 8,
+        "path": "briefs/mini-method.md"
+      },
+      {
+        "after": "The full methodology is proportionate to phased, gate-proved software: it earns its ceremony on projects with a plan ledger, four review roles, candidate-bound evidence, and an authoritative build gate. A notebook of experiments, a small tool, a research folder, or a knowledge base needs none of that machinery — but it still benefits from the *shape*: a git repository, an ignore file, one place for thinking, one for rules, one for pinned third-party material, one for deterministic scripts, and a single instruction file that tells any agent how the directory is organized and how to behave. Mini-method is that subset, packaged as one `AGENTS.md` an agent can execute.",
+        "before": "The full methodology is proportionate to phased, gate-proved software: it earns its ceremony on projects with a plan ledger, four review roles, candidate-bound evidence, and an authoritative build gate. A notebook of experiments, a small tool, a research folder, or a knowledge base needs none of that machinery — but it still benefits from the *shape*: a git repository, an ignore file, one place for thinking, one for rules, one for pinned third-party material, one for deterministic scripts, and a single instruction file that tells any agent how the directory is organized and how to behave. Mini-method is that subset, packaged as one `CLAUDE.md` an agent can execute.",
+        "line": 12,
+        "path": "briefs/mini-method.md"
+      },
+      {
+        "after": "| `AGENTS.md` | The whole method: layout, setup protocol, rule set | Replaced by the two-zone form; the Project paragraph carries into Project Context |",
+        "before": "| `CLAUDE.md` | The whole method: layout, setup protocol, rule set | Replaced by the two-zone form; the Project paragraph carries into Project Context |",
+        "line": 22,
+        "path": "briefs/mini-method.md"
+      },
+      {
+        "after": "| `briefs/` | Durable thinking, indexed by `briefs/README.md` | Carries over unchanged; the catalog moves into `AGENTS.md` |",
+        "before": "| `briefs/` | Durable thinking, indexed by `briefs/README.md` | Carries over unchanged; the catalog moves into `CLAUDE.md` |",
+        "line": 23,
+        "path": "briefs/mini-method.md"
+      },
+      {
+        "after": "| `policies/` | Binding rules, indexed by `policies/README.md` | Carries over unchanged; the catalog moves into `AGENTS.md`; the universal policy set is added |",
+        "before": "| `policies/` | Binding rules, indexed by `policies/README.md` | Carries over unchanged; the catalog moves into `CLAUDE.md`; the universal policy set is added |",
+        "line": 24,
+        "path": "briefs/mini-method.md"
+      },
+      {
+        "after": "The catalogs live in per-directory `README.md` files, not in `AGENTS.md`, so the fenced block below is verbatim for every project and never needs editing as the project grows: the project's own content accumulates in the directories and their READMEs, and the one file that came from this brief stays byte-identical to its source.",
+        "before": "The catalogs live in per-directory `README.md` files, not in `CLAUDE.md`, so the fenced block below is verbatim for every project and never needs editing as the project grows: the project's own content accumulates in the directories and their READMEs, and the one file that came from this brief stays byte-identical to its source.",
+        "line": 29,
+        "path": "briefs/mini-method.md"
+      },
+      {
+        "after": "## The AGENTS.md",
+        "before": "## The CLAUDE.md",
+        "line": 39,
+        "path": "briefs/mini-method.md"
+      },
+      {
+        "after": "# AGENTS.md",
+        "before": "# CLAUDE.md",
+        "line": 44,
+        "path": "briefs/mini-method.md"
+      },
+      {
+        "after": "The trailing HTML comment in the block is the marker the `teach` skill recognizes: a target whose `AGENTS.md` carries it is classified as a *mini-method graduation* rather than a divergent or partially stamped project. The four directories transfer as they stand; the `briefs/README.md` and `policies/README.md` catalogs fold into the new `AGENTS.md`'s catalogs, while `docs/README.md` and `bin/README.md` remain the catalog files the full methodology also uses; the mini `AGENTS.md` is replaced wholesale by the two-zone form, with its Project paragraph carried into the Project Context zone; and the absence of `plan/`, `LOG.md`, ledgers, roles, and gates is absent-by-design, not drift.",
+        "before": "The trailing HTML comment in the block is the marker the `teach` skill recognizes: a target whose `CLAUDE.md` carries it is classified as a *mini-method graduation* rather than a divergent or partially stamped project. The four directories transfer as they stand; the `briefs/README.md` and `policies/README.md` catalogs fold into the new `CLAUDE.md`'s catalogs, while `docs/README.md` and `bin/README.md` remain the catalog files the full methodology also uses; the mini `CLAUDE.md` is replaced wholesale by the two-zone form, with its Project paragraph carried into the Project Context zone; and the absence of `plan/`, `LOG.md`, ledgers, roles, and gates is absent-by-design, not drift.",
+        "line": 91,
+        "path": "briefs/mini-method.md"
+      },
+      {
+        "after": "- **Per-directory catalogs.** The block must be verbatim for every project or it stops being copy-pasteable and starts being a template with holes. Moving the catalogs into the directory READMEs is what makes that possible: the one file sourced from this brief never changes, and everything project-specific accumulates beside it. Graduation reverses this for `briefs/` and `policies/` because the full method's catalogs live in `AGENTS.md`.",
+        "before": "- **Per-directory catalogs.** The block must be verbatim for every project or it stops being copy-pasteable and starts being a template with holes. Moving the catalogs into the directory READMEs is what makes that possible: the one file sourced from this brief never changes, and everything project-specific accumulates beside it. Graduation reverses this for `briefs/` and `policies/` because the full method's catalogs live in `CLAUDE.md`.",
+        "line": 97,
+        "path": "briefs/mini-method.md"
+      },
+      {
+        "after": "This boundary is restated in `AGENTS.md` § Project Context so every session sees it before acting.",
+        "before": "This boundary is restated in `CLAUDE.md` § Project Context so every session sees it before acting.",
+        "line": 24,
+        "path": "briefs/BRIEF.md"
+      },
+      {
+        "after": "- [`cas-api.md`](cas-api.md) is present and cataloged in `AGENTS.md`.",
+        "before": "- [`cas-api.md`](cas-api.md) is present and cataloged in `CLAUDE.md`.",
+        "line": 42,
+        "path": "briefs/BRIEF.md"
+      },
+      {
+        "after": "- The scope boundary above appears in both this brief and `AGENTS.md` § Project Context.",
+        "before": "- The scope boundary above appears in both this brief and `CLAUDE.md` § Project Context.",
+        "line": 43,
+        "path": "briefs/BRIEF.md"
+      }
+    ],
+    "rewritten_paths": [
+      "README.md",
+      "AGENTS.md",
+      "bin/check-catalogs",
+      "bin/README.md",
+      "bin/serve-execution-dashboard",
+      "bin/check-toolchain-callers",
+      "bin/check-harness-parity",
+      "tests/test_methodology_toolchain_contract.py",
+      "tests/test_check_catalogs.py",
+      "tests/test_execution_telemetry.py",
+      "tests/test_kickoff_evidence.py",
+      "tests/test_execution_dashboard.py",
+      "tests/test_mirror_parity.py",
+      "tests/test_check.py",
+      "tests/render_execution_dashboard_fixture.py",
+      ".claude/agents/code-critic.md",
+      ".claude/agents/phase-coder.md",
+      ".claude/agents/phase-planner.md",
+      ".claude/agents/plan-reviewer.md",
+      ".claude/skills/kickoff/preflight.md",
+      ".claude/skills/kickoff/close.md",
+      ".claude/skills/kickoff/SKILL.md",
+      ".claude/skills/learn/SKILL.md",
+      ".claude/skills/sweep-planning/SKILL.md",
+      ".claude/skills/teach/SKILL.md",
+      "policies/cross-harness-parity.md",
+      "policies/project-isolation.md",
+      "policies/review-lanes.md",
+      "policies/repo-relative-paths.md",
+      "policies/briefs-and-policies.md",
+      "policies/README.md",
+      "policies/lessons.md",
+      "policies/simplicity-and-consolidation.md",
+      "policies/briefs.md",
+      "policies/docs.md",
+      "policies/human-in-the-loop.md",
+      "policies/orchestration-evidence.md",
+      "lib/agentic_starter/execution_telemetry.py",
+      "briefs/agentic-bootstrap.md",
+      "briefs/methodology.md",
+      "briefs/harness-self-improvement.md",
+      "briefs/cross-agent-invocation.md",
+      "briefs/mini-method.md",
+      "briefs/BRIEF.md"
+    ]
+  },
+  "inventory": {
+    "obsolete": {
+      "bin/check-log": "395d543fc87143d0d1f77f67af122d56053dca4b497290b31c9ba5abbb99cd26",
+      "bin/check-log-monotonic": "0c9e842c5e4a818dc797b5fae96d49ee71c6233136b4ee5b30497352d4897d0d",
+      "bin/check-log-prefix": "b6db354ca272017009a6bc4066282248033169625440380bc639deebfd9184c7",
+      "bin/log-append": "497c9ef09113fd61bfb4f58ad0ce5492dcab193aed79ef3cd5b7c94286f6b009",
+      "bin/log-relocate": "8ebb9d66755d70798c3be60297a6d65ffbca6d7162dce8e0cb0f32afb88afbce"
+    },
+    "shared": {
+      ".githooks/pre-commit": "Preserve actual-index immutable-record validation.",
+      "bin/check": "Aggregate gate: replace removed executable and log callers.",
+      "bin/check-catalogs": "Catalogs/links: new phase semantics need live-cutover qualification.",
+      "bin/kickoff-command-zero": "Command admission: use structured-record validation.",
+      "bin/kickoff-evidence": "Advice/acceptance: new-schema semantics still need qualification.",
+      "bin/normalize-final-newline": "Execution/index normalization; remove flat-log repair.",
+      "lib/agentic_starter/log_blocks.py": "Historical body and terminal Lessons parsing."
+    }
+  },
+  "proof_families_removed": [],
+  "shared_semantic_adoption_pending": [
+    "candidate/close/phase capture and current actor adapters",
+    "complete new-schema catalog/skill semantics",
+    "recipient proof retirement/admission and full gate"
+  ],
+  "source_proof_judgments_transferred": false
+}

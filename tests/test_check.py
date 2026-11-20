@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
 CHECK_SOURCE = REPO_ROOT / "bin" / "check"
+
+
 PROBE = (
     "import castle.cli, pytest, subprocess; "
     "subprocess.run(['ruff','--version'], check=True, stdout=subprocess.DEVNULL)"
@@ -29,15 +33,11 @@ printf '%s\n' "$0"
     )
 
 
-def _family_probes(root: Path) -> list[str]:
-    return [f"uv cwd={root} args=cache dir", f"uv cwd={root} args=python dir"]
-
-
 @pytest.fixture
 def check_repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     root = tmp_path / "repo"
     (root / "bin").mkdir(parents=True)
-    (root / "project").mkdir()
+    (root / "project" / "tests").mkdir(parents=True)
     (root / "tests").mkdir()
     shutil.copy2(CHECK_SOURCE, root / "bin" / "check")
     shutil.copy2(REPO_ROOT / "bin" / "_python-toolchain", root / "bin" / "_python-toolchain")
@@ -47,8 +47,7 @@ def check_repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     (root / "project" / "pyproject.toml").write_text("[project]\nname='fixture'\n")
     (root / "project" / "uv.lock").write_text("version = 1\n")
     (root / "project" / ".python-version").write_text("3.12\n")
-    (root / "AGENTS.md").symlink_to("CLAUDE.md")
-    (root / "CLAUDE.md").write_text("# Fixture\n")
+    (root / "AGENTS.md").write_text("# Fixture\n")
 
     family_store = tmp_path / "family-uv"
     (family_store / "cache").mkdir(parents=True)
@@ -73,6 +72,15 @@ printf 'uv cwd=%s args=%s\\n' "$PWD" "$*" >> "$CHECK_TEST_LOG"
 if [[ -n "${CHECK_TEST_FAIL_MATCH:-}" && "$*" == *"$CHECK_TEST_FAIL_MATCH"* ]]; then
   exit "${CHECK_TEST_FAIL_CODE:-23}"
 fi
+if [[ -n "${CHECK_TEST_REAL_RUFF:-}" && "$*" == *"ruff format --check"* ]]; then
+  # Run the real formatter over the directories the gate names; the fixture's
+  # single-file targets are shell stubs.
+  targets=()
+  for argument in "$@"; do
+    [[ -d "$argument" ]] && targets+=("$argument")
+  done
+  exec "$CHECK_TEST_REAL_RUFF" format --check "${targets[@]}"
+fi
 if [[ "$*" == python\\ find\\ --no-project\\ * ]]; then
   printf '%s\\n' "${@: -1}"
 elif [[ "$*" == "cache dir" ]]; then
@@ -86,9 +94,6 @@ fi
         root / "bin" / "check-anonymization.sh",
         """#!/usr/bin/env bash
 printf 'policy cwd=%s\\n' "$PWD" >> "$CHECK_TEST_LOG"
-if [[ -n "${CHECK_POLICY_FAIL_CODE:-}" ]]; then
-  exit "$CHECK_POLICY_FAIL_CODE"
-fi
 """,
     )
     _write_executable(
@@ -107,15 +112,16 @@ printf 'lessons cwd=%s args=%s\\n' "$PWD" "$*" >> "$CHECK_TEST_LOG"
         root / "bin" / "treatise",
         """#!/usr/bin/env bash
 printf 'treatise cwd=%s args=%s\\n' "$PWD" "$*" >> "$CHECK_TEST_LOG"
-if [[ -n "${CHECK_TREATISE_FAIL_CODE:-}" ]]; then
-  exit "$CHECK_TREATISE_FAIL_CODE"
-fi
 """,
     )
     _write_executable(
         root / "bin" / "test-governance",
         """#!/usr/bin/env bash
 printf 'governance cwd=%s args=%s\n' "$PWD" "$*" >> "$CHECK_TEST_LOG"
+# A lane every adopter has, so proofs that need a failing policy check travel unchanged.
+if [[ "${1:-}" == "timing" && -n "${CHECK_POLICY_FAIL_CODE:-}" ]]; then
+  exit "$CHECK_POLICY_FAIL_CODE"
+fi
 if [[ "${1:-}" == "select" ]]; then
   printf '%s\n' 'FOCUSED' 'fixture selection' 'tests/test_check.py'
 fi
@@ -136,6 +142,7 @@ case "$1" in
     printf '%s\n' "$log"
     ;;
   complete)
+    printf 'receipt %s\\n' "$*" >> "$CHECK_TEST_LOG"
     if [[ " $* " == *" --outcome passed "* ]]; then
       printf '%s\n' \
         'CHECK RECEIPT STORED candidate=fixture log=.kickoff/check-all/logs/fixture.log' \
@@ -160,13 +167,9 @@ esac
         ("check-hooks-installed", "hooksinstalled"),
         ("check-shell-syntax", "shellsyntax"),
         ("new-name", "newname"),
-        ("check-log", "log"),
+        ("multioperator", "log"),
         ("check-candidate-partition", "partition"),
-        ("check-log-prefix", "logprefix"),
-        ("check-log-monotonic", "logmonotonic"),
         ("kickoff-command-zero", "commandzero"),
-        ("log-append", "logappend"),
-        ("log-relocate", "logrelocate"),
         ("normalize-final-newline", "finalnewline"),
     ):
         _write_executable(
@@ -211,12 +214,19 @@ def test_all_is_default_locked_ordered_and_cwd_independent(
     result = _run(root, environment, cwd=tmp_path)
 
     assert result.returncode == 0, result.stderr
-    calls = Path(environment["CHECK_TEST_LOG"]).read_text().splitlines()
-    assert calls == _family_probes(root) + [
+    calls = [
+        line
+        for line in Path(environment["CHECK_TEST_LOG"]).read_text().splitlines()
+        if not line.startswith("receipt ")
+    ]
+    expected_calls = _family_probes(root) + [
         (
             f"uv cwd={root} args=run --project {root / 'project'} --locked "
             f"--managed-python python -c {PROBE}"
         ),
+        f"log cwd={root}",
+        f"dashboards cwd={root}",
+        f"catalogs cwd={root}",
         (
             f"uv cwd={root / 'project'} args=run --locked --managed-python "
             "ruff check castle tests ../lib ../bin/kickoff-config ../bin/kickoff-evidence "
@@ -225,9 +235,10 @@ def test_all_is_default_locked_ordered_and_cwd_independent(
             "../bin/check-toolchain-callers ../bin/lessons ../bin/treatise "
             "../bin/check-catalogs "
             "../bin/check-hooks-installed ../bin/check-shell-syntax ../bin/new-name "
+            ""
             "../bin/check-plan-concreteness ../bin/check-plan-delivery ../bin/review-verdicts "
-            "../bin/check-log-prefix ../bin/check-log-monotonic ../bin/kickoff-command-zero "
-            "../bin/log-append ../bin/log-relocate ../bin/normalize-final-newline "
+            "../bin/kickoff-command-zero "
+            "../bin/normalize-final-newline "
             "../bin/check-candidate-partition "
             "../tests"
         ),
@@ -239,9 +250,10 @@ def test_all_is_default_locked_ordered_and_cwd_independent(
             "../bin/check-toolchain-callers ../bin/lessons ../bin/treatise "
             "../bin/check-catalogs "
             "../bin/check-hooks-installed ../bin/check-shell-syntax ../bin/new-name "
+            ""
             "../bin/check-plan-concreteness ../bin/check-plan-delivery ../bin/review-verdicts "
-            "../bin/check-log-prefix ../bin/check-log-monotonic ../bin/kickoff-command-zero "
-            "../bin/log-append ../bin/log-relocate ../bin/normalize-final-newline "
+            "../bin/kickoff-command-zero "
+            "../bin/normalize-final-newline "
             "../bin/check-candidate-partition "
             "../tests"
         ),
@@ -250,10 +262,14 @@ def test_all_is_default_locked_ordered_and_cwd_independent(
             f"uv cwd={root} args=run --project {root / 'project'} --locked "
             f"--managed-python python -c {PROBE}"
         ),
+        f"governance cwd={root} args=select --reuse --format lines",
+        f"governance cwd={root} args=reuse begin --lane reuse",
         (
             f"uv cwd={root} args=run --project {root / 'project'} --locked "
-            "--managed-python python -m pytest -q project/tests tests"
+            f"--managed-python python {root}/lib/agentic_starter/test_runner.py "
+            "-m pytest -q tests/test_check.py"
         ),
+        f"governance cwd={root} args=reuse finish --exit 0",
         f"parity cwd={root}",
         f"callers cwd={root}",
         f"dashboards cwd={root}",
@@ -266,7 +282,9 @@ def test_all_is_default_locked_ordered_and_cwd_independent(
         f"log cwd={root}",
         f"partition cwd={root}",
         f"governance cwd={root} args=validate",
+        f"governance cwd={root} args=timing",
     ]
+    assert calls == expected_calls, "GATE OMITTED OR REORDERED REQUIRED COMMAND"
     assert "CHECK ALL PASS" in result.stdout
 
 
@@ -274,14 +292,140 @@ def test_all_policy_failure_cannot_be_masked_by_later_policy_output(
     check_repo: tuple[Path, dict[str, str]],
 ) -> None:
     root, environment = check_repo
-    environment["CHECK_TREATISE_FAIL_CODE"] = "41"
+    environment["CHECK_POLICY_FAIL_CODE"] = "41"
 
     result = _run(root, environment, "all")
 
     assert result.returncode == 41
-    assert "CHECK policy-treatise FAIL (exit 41)" in result.stdout
+    assert "CHECK policy-test-time FAIL (exit 41)" in result.stdout
     assert "CHECK policy PASS" not in result.stdout
     assert "CHECK ALL PASS" not in result.stdout
+
+    # The same immutable-log check runs before tests, inside the receipt boundary.
+    Path(environment["CHECK_TEST_LOG"]).unlink()
+    _write_executable(
+        root / "bin" / "multioperator",
+        "#!/usr/bin/env bash\necho 'bad terminal record' >&2\nexit 37\n",
+    )
+    early = _run(root, environment, "all")
+    calls = Path(environment["CHECK_TEST_LOG"]).read_text()
+    assert (
+        early.returncode == 37
+        and "CHECK policy-log FAIL (exit 37)" in early.stdout
+        and "test_runner.py" not in calls
+        and "ruff check" not in calls
+        and "--outcome failed" in calls
+        and "CHECK ALL PASS" not in early.stdout
+    ), "INVALID LOG REACHED EXPENSIVE GATES OR PASSED RECEIPT"
+
+    Path(environment["CHECK_TEST_LOG"]).unlink()
+    _write_executable(
+        root / "bin" / "multioperator",
+        "#!/usr/bin/env bash\n"
+        "printf 'log validation\\n' >> \"$CHECK_TEST_LOG\"\n"
+        'if [[ -f "$PWD/log-checked" ]]; then exit 38; fi\n'
+        'touch "$PWD/log-checked"\n',
+    )
+    late = _run(root, environment, "all")
+    calls = Path(environment["CHECK_TEST_LOG"]).read_text()
+    assert (
+        late.returncode == 38
+        and calls.count("log validation") == 2
+        and "test_runner.py" in calls
+        and "--outcome failed" in calls
+        and "CHECK ALL PASS" not in late.stdout
+    ), "FINAL LOG VALIDATION LOST OR PASSED RECEIPT"
+
+
+@pytest.mark.parametrize(
+    ("executable", "lane"),
+    [
+        ("check-catalogs", "policy-catalogs"),
+        ("check-execution-dashboards", "policy-execution-dashboards"),
+    ],
+)
+def test_stale_catalog_or_report_stops_the_gate_before_lint_and_tests(
+    check_repo: tuple[Path, dict[str, str]], executable: str, lane: str
+) -> None:
+    root, environment = check_repo
+    _write_executable(
+        root / "bin" / executable,
+        "#!/usr/bin/env bash\n"
+        "printf 'bookkeeping check\\n' >> \"$CHECK_TEST_LOG\"\n"
+        "echo 'stale entry' >&2\nexit 39\n",
+    )
+    early = _run(root, environment, "all")
+    calls = Path(environment["CHECK_TEST_LOG"]).read_text()
+    assert (
+        early.returncode == 39
+        and f"CHECK {lane} FAIL (exit 39)" in early.stdout
+        and "ruff check" not in calls
+        and "test_runner.py" not in calls
+        and "--outcome failed" in calls
+        and "CHECK ALL PASS" not in early.stdout
+    ), "STALE BOOKKEEPING REACHED EXPENSIVE GATES OR PASSED RECEIPT"
+
+    # A tree that drifts while the costly lanes run is still caught on the final tree.
+    Path(environment["CHECK_TEST_LOG"]).unlink()
+    _write_executable(
+        root / "bin" / executable,
+        "#!/usr/bin/env bash\n"
+        "printf 'bookkeeping check\\n' >> \"$CHECK_TEST_LOG\"\n"
+        'if [[ -f "$PWD/bookkeeping-checked" ]]; then exit 40; fi\n'
+        'touch "$PWD/bookkeeping-checked"\n',
+    )
+    late = _run(root, environment, "all")
+    calls = Path(environment["CHECK_TEST_LOG"]).read_text()
+    assert (
+        late.returncode == 40
+        and calls.count("bookkeeping check") == 2
+        and "test_runner.py" in calls
+        and "CHECK ALL PASS" not in late.stdout
+    ), "FINAL BOOKKEEPING CHECK LOST OR PASSED RECEIPT"
+
+
+def test_format_rejects_staged_unstaged_and_untracked_candidates_without_rewriting(
+    check_repo: tuple[Path, dict[str, str]],
+) -> None:
+    root, environment = check_repo
+    ruff = shutil.which("ruff")
+    assert ruff is not None
+    environment["CHECK_TEST_REAL_RUFF"] = ruff
+    clean, unformatted = "value = 1\n", "value=1\n"
+
+    def git(*arguments: str) -> None:
+        subprocess.run(["git", *arguments], cwd=root, check=True, capture_output=True)
+
+    (root / "lib").mkdir()
+    (root / ".gitignore").write_text(".kickoff/\n")
+    (root / "lib" / "tracked.py").write_text(clean)
+    git("init", "-q")
+    git("config", "user.email", "fixture@example.invalid")
+    git("config", "user.name", "Fixture")
+    git("add", "-A")
+    git("commit", "-qm", "base")
+    # The formatter really runs, and a clean tree passes.
+    passed = _run(root, environment, "format")
+    assert passed.returncode == 0, passed.stderr
+    assert "CHECK format PASS" in passed.stdout
+
+    def rejected(path: Path) -> None:
+        result = _run(root, environment, "format")
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "CHECK format FAIL (exit 1)" in result.stderr
+        assert path.name in result.stdout + result.stderr
+        assert path.read_text() == unformatted
+
+    untracked = root / "lib" / "untracked.py"
+    untracked.write_text(unformatted)
+    rejected(untracked)
+    git("add", "lib/untracked.py")
+    rejected(untracked)
+    git("commit", "-qm", "staged")
+    untracked.write_text(clean)
+    git("commit", "-qam", "clean")
+    (root / "lib" / "tracked.py").write_text(unformatted)
+    rejected(root / "lib" / "tracked.py")
 
 
 @pytest.mark.parametrize(
@@ -316,10 +460,62 @@ def test_governed_iteration_lanes_dispatch_selected_tests_without_receipt(
     result = _run(root, environment, *arguments)
 
     assert result.returncode == 0, result.stderr
-    calls = Path(environment["CHECK_TEST_LOG"]).read_text().splitlines()
+    calls = [
+        line
+        for line in Path(environment["CHECK_TEST_LOG"]).read_text().splitlines()
+        if not line.startswith("receipt ")
+    ]
     assert f"governance cwd={root} args=select {selection_arguments}" in calls
-    assert any("python -m pytest -q tests/test_check.py" in call for call in calls)
+    assert any(
+        f"python {root}/lib/agentic_starter/test_runner.py -m pytest -q tests/test_check.py" in call
+        for call in calls
+    )
     assert not any("check-receipt" in call for call in calls)
+
+
+def test_no_reuse_runs_the_whole_suite_and_a_failing_reuse_lane_fails_the_gate(
+    check_repo: tuple[Path, dict[str, str]],
+) -> None:
+    root, environment = check_repo
+
+    uncached = _run(root, environment, "all", "--no-reuse")
+    calls = Path(environment["CHECK_TEST_LOG"]).read_text()
+    Path(environment["CHECK_TEST_LOG"]).unlink()
+    environment["CHECK_TEST_FAIL_MATCH"] = "-m pytest -q tests/test_check.py"
+    failed = _run(root, environment, "all")
+    failed_calls = Path(environment["CHECK_TEST_LOG"]).read_text()
+
+    assert (
+        uncached.returncode == 0
+        and "-o junit_family=xunit1 project/tests tests" in calls
+        and "select --reuse" not in calls
+        and "reuse begin --lane full" in calls
+        and failed.returncode == 23
+        and "reuse finish --exit 23" in failed_calls
+        and "--outcome failed" in failed_calls
+        and "CHECK ALL PASS" not in failed.stdout
+    ), f"UNCACHED GATE REUSED TESTS OR A FAILED REUSE LANE PASSED: {uncached.stderr}{failed.stderr}"
+
+
+def test_report_runs_every_lane_names_each_failure_and_stores_no_receipt(
+    check_repo: tuple[Path, dict[str, str]],
+) -> None:
+    root, environment = check_repo
+    environment["CHECK_TEST_FAIL_MATCH"] = "ruff format --check"
+    environment["CHECK_POLICY_FAIL_CODE"] = "41"
+
+    result = _run(root, environment, "report")
+
+    calls = Path(environment["CHECK_TEST_LOG"]).read_text()
+    assert (
+        result.returncode == 1
+        and "CHECK REPORT FAILED: format policy-test-time" in result.stderr
+        and "test_runner.py" in calls
+        and "governance cwd=" in calls
+        and not any(line.startswith("receipt ") for line in calls.splitlines())
+        and "CHECK policy PASS" not in result.stdout
+        and "CHECK ALL PASS" not in result.stdout
+    ), f"REPORT STOPPED EARLY, HID A FAILED LANE OR STORED A RECEIPT: {result.stderr}"
 
 
 def test_authoritative_runtime_probe_failure_stops_before_gate_without_fallback(
@@ -338,7 +534,11 @@ def test_authoritative_runtime_probe_failure_stops_before_gate_without_fallback(
     assert result.returncode == 43
     assert "dependency-chain probe failed" in result.stderr
     assert "no runtime fallback was attempted" in result.stderr
-    calls = Path(environment["CHECK_TEST_LOG"]).read_text().splitlines()
+    calls = [
+        line
+        for line in Path(environment["CHECK_TEST_LOG"]).read_text().splitlines()
+        if not line.startswith("receipt ")
+    ]
     assert calls == _family_probes(root) + [
         f"uv cwd={root} args=python find --no-project {runtime}",
         f"uv cwd={root} args=python dir",
@@ -347,3 +547,30 @@ def test_authoritative_runtime_probe_failure_stops_before_gate_without_fallback(
             f"--python {runtime} --no-managed-python python -c {PROBE}"
         ),
     ]
+
+
+def test_interrupted_tests_cannot_issue_a_passing_gate_receipt(
+    check_repo: tuple[Path, dict[str, str]],
+) -> None:
+    root, environment = check_repo
+    environment["CHECK_TEST_FAIL_MATCH"] = "-m pytest"
+    environment["CHECK_TEST_FAIL_CODE"] = "124"
+    result = _run(root, environment, "all")
+    assert result.returncode == 124, "incomplete gate status must survive"
+    assert "CHECK test INCOMPLETE" in result.stdout, "gate must label incomplete tests"
+    assert "CHECK test FAIL" not in result.stdout, (
+        "incomplete must not be labelled correctness failure"
+    )
+    assert "CHECK ALL PASS" not in result.stdout, "incomplete gate must not claim success"
+    receipt_calls = [
+        line
+        for line in Path(environment["CHECK_TEST_LOG"]).read_text().splitlines()
+        if line.startswith("receipt ")
+    ]
+    assert any("--exit-code 124 --outcome failed" in line for line in receipt_calls), (
+        "durable metadata must encode incomplete status"
+    )
+
+
+def _family_probes(root: Path) -> list[str]:
+    return [f"uv cwd={root} args=cache dir", f"uv cwd={root} args=python dir"]
